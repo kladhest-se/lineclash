@@ -11,7 +11,7 @@ CFLAGS   := -Wall -Wextra -O2 -DPLATFORM_POSIX -I../../shared/include -I$(SRCDIR
 LDFLAGS  :=
 
 # Include TETRINETZ_VERSION if version.mk exists
--include ../version.mk
+-include ../../version.mk
 ifdef VERSION
     CFLAGS += -DTETRINETZ_VERSION=\"$(VERSION)\"
 else

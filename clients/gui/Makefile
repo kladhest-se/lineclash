@@ -14,7 +14,7 @@ ifndef VERSION
     BUILD_DATE  := unknown
   endif
 endif
-include ../version.mk
+include ../../version.mk
 
 .PHONY: all clean run gen-buildnum
 
