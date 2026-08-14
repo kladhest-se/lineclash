@@ -1,0 +1,28 @@
+FROM ubuntu:24.04
+
+LABEL maintainer="frossmant"
+LABEL description="LineClash CI base image — Ubuntu 24.04"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssh-client \
+    gcc \
+    make \
+    libsdl2-dev \
+    dpkg-dev \
+    gzip \
+    ca-certificates \
+    curl \
+    git \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/* \
+  && ssh -V \
+  && which ssh
+
+# Trust the GitLab host at build time
+ARG GITLAB_HOST=gitlab.kladhest.se
+RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh \
+  && ssh-keyscan ${GITLAB_HOST} >> /root/.ssh/known_hosts 2>/dev/null \
+  && chmod 644 /root/.ssh/known_hosts \
+  && cat /root/.ssh/known_hosts

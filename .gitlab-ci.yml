@@ -1,0 +1,268 @@
+# LineClash CI/CD Pipeline — monorepo
+#
+# Runners:
+#   builder-opensuse-leap15-shell   tags: [linux, shell, opensuse]
+#   builder-opensuse-leap15-docker  tags: [linux, docker, opensuse]
+#   builder-macos-shell             tags: [macos, shell]
+#
+# Path rules: only rebuild what changed.
+#   server/**  or shared/**  → server jobs
+#   clients/** or shared/**  → client jobs
+#   docker/**               → docker image rebuild
+
+stages:
+  - docker
+  - test
+  - build
+  - integration-test
+  - package
+
+default:
+  artifacts:
+    expire_in: 7 days
+
+# ════════════════════════════════════════════════════════════
+# DOCKER STAGE
+# ════════════════════════════════════════════════════════════
+
+.docker_build:
+  stage: docker
+  tags: [linux, shell, opensuse]
+  before_script:
+    - podman login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  rules:
+    - if: $CI_COMMIT_BRANCH
+      changes: [docker/Dockerfile.leap15, docker/Dockerfile.ubuntu24]
+    - when: manual
+      allow_failure: true
+
+docker:leap15:
+  extends: .docker_build
+  script:
+    - podman build --build-arg GITLAB_HOST=gitlab.kladhest.se
+        -t "$CI_REGISTRY_IMAGE/ci-leap15:latest"
+        -f docker/Dockerfile.leap15 .
+    - podman push "$CI_REGISTRY_IMAGE/ci-leap15:latest"
+
+docker:ubuntu24:
+  extends: .docker_build
+  script:
+    - podman build --build-arg GITLAB_HOST=gitlab.kladhest.se
+        -t "$CI_REGISTRY_IMAGE/ci-ubuntu24:latest"
+        -f docker/Dockerfile.ubuntu24 .
+    - podman push "$CI_REGISTRY_IMAGE/ci-ubuntu24:latest"
+
+# ════════════════════════════════════════════════════════════
+# TEST STAGE — unit tests, all platforms
+# ════════════════════════════════════════════════════════════
+
+.unit_test:
+  stage: test
+  script:
+    - chmod +x scripts/*.sh
+    - ./scripts/run-tests.sh --unit
+
+test:leap15:
+  extends: .unit_test
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-leap15:latest
+
+test:ubuntu:
+  extends: .unit_test
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-ubuntu24:latest
+
+test:macos:
+  extends: .unit_test
+  tags: [macos, shell]
+
+# ════════════════════════════════════════════════════════════
+# BUILD STAGE
+# ════════════════════════════════════════════════════════════
+
+# ── Server ───────────────────────────────────────────────────
+build:server:
+  stage: build
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-leap15:latest
+  rules:
+    - changes: [server/**, shared/**]
+    - when: manual
+  before_script:
+    - zypper install -y sqlite3-devel 2>/dev/null || true
+  script:
+    - chmod +x scripts/*.sh
+    - ./scripts/build-server.sh
+  artifacts:
+    name: server-binaries
+    paths:
+      - server/lineclashd
+      - server/lineclashd-tool
+      - build_number.txt
+      - server/src/buildnum.h
+      - clients/gui/src/buildnum.h
+
+# ── GUI Client ───────────────────────────────────────────────
+build:client:macos:
+  stage: build
+  tags: [macos, shell]
+  rules:
+    - changes: [clients/gui/**, clients/cli/**, shared/**]
+    - when: manual
+  script:
+    - brew list sdl2 &>/dev/null || brew install sdl2
+    - chmod +x scripts/*.sh
+    - ./scripts/build-client.sh
+  artifacts:
+    name: client-macos-arm64
+    paths: [clients/gui/lineclash]
+
+build:client:leap15:
+  stage: build
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-leap15:latest
+  rules:
+    - changes: [clients/gui/**, clients/cli/**, shared/**]
+    - when: manual
+  script:
+    - chmod +x scripts/*.sh
+    - ./scripts/build-client.sh
+  artifacts:
+    name: client-leap15-x86_64
+    paths: [clients/gui/lineclash]
+
+build:client:ubuntu:
+  stage: build
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-ubuntu24:latest
+  rules:
+    - changes: [clients/gui/**, clients/cli/**, shared/**]
+    - when: manual
+  script:
+    - chmod +x scripts/*.sh
+    - ./scripts/build-client.sh
+  artifacts:
+    name: client-ubuntu-x86_64
+    paths: [clients/gui/lineclash]
+
+# ── CLI client ───────────────────────────────────────────────
+build:cli:macos:
+  stage: build
+  tags: [macos, shell]
+  rules:
+    - changes: [clients/cli/**, shared/**]
+    - when: manual
+  script:
+    - chmod +x scripts/*.sh
+    - ./scripts/build-cli.sh
+  artifacts:
+    name: cli-macos-arm64
+    paths: [clients/cli/lineclash-cli]
+
+build:cli:leap15:
+  stage: build
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-leap15:latest
+  rules:
+    - changes: [clients/cli/**, shared/**]
+    - when: manual
+  script:
+    - chmod +x scripts/*.sh
+    - ./scripts/build-cli.sh
+  artifacts:
+    name: cli-leap15-x86_64
+    paths: [clients/cli/lineclash-cli]
+
+build:cli:ubuntu:
+  stage: build
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-ubuntu24:latest
+  rules:
+    - changes: [clients/cli/**, shared/**]
+    - when: manual
+  script:
+    - chmod +x scripts/*.sh
+    - ./scripts/build-cli.sh
+  artifacts:
+    name: cli-ubuntu-x86_64
+    paths: [clients/cli/lineclash-cli]
+
+# ════════════════════════════════════════════════════════════
+# INTEGRATION TEST STAGE
+# ════════════════════════════════════════════════════════════
+
+.integration_test:
+  stage: integration-test
+  needs: [build:server]
+  script:
+    - chmod +x scripts/*.sh
+    - ./scripts/run-tests.sh --integration
+
+integration:leap15:
+  extends: .integration_test
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-leap15:latest
+
+integration:ubuntu:
+  extends: .integration_test
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-ubuntu24:latest
+
+integration:macos:
+  extends: .integration_test
+  tags: [macos, shell]
+
+# ════════════════════════════════════════════════════════════
+# PACKAGE STAGE
+# ════════════════════════════════════════════════════════════
+
+package:macos:
+  stage: package
+  tags: [macos, shell]
+  needs:
+    - build:client:macos
+    - build:cli:macos
+    - build:server
+    - integration:macos
+  script:
+    - chmod +x scripts/*.sh
+    - ./scripts/package-macos.sh
+  artifacts:
+    name: "lineclash-macos-arm64-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - dist/LineClash-*-macos-arm64.dmg
+
+package:leap15:
+  stage: package
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-leap15:latest
+  needs:
+    - build:client:leap15
+    - build:cli:leap15
+    - build:server
+    - integration:leap15
+  script:
+    - chmod +x scripts/*.sh
+    - ./scripts/package-linux.sh --opensuse-leap15
+  artifacts:
+    name: "lineclash-leap15-x86_64-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - dist/LineClash-*-linux-x86_64.tar.gz
+      - dist/lineclash-*opensuse-leap15*.rpm
+
+package:ubuntu:
+  stage: package
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-ubuntu24:latest
+  needs:
+    - build:client:ubuntu
+    - build:cli:ubuntu
+    - build:server
+    - integration:ubuntu
+  script:
+    - chmod +x scripts/*.sh
+    - ./scripts/package-linux.sh --deb
+  artifacts:
+    name: "lineclash-ubuntu24-x86_64-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - dist/lineclash_*.deb

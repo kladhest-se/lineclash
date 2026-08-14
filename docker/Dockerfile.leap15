@@ -1,0 +1,27 @@
+FROM opensuse/leap:15
+
+LABEL maintainer="frossmant"
+LABEL description="LineClash CI base image — openSUSE Leap 15"
+
+RUN zypper refresh && zypper install -y --no-recommends \
+    openssh-clients \
+    gcc \
+    make \
+    sqlite3-devel \
+    libSDL2-devel \
+    rpm-build \
+    gzip \
+    ca-certificates \
+    curl \
+    git \
+  && zypper clean -a \
+  && rm -rf /var/cache/zypp/* \
+  && ssh -V \
+  && which ssh
+
+# Trust the GitLab host at build time
+ARG GITLAB_HOST=gitlab.kladhest.se
+RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh \
+  && ssh-keyscan ${GITLAB_HOST} >> /root/.ssh/known_hosts 2>/dev/null \
+  && chmod 644 /root/.ssh/known_hosts \
+  && cat /root/.ssh/known_hosts

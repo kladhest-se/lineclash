@@ -1,0 +1,2506 @@
+#include "client.h"
+#include <SDL.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <math.h>
+#if defined(PLATFORM_WINDOWS)
+#  include <shellapi.h>  /* ShellExecuteA */
+#endif
+
+static SDL_Window   *g_win  = NULL;
+static SDL_Renderer *g_rend = NULL;
+static int g_popup_blocked = 0; /* when 1: dbtn suppresses hover+click */
+static MouseState    g_mouse = {0,0,0,0};
+static uint32_t      g_rtick = 0; /* increments every render frame */
+
+/* ============================== FONT ============================== */
+#define FW 7
+#define FH 13
+#define NCHARS 256
+static const unsigned char FONT[NCHARS][FH]={
+[0x20]={0,0,0,0,0,0,0,0,0,0,0,0,0},
+[0x21]={0,8,8,8,8,8,8,0,8,0,0,0,0},[0x22]={0,20,20,20,0,0,0,0,0,0,0,0,0},
+[0x23]={0,20,20,62,20,62,20,20,0,0,0,0,0},[0x24]={0,8,30,40,28,10,60,8,0,0,0,0,0},
+[0x25]={0,33,34,4,8,16,34,33,0,0,0,0,0},[0x26]={0,16,40,40,16,41,34,29,0,0,0,0,0},
+[0x27]={0,8,8,8,0,0,0,0,0,0,0,0,0},[0x28]={0,4,8,16,16,16,8,4,0,0,0,0,0},
+[0x29]={0,16,8,4,4,4,8,16,0,0,0,0,0},[0x2a]={0,0,8,42,28,42,8,0,0,0,0,0,0},
+[0x2b]={0,0,8,8,62,8,8,0,0,0,0,0,0},[0x2c]={0,0,0,0,0,0,12,8,16,0,0,0,0},
+[0x2d]={0,0,0,0,62,0,0,0,0,0,0,0,0},[0x2e]={0,0,0,0,0,0,12,12,0,0,0,0,0},
+[0x2f]={0,1,2,4,8,16,32,64,0,0,0,0,0},
+[0x30]={0,28,34,35,37,41,49,28,0,0,0,0,0},[0x31]={0,8,24,8,8,8,8,28,0,0,0,0,0},
+[0x32]={0,28,34,2,4,8,16,62,0,0,0,0,0},[0x33]={0,62,4,8,4,2,34,28,0,0,0,0,0},
+[0x34]={0,4,12,20,36,62,4,4,0,0,0,0,0},[0x35]={0,62,32,60,2,2,34,28,0,0,0,0,0},
+[0x36]={0,12,16,32,60,34,34,28,0,0,0,0,0},[0x37]={0,62,2,4,8,16,16,16,0,0,0,0,0},
+[0x38]={0,28,34,34,28,34,34,28,0,0,0,0,0},[0x39]={0,28,34,34,30,2,4,24,0,0,0,0,0},
+[0x3a]={0,0,12,12,0,12,12,0,0,0,0,0,0},[0x3b]={0,0,12,12,0,12,8,16,0,0,0,0,0},
+[0x3c]={0,2,4,8,16,8,4,2,0,0,0,0,0},[0x3d]={0,0,0,62,0,62,0,0,0,0,0,0,0},
+[0x3e]={0,32,16,8,4,8,16,32,0,0,0,0,0},[0x3f]={0,28,34,2,4,8,0,8,0,0,0,0,0},
+[0x40]={0,28,34,2,26,26,34,28,0,0,0,0,0},
+[0x41]={0,8,20,34,34,62,34,34,0,0,0,0,0},[0x42]={0,60,34,34,60,34,34,60,0,0,0,0,0},
+[0x43]={0,28,34,32,32,32,34,28,0,0,0,0,0},[0x44]={0,56,36,34,34,34,36,56,0,0,0,0,0},
+[0x45]={0,62,32,32,60,32,32,62,0,0,0,0,0},[0x46]={0,62,32,32,60,32,32,32,0,0,0,0,0},
+[0x47]={0,28,34,32,38,34,34,28,0,0,0,0,0},[0x48]={0,34,34,34,62,34,34,34,0,0,0,0,0},
+[0x49]={0,28,8,8,8,8,8,28,0,0,0,0,0},[0x4a]={0,14,4,4,4,4,36,24,0,0,0,0,0},
+[0x4b]={0,34,36,40,48,40,36,34,0,0,0,0,0},[0x4c]={0,32,32,32,32,32,32,62,0,0,0,0,0},
+[0x4d]={0,34,54,42,42,34,34,34,0,0,0,0,0},[0x4e]={0,34,34,50,42,38,34,34,0,0,0,0,0},
+[0x4f]={0,28,34,34,34,34,34,28,0,0,0,0,0},[0x50]={0,60,34,34,60,32,32,32,0,0,0,0,0},
+[0x51]={0,28,34,34,34,42,36,26,0,0,0,0,0},[0x52]={0,60,34,34,60,40,36,34,0,0,0,0,0},
+[0x53]={0,28,34,32,28,2,34,28,0,0,0,0,0},[0x54]={0,62,8,8,8,8,8,8,0,0,0,0,0},
+[0x55]={0,34,34,34,34,34,34,28,0,0,0,0,0},[0x56]={0,34,34,34,34,20,20,8,0,0,0,0,0},
+[0x57]={0,34,34,34,42,42,54,34,0,0,0,0,0},[0x58]={0,34,34,20,8,20,34,34,0,0,0,0,0},
+[0x59]={0,34,34,20,8,8,8,8,0,0,0,0,0},[0x5a]={0,62,2,4,8,16,32,62,0,0,0,0,0},
+[0x5b]={0,28,16,16,16,16,16,28,0,0,0,0,0},[0x5c]={0,64,32,16,8,4,2,1,0,0,0,0,0},
+[0x5d]={0,28,4,4,4,4,4,28,0,0,0,0,0},[0x5e]={0,8,20,34,0,0,0,0,0,0,0,0,0},
+[0x5f]={0,0,0,0,0,0,0,62,0,0,0,0,0},[0x60]={0,16,8,4,0,0,0,0,0,0,0,0,0},
+[0x61]={0,0,0,28,2,30,34,30,0,0,0,0,0},[0x62]={0,32,32,60,34,34,34,60,0,0,0,0,0},
+[0x63]={0,0,0,28,32,32,34,28,0,0,0,0,0},[0x64]={0,2,2,30,34,34,34,30,0,0,0,0,0},
+[0x65]={0,0,0,28,34,62,32,28,0,0,0,0,0},[0x66]={0,12,18,16,60,16,16,16,0,0,0,0,0},
+[0x67]={0,0,0,30,34,30,2,28,0,0,0,0,0},[0x68]={0,32,32,60,34,34,34,34,0,0,0,0,0},
+[0x69]={0,8,0,24,8,8,8,28,0,0,0,0,0},[0x6a]={0,4,0,12,4,4,36,24,0,0,0,0,0},
+[0x6b]={0,32,32,34,36,56,36,34,0,0,0,0,0},[0x6c]={0,24,8,8,8,8,8,28,0,0,0,0,0},
+[0x6d]={0,0,0,52,42,42,42,34,0,0,0,0,0},[0x6e]={0,0,0,60,34,34,34,34,0,0,0,0,0},
+[0x6f]={0,0,0,28,34,34,34,28,0,0,0,0,0},[0x70]={0,0,0,60,34,60,32,32,0,0,0,0,0},
+[0x71]={0,0,0,30,34,30,2,2,0,0,0,0,0},[0x72]={0,0,0,44,48,32,32,32,0,0,0,0,0},
+[0x73]={0,0,0,28,32,28,2,60,0,0,0,0,0},[0x74]={0,16,16,60,16,16,18,12,0,0,0,0,0},
+[0x75]={0,0,0,34,34,34,34,30,0,0,0,0,0},[0x76]={0,0,0,34,34,34,20,8,0,0,0,0,0},
+[0x77]={0,0,0,34,34,42,42,20,0,0,0,0,0},[0x78]={0,0,0,34,20,8,20,34,0,0,0,0,0},
+[0x79]={0,0,0,34,34,30,2,28,0,0,0,0,0},[0x7a]={0,0,0,62,4,8,16,62,0,0,0,0,0},
+[0x7b]={0,4,8,8,16,8,8,4,0,0,0,0,0},[0x7c]={0,8,8,8,8,8,8,8,0,0,0,0,0},
+[0x7d]={0,16,8,8,4,8,8,16,0,0,0,0,0},[0x7e]={0,0,0,0,17,34,0,0,0,0,0,0,0},
+/* Swedish characters: Å Ä Ö å ä ö */
+[0xC5]={0,20,8,20,34,34,62,34,34,0,0,0,0}, /* Å */
+[0xC4]={0,20,0,8,20,34,62,34,34,0,0,0,0}, /* Ä */
+[0xD6]={0,20,0,28,34,34,34,34,28,0,0,0,0}, /* Ö */
+[0xE5]={0,12,18,12,28,2,30,34,30,0,0,0,0}, /* å */
+[0xE4]={0,20,0,28,2,30,34,30,0,0,0,0,0}, /* ä */
+[0xF6]={0,20,0,28,34,34,34,28,0,0,0,0,0}, /* ö */
+};
+
+/* ============================== DRAW PRIMITIVES ============================== */
+static void setc(uint32_t rgba) {
+    SDL_SetRenderDrawColor(g_rend,(rgba>>24)&0xff,(rgba>>16)&0xff,(rgba>>8)&0xff,rgba&0xff);
+}
+static void fr(int x,int y,int w,int h,uint32_t c){SDL_Rect r={x,y,w,h};setc(c);SDL_RenderFillRect(g_rend,&r);}
+static void dr(int x,int y,int w,int h,uint32_t c){SDL_Rect r={x,y,w,h};setc(c);SDL_RenderDrawRect(g_rend,&r);}
+static void dc(int x,int y,char ch,uint32_t col,int sc) {
+    int r,b,idx=(unsigned char)ch; if(idx>=NCHARS) idx='?';
+    for(r=0;r<FH;r++){unsigned char bits=FONT[idx][r];
+        for(b=0;b<FW;b++) if(bits&(0x40>>b)) fr(x+b*sc,y+r*sc,sc,sc,col);}
+}
+static void dt(int x,int y,const char*s,uint32_t col,int sc){
+    while(*s){
+        unsigned char c=(unsigned char)*s;
+        /* Decode UTF-8 two-byte sequences into Latin-1 codepoints */
+        if(c>=0xC2&&c<=0xC3&&(unsigned char)s[1]>=0x80){
+            unsigned char ch=(unsigned char)((c==0xC3)?s[1]+0x40:s[1]);
+            dc(x,y,(char)ch,col,sc); s+=2;
+        } else { dc(x,y,(char)c,col,sc); s++; }
+        x+=FW*sc+sc;
+    }
+}
+static void dtc(int cx,int y,const char*s,uint32_t col,int sc){
+    int w=(int)strlen(s)*(FW*sc+sc); dt(cx-w/2,y,s,col,sc);}
+static void dts(int x,int y,const char*s,uint32_t col,int sc){
+    dt(x+sc,y+sc,s,0x000000a0,sc); dt(x,y,s,col,sc);}
+static int tw(const char*s,int sc){
+    int n=0; const unsigned char*u=(const unsigned char*)s;
+    while(*u){if(*u>=0xC2&&*u<=0xC3&&u[1]>=0x80){n++;u+=2;}else{n++;u++;}}
+    return n*(FW*sc+sc);
+}
+
+/* ============================== BUTTON SYSTEM ============================== */
+static int pt_in(int px,int py,int rx,int ry,int rw,int rh){
+    return px>=rx&&px<rx+rw&&py>=ry&&py<ry+rh;}
+
+typedef enum{BS_NORMAL,BS_HOVER,BS_ACTIVE,BS_DISABLED,BS_TOGON}BtnStyle;
+
+/* Returns 1 if clicked this frame */
+static int dbtn(int x,int y,int w,int h,const char*lbl,BtnStyle sty){
+    int hov=(!g_popup_blocked)&&pt_in(g_mouse.x,g_mouse.y,x,y,w,h);
+    int clk=hov&&g_mouse.clicked&&(sty!=BS_DISABLED);
+    if(clk) g_mouse.clicked=0; /* consume click so no other button fires */
+    uint32_t bg,bo,tc;
+    switch(sty){
+    case BS_DISABLED: bg=0x181828ff;bo=0x282840ff;tc=0x404060ff;break;
+    case BS_TOGON:    bg=hov?0x1a5a1aff:0x144014ff;bo=0x22cc44ff;tc=0x22cc44ff;break;
+    case BS_ACTIVE:   bg=hov?0x5a3000ff:0x402200ff;bo=0xff8c00ff;tc=0xff8c00ff;break;
+    default:          bg=hov?0x38386aff:0x20203aff;bo=hov?0x8080c0ff:0x3a3a6aff;tc=hov?0xffffffff:0xc0c0c0ff;
+    }
+    fr(x,y,w,h,bg);
+    if(hov&&sty!=BS_DISABLED){fr(x,y,w,1,0x5050a0ff);fr(x,y,1,h,0x5050a0ff);fr(x,y+h-1,w,1,0x10101aff);fr(x+w-1,y,1,h,0x10101aff);}
+    dr(x,y,w,h,bo);
+    {int tx2=x+(w-tw(lbl,1))/2,ty2=y+(h-FH)/2; dts(tx2,ty2,lbl,tc,1);}
+    return clk;
+}
+static int dtog(int x,int y,int w,int h,const char*loff,const char*lon,int on){
+    return dbtn(x,y,w,h,on?lon:loff,on?BS_TOGON:BS_NORMAL);}
+
+/* ============================== BLOCK RENDERING ============================== */
+static const uint32_t PC[8]={0x0d0d1aff,0x00c8ffff,0xffe800ff,0xb400ffff,0x00e800ff,0xff2020ff,0x0038ffff,0xff8c00ff};
+/* Special type: 1=attack(red) 2=neutral(orange) 3=friendly(green)
+ * Order matches SP_ defines: a c b r o q g s n i v m d f */
+static const int SP_TYPE[NUM_SPECIALS+1]={
+    0,
+    1,  /* a AddLine     — attack  */
+    3,  /* c ClearLine   — friendly */
+    2,  /* b ClrSpecial  — neutral  */
+    1,  /* r RandClear   — attack  */
+    1,  /* o BlockBomb   — attack  */
+    1,  /* q Quake       — attack  */
+    1,  /* g Gravity     — attack  */
+    1,  /* s Switch      — attack  */
+    3,  /* n Nuke        — friendly */
+    3,  /* i Immunity    — friendly */
+    1,  /* v ClearColumn — attack  */
+    1,  /* m Mutate      — attack  */
+    1,  /* d Darkness    — attack  */
+    1,  /* f Confusion   — attack  */
+};
+static const uint32_t SC[NUM_SPECIALS+1]={
+    0,
+    0xff4040ff, /* a AddLine     red       */
+    0x40ff80ff, /* c ClearLine   green     */
+    0xffcc40ff, /* b ClrSpecial  gold      */
+    0xffaa40ff, /* r RandClear   orange    */
+    0xff8040ff, /* o BlockBomb   orange-red*/
+    0xff6060ff, /* q Quake       red       */
+    0xff5050ff, /* g Gravity     red       */
+    0xff8060ff, /* s Switch      salmon    */
+    0x40ff40ff, /* n Nuke        bright gr */
+    0x40ffccff, /* i Immunity    cyan-gr   */
+    0xff4060ff, /* v ClearColumn crimson   */
+    0xffaa60ff, /* m Mutate      peach     */
+    0x8060ffff, /* d Darkness    purple    */
+    0xff60a0ff, /* f Confusion   pink      */
+};
+static const char *SP_NAMES[NUM_SPECIALS+1]={
+    "",
+    "AddLine","ClearLine","ClrSpecial","RandClear","BlockBomb",
+    "Quake","Gravity","Switch","Nuke","Immunity",
+    "ClearColumn","Mutate","Darkness","Confusion",
+};
+
+static uint32_t ccol(uint8_t v){
+    if(!v)                  return 0;
+    if(v<=7)                return PC[v];
+    if(v==8)                return 0x606060ff;
+    if(v<=8+NUM_SPECIALS)   return SC[v-8];
+    return 0x606060ff;
+}
+
+static void dblk(int px,int py,int sz,uint8_t val,int ghost){
+    uint32_t col;
+    if(!val){fr(px,py,sz,sz,0x0d0d1aff);dr(px,py,sz,sz,0x16162aff);return;}
+    col=ccol(val);
+    if(ghost){dr(px+1,py+1,sz-2,sz-2,(col&0xffffff00)|0x60);return;}
+    fr(px,py,sz,sz,col);
+    {uint32_t r=(col>>24)&0xff,g=(col>>16)&0xff,b=(col>>8)&0xff,a=col&0xff;
+     uint32_t lt=((r+60>255?255:r+60)<<24)|((g+60>255?255:g+60)<<16)|((b+60>255?255:b+60)<<8)|a;
+     uint32_t dk=((r/2)<<24)|((g/2)<<16)|((b/2)<<8)|a;
+     fr(px,py,sz,2,lt);fr(px,py,2,sz,lt);fr(px,py+sz-2,sz,2,dk);fr(px+sz-2,py,2,sz,dk);}
+    if(val>8&&val<=8+NUM_SPECIALS&&sz>=12){char s[2]={SPECIAL_CHARS[val-9],0};dts(px+sz/2-3,py+sz/2-5,s,0xffffffff,1);}
+}
+
+static void dfield(int ox,int oy,int sz,Field*f,Piece*cur,int show_ghost){
+    int x,y;
+    fr(ox,oy,FIELD_WIDTH*sz,FIELD_HEIGHT*sz,0x0d0d1aff);
+    setc(0x16162aff);
+    for(x=0;x<=FIELD_WIDTH;x++) SDL_RenderDrawLine(g_rend,ox+x*sz,oy,ox+x*sz,oy+FIELD_HEIGHT*sz);
+    for(y=0;y<=FIELD_HEIGHT;y++) SDL_RenderDrawLine(g_rend,ox,oy+y*sz,ox+FIELD_WIDTH*sz,oy+y*sz);
+    for(y=0;y<FIELD_HEIGHT;y++) for(x=0;x<FIELD_WIDTH;x++) if(f->cells[y][x]) dblk(ox+x*sz,oy+y*sz,sz,f->cells[y][x],0);
+    if(cur&&show_ghost){
+        Piece gh=*cur; const PieceShape*sh; int i;
+        piece_drop(f,&gh); sh=&PIECES[gh.type][gh.rotation];
+        for(i=0;i<4;i++){int gx=gh.x+sh->c[i].dx,gy=gh.y+sh->c[i].dy;
+            if(gx>=0&&gx<FIELD_WIDTH&&gy>=0&&gy<FIELD_HEIGHT&&!f->cells[gy][gx])
+                dblk(ox+gx*sz,oy+gy*sz,sz,(uint8_t)(cur->type+1),1);}
+    }
+    if(cur){
+        const PieceShape*sh=&PIECES[cur->type][cur->rotation];int i;
+        for(i=0;i<4;i++){int px=cur->x+sh->c[i].dx,py=cur->y+sh->c[i].dy;
+            if(px>=0&&px<FIELD_WIDTH&&py>=0&&py<FIELD_HEIGHT) dblk(ox+px*sz,oy+py*sz,sz,(uint8_t)(cur->type+1),0);}
+    }
+}
+
+static void dnext(int ox,int oy,int bw,int bh,Piece*p){
+    const PieceShape*sh=&PIECES[p->type][0];int sz=20,i,cx=ox+bw/2-sz,cy=oy+bh/2-sz;
+    fr(ox,oy,bw,bh,0x0d0d1aff);dr(ox,oy,bw,bh,COL_BORDER);dt(ox+4,oy+3,"NEXT",COL_GRAY,1);
+    for(i=0;i<4;i++) dblk(cx+sh->c[i].dx*sz,cy+sh->c[i].dy*sz,sz,(uint8_t)(p->type+1),0);}
+
+static void dhold(int ox,int oy,int bw,int bh,int ptype,int used,const char*keyhint){
+    fr(ox,oy,bw,bh,used?0x0a0a0aff:0x0d0d1aff);dr(ox,oy,bw,bh,used?0x303030ff:COL_BORDER);
+    dt(ox+4,oy+3,"HOLD",used?0x404040ff:COL_GRAY,1);
+    dt(ox+4+tw("HOLD",1)+4,oy+3,keyhint,used?0x303030ff:0x505070ff,1);
+    if(ptype>=0&&ptype<NUM_PIECES){
+        const PieceShape*sh=&PIECES[ptype][0];int sz=20,i,cx=ox+bw/2-sz,cy=oy+bh/2-sz;
+        uint32_t col=used?0x303030ff:0xffffffff;
+        (void)col;
+        for(i=0;i<4;i++) dblk(cx+sh->c[i].dx*sz,cy+sh->c[i].dy*sz,sz,(uint8_t)(used?8:(ptype+1)),0);
+    } else {
+        dtc(ox+bw/2,oy+bh/2-FH/2,"—",0x303040ff,1);
+    }
+}
+
+static void dpanel(int x,int y,int w,int h,const char*title){
+    fr(x,y,w,h,COL_HIGHLIGHT);dr(x,y,w,h,COL_BORDER);
+    if(title&&*title){fr(x,y,w,FH+6,COL_BORDER);dt(x+4,y+3,title,COL_LTGRAY,1);}
+}
+
+/* ============================== SPECIALS BAR ==============================
+ * Two sections:
+ *   Row 1: SPECIALS queue (9 slots) + hover tooltip
+ *   Taunt strip: 18px for taunt notifications
+ * TARGETS removed — use number keys 1-8 mapped to display IDs.
+ * ==================================================================== */
+static BtnId draw_attack_bar(int ox,int oy,int bw,int bh,ClientCtx*c){
+    BtnId action=BTN_NONE;
+    int i,active=(c->state==CS_PLAYING&&!c->paused&&!c->is_spectator&&!c->no_attacks);
+
+    const int TAUNT_H = 18;
+    const int ROW_H   = bh - TAUNT_H;
+    const int PAD     = 4;
+    const int SLOT_SZ = 32;
+    const int SLOT_GAP= 3;
+    const int NUM_SL  = 9;
+    const int LBL_W   = 72;
+
+    fr(ox,oy,bw,bh,0x0a0a14ff);
+    dr(ox,oy,bw,bh,COL_BORDER);
+
+    /* -------- SPECIALS ROW -------- */
+    {
+        int r1y   = oy + 1;
+        int sloth = ROW_H - 2;
+        int slot_y= r1y + (sloth - SLOT_SZ)/2;
+        int slots_end_x = ox+PAD+LBL_W + NUM_SL*(SLOT_SZ+SLOT_GAP);
+        dt(ox+PAD, r1y+(sloth-FH)/2, "SPECIALS", 0x4a4a78ff, 1);
+        int hovered_sp = 0;
+        for(i=0;i<NUM_SL;i++){
+            int sx = ox+PAD+LBL_W + i*(SLOT_SZ+SLOT_GAP);
+            uint8_t sp = (i<c->my_field.special_count)
+                       ? c->my_field.specials[(c->my_field.special_head+i)%64] : 0;
+            uint32_t col = sp ? SC[sp<=NUM_SPECIALS?sp:0] : 0x0e0e1eff;
+            fr(sx,slot_y,SLOT_SZ,SLOT_SZ, sp?col:0x111120ff);
+            if(i==0&&sp) dr(sx-1,slot_y-1,SLOT_SZ+2,SLOT_SZ+2,0xffffffff);
+            else         dr(sx,slot_y,SLOT_SZ,SLOT_SZ,sp?0x505078ff:0x1e1e30ff);
+            if(sp&&sp<=NUM_SPECIALS){
+                int spt=SP_TYPE[sp];
+                uint32_t type_col = spt==1?0xff3030ff:spt==3?0x30ff60ff:0xffaa20ff;
+                char s[2]={SPECIAL_CHARS[sp-1],'\0'};
+                dts(sx+SLOT_SZ/2-3,slot_y+SLOT_SZ/2-6,s,0xffffffff,1);
+                fr(sx+2,slot_y+2,6,6,type_col);
+                if(active&&pt_in(g_mouse.x,g_mouse.y,sx,slot_y,SLOT_SZ,SLOT_SZ)){
+                    dr(sx,slot_y,SLOT_SZ,SLOT_SZ,type_col);
+                    hovered_sp = sp;
+                }
+            }
+        }
+        /* Hover tooltip right of slots — show first special by default,
+           switch to hovered slot when mouse is over one */
+        {
+            int tip_sp = 0;
+            /* Default: first special in queue */
+            if (c->my_field.special_count > 0)
+                tip_sp = c->my_field.specials[c->my_field.special_head % 64];
+            /* Override with hovered slot if any */
+            if (hovered_sp > 0)
+                tip_sp = hovered_sp;
+            if (tip_sp > 0 && tip_sp <= NUM_SPECIALS) {
+                int spt = SP_TYPE[tip_sp];
+                char tip[64];
+                snprintf(tip, sizeof(tip), "%s%s [%s]",
+                    hovered_sp ? "" : "\x10 ",   /* ► prefix when showing default */
+                    SP_NAMES[tip_sp],
+                    spt==1?"ATTACK":spt==3?"FRIENDLY":"NEUTRAL");
+                uint32_t tc = spt==1?0xff8080ff:spt==3?0x80ff80ff:0xffcc60ff;
+                /* Dim slightly when showing default (not hovered) */
+                if (!hovered_sp) tc = (tc & 0xffffff00) | 0xa0;
+                dt(slots_end_x+6, slot_y+SLOT_SZ/2-FH/2, tip, tc, 1);
+            }
+        }
+    }
+
+    /* -------- TAUNT STRIP -------- */
+    {
+        int ty = oy + ROW_H;
+        fr(ox,ty,bw,TAUNT_H,0x100a00ff);
+        dr(ox,ty,bw,TAUNT_H,0x2a2000ff);
+        if(c->taunt_timer>0){
+            uint8_t alpha=(c->taunt_timer>60)?255:(uint8_t)(c->taunt_timer*255/60);
+            uint32_t col=(0xffcc5500)|(alpha);
+            dtc(ox+bw/2, ty+(TAUNT_H-FH)/2, c->taunt_text, col, 1);
+        } else {
+            dtc(ox+bw/2, ty+(TAUNT_H-FH)/2, "-- no taunts yet --", 0x222018ff, 1);
+        }
+    }
+    return action;
+}
+static void draw_activity_log(int ox, int oy, int w, int h, ClientCtx *c) {
+    int lh = FH+3, i;
+    int maxl = (h - 20) / lh;
+    int start = c->act_count - maxl; if(start<0) start=0;
+    /* Same style as chat panel: dark background, border, plain text label */
+    fr(ox,oy,w,h,0x10101fff); dr(ox,oy,w,h,COL_BORDER);
+    dt(ox+4,oy+3,"ACTIVITY",COL_GRAY,1);
+    for(i=start;i<c->act_count;i++){
+        int ty=oy+20+(i-start)*lh;
+        uint32_t col=c->act_log[i].colour;
+        if(c->act_log[i].age>180){
+            int fade=255-(c->act_log[i].age-180)*255/120;
+            if(fade<40) fade=40;
+            col=(col&0xffffff00)|(uint8_t)fade;
+        }
+        char cl[MAX_ACT_LEN]; int mc=(w-8)/(FW+1);
+        if(mc>=(int)sizeof(cl)) mc=(int)sizeof(cl)-1;
+        strncpy(cl,c->act_log[i].text,mc); cl[mc]='\0';
+        dt(ox+4,ty,cl,col,1);
+    }
+    if(c->act_count==0)
+        dt(ox+4,oy+20,"(no specials yet)",0x303050ff,1);
+}
+
+/* ============================== OPPONENT MINI FIELD ============================== */
+static void dopp(int ox,int oy,Field*f,const char*nick,int alive,int spectating,int slot){
+    int sz=MINI_BLOCK,fw=FIELD_WIDTH*sz,fh=FIELD_HEIGHT*sz,x,y;
+    /* Panel border — purple tint for spectators */
+    uint32_t border_col = spectating ? 0x6060a0ff : COL_BORDER;
+    fr(ox-2,oy-16,fw+4,fh+20,spectating?0x0a0a22ff:COL_HIGHLIGHT);
+    dr(ox-2,oy-16,fw+4,fh+20,border_col);
+
+    /* Header: slot chip left, nick centre, SPEC badge right */
+    if(slot>0){
+        char s[4]; snprintf(s,sizeof(s),"%d",slot);
+        fr(ox-2,oy-16,FW+6,16,spectating?0x101022ff:0x1a1a00ff);
+        dt(ox,oy-14,s,spectating?0x6060a0ff:COL_HOSTGOLD,1);
+    }
+    int nick_x = ox + (slot>0 ? FW+5 : 0);
+    dt(nick_x,oy-14,nick?nick:"?",spectating?0x5050a0ff:alive?COL_LTGRAY:0x505050ff,1);
+    /* Spectator badge — right side of header, clear purple label */
+    if(spectating){
+        int bw=tw("SPEC",1)+6;
+        fr(ox+fw-bw-2,oy-16,bw+2,16,0x20204aff);
+        dt(ox+fw-bw,oy-14,"SPEC",0x8080ccff,1);
+    }
+
+    /* Field background */
+    fr(ox,oy,fw,fh,spectating?0x080814ff:0x0d0d1aff);
+    for(y=0;y<FIELD_HEIGHT;y++) for(x=0;x<FIELD_WIDTH;x++){
+        uint8_t v=f->cells[y][x]; if(v) fr(ox+x*sz,oy+y*sz,sz-1,sz-1,ccol(v));}
+
+    /* Spectator overlay — dim the field with SPECTATOR text */
+    if(spectating){
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+        fr(ox,oy,fw,fh,0x00000088);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+        dtc(ox+fw/2,oy+fh/2-FH,"SPECTATOR",0x6060a0ff,1);
+        dtc(ox+fw/2,oy+fh/2+2,"(watching)",0x404080ff,1);
+        return;
+    }
+
+    if(!alive){
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+        fr(ox,oy,fw,fh,0x00000099);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+        dtc(ox+fw/2,oy+fh/2-6,"OUT",COL_INGAME_RED,1);}
+}
+
+/* ============================== CHAT PANEL ============================== */
+static int draw_chat_panel(int ox,int oy,int w,int h,ClientCtx*c){
+    int line_h=FH+3,i,clicked_chat=0;
+    int input_h=22, hdr_h=20, sep=1, sb_w=8;
+    int msg_w=w-sb_w; /* leave room for scrollbar */
+    int msg_h=h-hdr_h-sep-sep-input_h;
+    int max_l=msg_h/line_h; if(max_l<1)max_l=1;
+
+    /* Clamp scroll: 0=bottom, max scroll = max history - visible */
+    int max_scroll=c->chat_count-max_l; if(max_scroll<0)max_scroll=0;
+    if(c->chat_scroll>max_scroll) c->chat_scroll=max_scroll;
+    if(c->chat_scroll<0)          c->chat_scroll=0;
+
+    /* Panel background + border */
+    fr(ox,oy,w,h,0x0c0c1aff); dr(ox,oy,w,h,0x3a3a60ff);
+
+    /* Header */
+    dt(ox+4,oy+4,"ROOM CHAT",0x6060a0ff,1);
+    {int btn_w=tw("Chat (Tab)",1)+14;
+     if(dbtn(ox+w-sb_w-btn_w-2,oy+2,btn_w,16,"Chat (Tab)",BS_NORMAL)) clicked_chat=1;}
+    fr(ox,oy+hdr_h,w,sep,0x2a2a50ff);
+
+    /* Messages — scroll: 0=show newest, N=show N lines back */
+    {int end=c->chat_count - c->chat_scroll; if(end<0)end=0;
+     int start=end-max_l; if(start<0)start=0;
+     for(i=start;i<end;i++){
+         int ty=oy+hdr_h+sep+2+(i-start)*line_h;
+         uint32_t col=c->chat[i].colour;
+         if(c->chat[i].age>300)col=(col&0xffffff00)|0x80;
+         char cl[120]; int mc=(msg_w-8)/(FW+1); if(mc>119)mc=119;
+         strncpy(cl,c->chat[i].text,mc);cl[mc]=0;
+         dt(ox+4,ty,cl,col,1);
+     }}
+
+    /* Scrollbar */
+    {int sty=oy+hdr_h+sep, sth=h-hdr_h-sep-sep-input_h;
+     int sbx=ox+msg_w;
+     fr(sbx,sty,sb_w,sth,0x08081aff);
+     if(max_scroll>0){
+         int thumb_h=sth*max_l/(c->chat_count>0?c->chat_count:1);
+         if(thumb_h<12)thumb_h=12;
+         int thumb_y=sty+(sth-thumb_h)*(max_scroll-c->chat_scroll)/max_scroll;
+         /* Highlight thumb when dragging */
+         uint32_t thumb_col=c->chat_sb_drag?0x6060b0ff:0x3a3a70ff;
+         fr(sbx+1,thumb_y,sb_w-2,thumb_h,thumb_col);
+         /* Start drag on mousedown over thumb */
+         if(g_mouse.held&&pt_in(g_mouse.x,g_mouse.y,sbx+1,thumb_y,sb_w-2,thumb_h)
+            &&!c->chat_sb_drag){
+             c->chat_sb_drag=1;
+             c->chat_sb_drag_y0=g_mouse.y;
+             c->chat_sb_drag_scroll0=c->chat_scroll;
+         }
+         /* Continue drag */
+         if(c->chat_sb_drag&&g_mouse.held){
+             int dy=g_mouse.y-c->chat_sb_drag_y0;
+             /* dy pixels maps to scroll: negative dy = scroll up (more history) */
+             int ds=dy*(max_scroll+1)/(sth-thumb_h+1);
+             c->chat_scroll=c->chat_sb_drag_scroll0-ds;
+             if(c->chat_scroll<0)c->chat_scroll=0;
+             if(c->chat_scroll>max_scroll)c->chat_scroll=max_scroll;
+         }
+         /* Release drag */
+         if(!g_mouse.held) c->chat_sb_drag=0;
+         /* Click track (outside thumb) to jump */
+         if(pt_in(g_mouse.x,g_mouse.y,sbx,sty,sb_w,sth)&&g_mouse.clicked
+            &&!pt_in(g_mouse.x,g_mouse.y,sbx+1,thumb_y,sb_w-2,thumb_h)){
+             int rel=g_mouse.y-sty;
+             c->chat_scroll=max_scroll-(rel*max_scroll/sth);
+         }
+     } else {
+         if(!g_mouse.held) c->chat_sb_drag=0;
+     }}
+
+    /* Separator + input box */
+    fr(ox,oy+h-input_h-sep,w,sep,0x3a3a70ff);
+    {int iy=oy+h-input_h;
+     if(c->chat_input.active){
+         fr(ox,iy,w,input_h,0x14143aff);
+         dr(ox,iy,w,input_h,0xaaaaffff);
+         char d[160]; snprintf(d,sizeof(d),"> %s_",c->chat_input.text);
+         dt(ox+6,iy+(input_h-FH)/2,d,0xeeeeffff,1);
+     } else {
+         fr(ox,iy,w,input_h,0x08081aff);
+         dr(ox,iy,w,input_h,0x2a2a50ff);
+         dt(ox+6,iy+(input_h-FH)/2,"Tab to chat...",0x404070ff,1);
+     }}
+    return clicked_chat;
+}
+
+/* ============================== WINNER BANNER ============================== */
+static void draw_winner(ClientCtx*c){
+    if(!c->winner[0]||c->winner_timer<=0)return;
+    char msg[64];snprintf(msg,sizeof(msg),"  %s WINS!  ",c->winner);
+    int bw=tw(msg,2)+20,bh=FH*2+20,bx=WIN_W/2-bw/2,by=WIN_H/2-bh/2-40;
+    int al=(c->winner_timer>60)?230:(c->winner_timer*230/60);
+    SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+    fr(bx-4,by-4,bw+8,bh+8,al);fr(bx,by,bw,bh,(0x1a1a2e00)|al);
+    dr(bx,by,bw,bh,COL_HOSTGOLD);
+    SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+    dts(bx+10,by+10,msg,COL_HOSTGOLD,2);}
+
+/* ============================== TEXT FIELD ============================== */
+static int draw_textfield(int x,int y,int w,int h,TextField*tf,const char*placeholder){
+    int hov=pt_in(g_mouse.x,g_mouse.y,x,y,w,h);
+    int clicked=(hov&&g_mouse.clicked);
+    uint32_t bg=tf->focused?0x1e1e3aff:0x141420ff;
+    uint32_t bo=tf->focused?0x8080c0ff:0x3a3a6aff;
+    fr(x,y,w,h,bg);dr(x,y,w,h,bo);
+    if(tf->len>0){
+        char disp[130];snprintf(disp,sizeof(disp),"%s%s",tf->text,tf->focused?"_":"");
+        dt(x+5,y+(h-FH)/2,disp,COL_WHITE,1);
+    } else {
+        dt(x+5,y+(h-FH)/2,placeholder,0x404060ff,1);
+        if(tf->focused) dt(x+5,y+(h-FH)/2,"_",0x8080a0ff,1);
+    }
+    return clicked;
+}
+
+/* ============================== CONNECT SCREEN ============================== */
+/* Draw a password field — same as textfield but shows asterisks */
+static int draw_passfield(int x,int y,int w,int h,TextField*tf,const char*placeholder){
+    int hov=pt_in(g_mouse.x,g_mouse.y,x,y,w,h);
+    int clicked=(hov&&g_mouse.clicked);
+    uint32_t bg=tf->focused?0x1e1e3aff:0x141420ff;
+    uint32_t bo=tf->focused?0x8080c0ff:0x3a3a6aff;
+    char stars[130];
+    int i;
+    fr(x,y,w,h,bg); dr(x,y,w,h,bo);
+    if(tf->len>0){
+        for(i=0;i<tf->len&&i<128;i++) stars[i]='*';
+        if(tf->focused) stars[i++]='_';
+        stars[i]='\0';
+        dt(x+5,y+(h-FH)/2,stars,COL_WHITE,1);
+    } else {
+        dt(x+5,y+(h-FH)/2,placeholder,0x404060ff,1);
+        if(tf->focused) dt(x+5,y+(h-FH)/2,"_",0x8080a0ff,1);
+    }
+    return clicked;
+}
+
+/* ============================== SERVER LIST ============================== */
+/* ── Shared scancode -> human-readable name ── */
+static const char *sc_name(int sc) {
+    switch(sc) {
+        case 4:  return "A";       case 5:  return "B";
+        case 6:  return "C";       case 7:  return "D";
+        case 8:  return "E";       case 9:  return "F";
+        case 10: return "G";       case 11: return "H";
+        case 12: return "I";       case 13: return "J";
+        case 14: return "K";       case 15: return "L";
+        case 16: return "M";       case 17: return "N";
+        case 18: return "O";       case 19: return "P";
+        case 20: return "Q";       case 21: return "R";
+        case 22: return "S";       case 23: return "T";
+        case 24: return "U";       case 25: return "V";
+        case 26: return "W";       case 27: return "X";
+        case 28: return "Y";       case 29: return "Z";
+        case 30: return "1";       case 31: return "2";
+        case 32: return "3";       case 33: return "4";
+        case 34: return "5";       case 35: return "6";
+        case 36: return "7";       case 37: return "8";
+        case 38: return "9";       case 39: return "0";
+        case 40: return "Enter";   case 41: return "Escape";
+        case 42: return "Bksp";    case 43: return "Tab";
+        case 44: return "Space";   case 45: return "-";
+        case 46: return "=";       case 58: return "F1";
+        case 59: return "F2";      case 60: return "F3";
+        case 61: return "F4";      case 62: return "F5";
+        case 63: return "F6";      case 64: return "F7";
+        case 65: return "F8";      case 79: return "Right";
+        case 80: return "Left";    case 81: return "Down";
+        case 82: return "Up";      case 224: return "LCtrl";
+        case 225: return "LShift"; case 226: return "LAlt";
+        case 228: return "RCtrl";  case 229: return "RShift";
+        case 230: return "RAlt";
+        default: { static char buf[8]; snprintf(buf,sizeof(buf),"#%d",sc); return buf; }
+    }
+}
+
+/* ── Shared keymap popup render — call from any screen ── */
+static void render_keymap_popup(ClientCtx *c, int saved_click) {
+    static const char *KM_LABELS[] = {
+        "Move Left","Move Right","Rotate CW","Rotate CCW",
+        "Soft Drop","Hard Drop","Hold","Hold (alt)",
+        "Chat","Pause","Ready (toggle)"
+    };
+    int *km_fields[] = {
+        &c->km.move_left, &c->km.move_right,
+        &c->km.rotate_cw, &c->km.rotate_ccw,
+        &c->km.soft_drop, &c->km.hard_drop,
+        &c->km.hold,      &c->km.hold2,
+        &c->km.chat,      &c->km.pause,
+        &c->km.ready
+    };
+    const int NKEYS = 11;
+    const int ROW_H = 30, ROW_PAD = 4;
+    int pw=400, ph=30+NKEYS*(ROW_H+ROW_PAD)+50;
+    int px=(WIN_W-pw)/2, py=(WIN_H-ph)/2;
+    int capturing = (c->keymap_capture_idx >= 0);
+
+    SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+    fr(0,0,WIN_W,WIN_H,0x00000099);
+    SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+
+    /* saved_click is the real this-frame click captured before the caller
+     * zeroed g_mouse.clicked for popup blocking. Use it for outside-click
+     * guard AND restore it into g_mouse.clicked for all internal widgets. */
+    if(!capturing && saved_click && !pt_in(g_mouse.x,g_mouse.y,px,py,pw,ph)){
+        c->keymap_popup_open=0; c->keymap_capture_idx=-1; g_mouse.clicked=0; return;
+    }
+
+    /* Restore real click into g_mouse.clicked so dbtn and row hits work */
+    g_popup_blocked = 0;
+    g_mouse.clicked = saved_click;
+
+    fr(px,py,pw,ph,0x10102aff); dr(px,py,pw,ph,COL_PIECE_I);
+    dtc(px+pw/2,py+10,"Key Bindings",COL_LTGRAY,2);
+
+    for(int i=0;i<NKEYS;i++){
+        int bx=px+12, by=py+28+i*(ROW_H+ROW_PAD);
+        int bw=pw-24, bh=ROW_H;
+        int is_cap=(c->keymap_capture_idx==i);
+        int hv=(!capturing||is_cap)&&pt_in(g_mouse.x,g_mouse.y,bx,by,bw,bh);
+        uint32_t bg=is_cap?0x201840ff:hv?0x141428ff:0x0c0c1eff;
+        uint32_t border=is_cap?0x9060ffff:hv?0x4040a0ff:0x222244ff;
+        fr(bx,by,bw,bh,bg); dr(bx,by,bw,bh,border);
+        dt(bx+10,by+bh/2-FH/2,KM_LABELS[i],is_cap?0xc0a0ffff:0x8080a0ff,1);
+        if(is_cap){
+            const char *prompt="Press any key...";
+            uint32_t pc=(int)(SDL_GetTicks64()/500)%2?0x9060ffff:0xc080ffff;
+            dt(bx+bw-tw(prompt,1)-10,by+bh/2-FH/2,prompt,pc,1);
+        } else {
+            const char *nm=sc_name(*km_fields[i]);
+            dt(bx+bw-tw(nm,1)-10,by+bh/2-FH/2,nm,0x8080c0ff,1);
+        }
+        if(!is_cap && hv && g_mouse.clicked){
+            c->keymap_capture_idx=i; g_mouse.clicked=0;
+        }
+    }
+    if(dbtn(px+12,py+ph-44,pw-24,32,"Close",BS_NORMAL)){
+        c->keymap_popup_open=0; c->keymap_capture_idx=-1;
+    }
+    /* Consume any remaining click so background buttons don't fire after popup */
+    g_mouse.clicked = 0;
+}
+
+/* ── Shared about popup render ── */
+static void render_about_popup(ClientCtx *c, int saved_click) {
+    int pw=640, ph=346, px=(WIN_W-pw)/2, py=(WIN_H-ph)/2;
+
+    SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+    fr(0,0,WIN_W,WIN_H,0x000000b0);
+    SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+
+    /* Outside click: if license open, close license; else close about */
+    if(saved_click && !pt_in(g_mouse.x,g_mouse.y,px,py,pw,ph)){
+        if(c->license_popup_open){ c->license_popup_open=0; }
+        else { c->about_popup_open=0; }
+        g_mouse.clicked=0; return;
+    }
+    /* If license popup is open and click is inside about but outside license, close license */
+    if(c->license_popup_open && saved_click){
+        int lpw=600,lph=420,lpx2=(WIN_W-lpw)/2,lpy2=(WIN_H-lph)/2;
+        if(!pt_in(g_mouse.x,g_mouse.y,lpx2,lpy2,lpw,lph)){
+            c->license_popup_open=0; g_mouse.clicked=0;
+        }
+    }
+    g_popup_blocked=0;
+    g_mouse.clicked=saved_click;
+
+    fr(px,py,pw,ph,0x10102aff);
+    fr(px,py,pw,30,0x1a1a40ff);
+    dr(px,py,pw,ph,COL_PIECE_I);
+    {char hdr[32]; snprintf(hdr,sizeof(hdr),"LineClash v%s",TETRINETZ_VERSION);
+     dtc(px+pw/2,py+9,hdr,COL_PIECE_I,1);}
+
+    int ty=py+42;
+    dt(px+22,ty,"A multiplayer falling blocks clone in the style of LineClash.",COL_LTGRAY,1); ty+=16;
+    dt(px+22,ty,"Stack blocks, clear lines, and use special blocks to make opponents top out.",0x7070a0ff,1); ty+=24;
+    dt(px+22,ty,"Developer  :",0x5050a0ff,1);
+    dt(px+130,ty,"Tommy Frössman  (frossmant / styrbjorn)",COL_LTGRAY,1); ty+=16;
+    dt(px+22,ty,"License    :",0x5050a0ff,1);
+    /* License link — clickable */
+    {const char *lic="GNU General Public License v3 (GPLv3)";
+     int lw=tw(lic,1);
+     int lhov=pt_in(g_mouse.x,g_mouse.y,px+130,ty-2,lw,FH+4);
+     uint32_t lcol=lhov?0xffffffff:0x70c070ff;
+     dt(px+130,ty,lic,lcol,1);
+     fr(px+130,ty+FH+1,lw,1,lcol);
+     if(lhov&&g_mouse.clicked){ c->license_popup_open=1; g_mouse.clicked=0; }
+    } ty+=24;
+    /* Source code link */
+    {const char *url="https://github.com/frossmant/lineclash";
+     int uw=tw(url,1);
+     int uhov=pt_in(g_mouse.x,g_mouse.y,px+130,ty-2,uw,FH+4);
+     uint32_t ucol=uhov?0xffffffff:COL_OPEN_GREEN;
+     dt(px+22,ty,"Source code:",0x5050a0ff,1);
+     dt(px+130,ty,url,ucol,1);
+     fr(px+130,ty+FH+1,uw,1,ucol);
+     if(uhov&&g_mouse.clicked){
+#if defined(PLATFORM_WINDOWS)
+         ShellExecuteA(NULL,"open",url,NULL,NULL,SW_SHOWNORMAL);
+#elif defined(SDL_OpenURL)
+         SDL_OpenURL(url);
+#elif defined(__APPLE__)
+         {char cmd[256];snprintf(cmd,sizeof(cmd),"open \"%s\"",url);system(cmd);}
+#else
+         {char cmd[256];snprintf(cmd,sizeof(cmd),"xdg-open \"%s\"",url);system(cmd);}
+#endif
+         g_mouse.clicked=0;
+     }
+     ty+=16;}
+    /* Issues link */
+    {const char *iurl="https://github.com/frossmant/lineclash/issues";
+     int iw=tw(iurl,1);
+     int ihov=pt_in(g_mouse.x,g_mouse.y,px+130,ty-2,iw,FH+4);
+     uint32_t icol=ihov?0xffffffff:COL_OPEN_GREEN;
+     dt(px+22,ty,"Issues     :",0x5050a0ff,1);
+     dt(px+130,ty,iurl,icol,1);
+     fr(px+130,ty+FH+1,iw,1,icol);
+     if(ihov&&g_mouse.clicked){
+#if defined(PLATFORM_WINDOWS)
+         ShellExecuteA(NULL,"open",iurl,NULL,NULL,SW_SHOWNORMAL);
+#elif defined(SDL_OpenURL)
+         SDL_OpenURL(iurl);
+#elif defined(__APPLE__)
+         {char cmd[256];snprintf(cmd,sizeof(cmd),"open \"%s\"",iurl);system(cmd);}
+#else
+         {char cmd[256];snprintf(cmd,sizeof(cmd),"xdg-open \"%s\"",iurl);system(cmd);}
+#endif
+         g_mouse.clicked=0;
+     }
+     ty+=24;}
+    dt(px+22,ty,"Controls:",0x5050a0ff,1); ty+=15;
+    dt(px+32,ty,"Arrow keys = move / rotate       Space = hard drop",0x6060a0ff,1); ty+=13;
+    dt(px+32,ty,"C / Shift = hold piece           Z = rotate CCW",0x6060a0ff,1); ty+=13;
+    dt(px+32,ty,"1 = send special to self         2-8 = send to opponents",0x6060a0ff,1); ty+=13;
+    dt(px+32,ty,"Tab = open chat                  R = ready   Esc = leave room",0x6060a0ff,1);
+    if(dbtn(px+pw/2-54,py+ph-46,108,34,"Close",BS_ACTIVE)){
+        c->about_popup_open=0; c->license_popup_open=0;
+    }
+    g_mouse.clicked=0; /* consume remaining click */
+
+    /* ── LICENSE sub-popup ── */
+    if(c->license_popup_open){
+        static const char *LICENSE_LINES[]={
+            "GNU GENERAL PUBLIC LICENSE",
+            "Version 3, 29 June 2007",
+            "",
+            "Copyright (C) 2024  frossmant",
+            "https://github.com/frossmant/lineclash",
+            "",
+            "This program is free software: you can redistribute it",
+            "and/or modify it under the terms of the GNU General",
+            "Public License as published by the Free Software",
+            "Foundation, either version 3 of the License, or",
+            "(at your option) any later version.",
+            "",
+            "This program is distributed in the hope that it will",
+            "be useful, but WITHOUT ANY WARRANTY; without even the",
+            "implied warranty of MERCHANTABILITY or FITNESS FOR A",
+            "PARTICULAR PURPOSE. See the GNU General Public License",
+            "for more details.",
+            "",
+            "You should have received a copy of the GNU General",
+            "Public License along with this program. If not, see:",
+            "https://www.gnu.org/licenses/gpl-3.0.txt",
+            "",
+            "                   TERMS AND CONDITIONS",
+            "",
+            "0. Definitions.",
+            "",
+            "\"This License\" refers to version 3 of the GNU General",
+            "Public License.",
+            "",
+            "\"The Program\" refers to any copyrightable work licensed",
+            "under this License.",
+            "",
+            "1. Source Code.",
+            "",
+            "The \"source code\" for a work means the preferred form",
+            "of the work for making modifications to it. \"Object",
+            "code\" means any non-source form of a work.",
+            "",
+            "2. Basic Permissions.",
+            "",
+            "All rights granted under this License are granted for",
+            "the term of copyright on the Program, and are",
+            "irrevocable provided the stated conditions are met.",
+            "This License explicitly affirms your unlimited",
+            "permission to run the unmodified Program.",
+            "",
+            "Full license text: https://www.gnu.org/licenses/",
+            NULL
+        };
+        int nlines=0; while(LICENSE_LINES[nlines]) nlines++;
+        int lpw=600,lph=440,lpx=(WIN_W-lpw)/2,lpy=(WIN_H-lph)/2;
+        const int VIS=21, LINE_H=16;
+        const int CLOSE_H=32, CLOSE_MARGIN=26;
+        const int CONTENT_H=lph-36-CLOSE_H-CLOSE_MARGIN*2; /* text area height */
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+        fr(0,0,WIN_W,WIN_H,0x000000a0);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+        /* Fill body, then header, then draw full border on top */
+        fr(lpx,lpy,lpw,lph,0x0c0c1eff);
+        fr(lpx,lpy,lpw,28,0x14241aff);
+        dr(lpx,lpy,lpw,lph,0x70c070ff); /* border drawn last — complete rectangle */
+        dtc(lpx+lpw/2,lpy+8,"GNU General Public License v3",0x70c070ff,1);
+        /* scroll area */
+        int max_scroll=nlines-VIS; if(max_scroll<0)max_scroll=0;
+        if(c->license_scroll>max_scroll) c->license_scroll=max_scroll;
+        if(c->license_scroll<0) c->license_scroll=0;
+        for(int li=0;li<VIS&&(li+c->license_scroll)<nlines;li++){
+            const char *line=LICENSE_LINES[li+c->license_scroll];
+            uint32_t col=(*line=='h')?0x60c060ff:
+                         (*line==' '||*line=='"')?0x9090c0ff:
+                         (li==0&&c->license_scroll==0)?0xa0ffa0ff:0x8080a0ff;
+            dt(lpx+14,lpy+34+li*LINE_H,line,col,1);
+        }
+        /* scroll bar */
+        if(nlines>VIS){
+            int sbh=CONTENT_H, sby=lpy+34;
+            int th=(sbh*VIS)/nlines;
+            int ty2=sby+(sbh*c->license_scroll)/nlines;
+            fr(lpx+lpw-10,sby,6,sbh,0x1a1a30ff);
+            fr(lpx+lpw-10,ty2,6,th,0x70c070ff);
+            if(g_mouse.held&&pt_in(g_mouse.x,g_mouse.y,lpx+lpw-12,sby,10,sbh)){
+                c->license_scroll=(int)((g_mouse.y-sby)*nlines/sbh);
+                if(c->license_scroll>max_scroll) c->license_scroll=max_scroll;
+            }
+        }
+        /* Close button with clear margin from text area */
+        if(dbtn(lpx+lpw/2-60,lpy+lph-CLOSE_H-CLOSE_MARGIN,120,CLOSE_H,"Close",BS_ACTIVE))
+            c->license_popup_open=0;
+    }
+}
+
+void sdl_render_server_list(ClientCtx*c){
+    BtnId action=BTN_NONE;
+    const int CX    = WIN_W/2;
+    const int LSX   = CX-440;
+    const int LSW   = 880;
+    const int ROW_H = 52;
+    const int HDR_Y = 96;
+    const int LIST_Y= HDR_Y+20;
+
+    /* If any popup is open, swallow background clicks entirely so
+     * underlying buttons cannot fire while a popup is visible. */
+    int any_popup = (c->server_popup_open || c->about_popup_open || c->keymap_popup_open);
+    int saved_click = g_mouse.clicked;
+    g_popup_blocked = any_popup; /* suppress hover+click on background */
+    if (any_popup) g_mouse.clicked = 0;
+    /* Per-row button strip (right side): Refresh + Rename + Remove */
+    const int BTN_W_REF = 66;   /* wider for "Refresh" text */
+    const int BTN_W     = 58;   /* Rename / Remove */
+    const int BTN_H     = 26;
+    const int BUTTONS_W = BTN_W_REF + BTN_W*2 + 16;
+    /* Content columns */
+    const int COL_NAME = LSX+10;
+    const int COL_STAT = COL_NAME+200;
+    const int COL_REG  = COL_STAT+120;  /* registered users */
+    const int COL_PLAY = COL_REG+110;   /* playing — wider gap */
+    const int COL_IDLE = COL_PLAY+100;  /* idle — wider gap */
+
+    SDL_SetRenderDrawColor(g_rend,0x0d,0x0d,0x1a,0xff);
+    SDL_RenderClear(g_rend);
+
+    /* Title */
+    fr(0,0,WIN_W,86,0x12122aff); dr(0,0,WIN_W,86,COL_BORDER);
+    {int tx=20; /* left-aligned title */
+     dts(tx,10,"LineClash",COL_PIECE_I,3);
+     {char ver[96]; snprintf(ver,sizeof(ver),"v%s  (%s)",TETRINETZ_VERSION,BUILD_DATE);
+      int tw3=tw("LineClash",3);
+      dtc(tx+tw3/2,56,ver,0x4040aaff,1);}}
+    if(dbtn(WIN_W-72,6,64,24,"Quit",BS_NORMAL))        action=BTN_QUIT;
+    if(dbtn(WIN_W-142,6,62,24,"About",BS_NORMAL))      action=BTN_SRV_ABOUT;
+    if(dbtn(WIN_W-214,6,64,24,"Keymap",BS_NORMAL))     action=BTN_KEYMAP_POPUP;
+    {BtnStyle ss=c->sound_enabled?BS_TOGON:BS_NORMAL;
+     if(dbtn(WIN_W-286,6,64,24,"SFX",ss))              action=BTN_TOGGLE_SOUND;}
+    {BtnStyle ms=music_get_enabled()?BS_TOGON:BS_NORMAL;
+     if(dbtn(WIN_W-358,6,64,24,"Music",ms))            action=BTN_TOGGLE_MUSIC;}
+
+
+    /* SFX + Music volume sliders — beneath the toggle buttons, inside the title bar */
+    {int sx=WIN_W-286,sy=32,sw=64,sh=22;
+     float _v=sound_get_sfx_volume();
+     int track=sw-2; int filled=(int)(_v*track);
+     fr(sx,sy,sw,sh,0x16182aff);        /* background */
+     if(filled>0) fr(sx+1,sy+1,filled,sh-2,0x3a5a9aff); /* filled */
+     fr(sx+1+filled,sy+1,track-filled,sh-2,0x1c1e30ff); /* empty  */
+     dr(sx,sy,sw,sh,0x4a4a80ff);        /* border on top */
+     if(g_mouse.held&&pt_in(g_mouse.x,g_mouse.y,sx,sy,sw,sh)) c->sfx_slider_drag=1;
+     if(!g_mouse.held) c->sfx_slider_drag=0;
+     if(c->sfx_slider_drag){
+         float nv=(float)(g_mouse.x-(sx+1))/track;
+         if(nv<0.0f)nv=0.0f; else if(nv>1.0f)nv=1.0f;
+         sound_set_sfx_volume(nv); client_save_settings(c);}
+    }
+    {int sx=WIN_W-358,sy=32,sw=64,sh=22;
+     float _v=music_get_volume();
+     int track=sw-2; int filled=(int)(_v*track);
+     fr(sx,sy,sw,sh,0x16182aff);        /* background */
+     if(filled>0) fr(sx+1,sy+1,filled,sh-2,0x3a5a9aff); /* filled */
+     fr(sx+1+filled,sy+1,track-filled,sh-2,0x1c1e30ff); /* empty  */
+     dr(sx,sy,sw,sh,0x4a4a80ff);        /* border on top */
+     if(g_mouse.held&&pt_in(g_mouse.x,g_mouse.y,sx,sy,sw,sh)) c->music_slider_drag=1;
+     if(!g_mouse.held) c->music_slider_drag=0;
+     if(c->music_slider_drag){
+         float nv=(float)(g_mouse.x-(sx+1))/track;
+         if(nv<0.0f)nv=0.0f; else if(nv>1.0f)nv=1.0f;
+         music_set_volume(nv); client_save_settings(c);}
+    }
+
+    /* Column headers */
+    fr(LSX,HDR_Y,LSW,20,0x14142cff); dr(LSX,HDR_Y,LSW,20,COL_BORDER);
+    dt(COL_NAME,HDR_Y+4,"Game server",   0x5050a0ff,1);
+    dt(COL_STAT,HDR_Y+4,"Status",         0x5050a0ff,1);
+    dt(COL_REG, HDR_Y+4,"Registered",     0x5050a0ff,1);
+    dt(COL_PLAY,HDR_Y+4,"Playing",        0x5050a0ff,1);
+    dt(COL_IDLE,HDR_Y+4,"Idle",           0x5050a0ff,1);
+
+    /* Pagination */
+    const int SRVS_PER_PAGE = 6;
+    {int tp=(c->server_count>0?(c->server_count+SRVS_PER_PAGE-1)/SRVS_PER_PAGE:1);
+     if(c->srv_page>=tp) c->srv_page=tp-1;
+     if(c->srv_page<0)  c->srv_page=0;}
+    int srv_start = c->srv_page * SRVS_PER_PAGE;
+    int srv_end   = srv_start + SRVS_PER_PAGE;
+    if(srv_end > c->server_count) srv_end = c->server_count;
+    int srv_total_pages = c->server_count>0?(c->server_count+SRVS_PER_PAGE-1)/SRVS_PER_PAGE:1;
+
+    /* Pagination arrows + indicator */
+    if(srv_total_pages > 1){
+        int ay = LIST_Y + (SRVS_PER_PAGE * ROW_H)/2 - 9;
+        {BtnStyle bs=c->srv_page>0?BS_NORMAL:BS_DISABLED;
+         if(dbtn(LSX-28,ay,22,18,"<",bs)){
+             if(c->srv_page>0){c->srv_page--;c->server_cursor=c->srv_page*SRVS_PER_PAGE;}}}
+        {BtnStyle bs=c->srv_page<srv_total_pages-1?BS_NORMAL:BS_DISABLED;
+         if(dbtn(LSX+LSW+6,ay,22,18,">",bs)){
+             if(c->srv_page<srv_total_pages-1){c->srv_page++;c->server_cursor=c->srv_page*SRVS_PER_PAGE;}}}
+    }
+
+    /* Server rows */
+    int i;
+    for(i=srv_start;i<srv_end;i++){
+        SavedServer *ss=&c->server_list[i];
+        int row_idx = i - srv_start;
+        int ry     = LIST_Y + row_idx*ROW_H;
+        int is_cur = (i==c->server_cursor);
+
+        /* Determine if connection is allowed — only block if explicitly failed */
+        int blocked = (ss->auth_status==-1||ss->auth_status==-2||ss->auth_status==-3);
+
+        uint32_t bg = is_cur ? 0x1e1e46ff : (i%2 ? 0x10101eff : 0x0d0d18ff);
+        uint32_t bo = is_cur ? (blocked?0xa03030ff:0x5050c0ff) : 0x1a1a34ff;
+        fr(LSX,ry,LSW,ROW_H-1,bg); dr(LSX,ry,LSW,ROW_H-1,bo);
+
+        /* Click left area = select; selected + click = connect (if allowed) */
+        int cw = LSW - BUTTONS_W - 6;
+        if(pt_in(g_mouse.x,g_mouse.y,LSX,ry,cw,ROW_H-1)&&g_mouse.clicked){
+            if(is_cur && !blocked) action=BTN_SRV_CONNECT;
+            else { c->server_cursor=i; c->srv_page=i/SRVS_PER_PAGE; }
+        }
+
+        /* Name (top) + host:port (sub-line) */
+        uint32_t name_col = blocked ? 0x606060ff : (is_cur?COL_WHITE:COL_LTGRAY);
+        dt(COL_NAME, ry+6, ss->name[0]?ss->name:ss->host, name_col, 1);
+        {char sub[100]; snprintf(sub,sizeof(sub),"%s:%d",ss->host,ss->port);
+         dt(COL_NAME, ry+6+FH+2, sub, 0x383858ff, 1);}
+
+        /* Status dot + label */
+        {int dy=ry+(ROW_H-1)/2-5;
+         const char *slabel; uint32_t dot_in,dot_out,txt_col;
+         if(ss->online==1&&ss->auth_status>=0){
+             slabel="Online"; dot_in=0x003300ff; dot_out=0x00cc44ff; txt_col=COL_OPEN_GREEN;
+         } else if(ss->auth_status==-1){
+             slabel="Auth failed"; dot_in=0x330000ff; dot_out=0xcc2200ff; txt_col=COL_INGAME_RED;
+         } else if(ss->auth_status==-2){
+             slabel="Ver mismatch"; dot_in=0x332200ff; dot_out=0xcc8800ff; txt_col=0xffaa00ff;
+         } else if(ss->auth_status==-3||ss->online==-1){
+             slabel="Unreachable"; dot_in=0x330000ff; dot_out=0x880000ff; txt_col=0x886666ff;
+         } else {
+             slabel="--"; dot_in=0x1a1a00ff; dot_out=0x555522ff; txt_col=0x444433ff;
+         }
+         fr(COL_STAT,dy,10,10,dot_in); dr(COL_STAT,dy,10,10,dot_out);
+         dt(COL_STAT+14,dy,slabel,txt_col,1);}
+
+        /* User counts (only when online) */
+        if(ss->online==1&&ss->auth_status>=0){
+            int dy=ry+(ROW_H-1)/2-FH/2;
+            {char b[8];snprintf(b,sizeof(b),"%d",ss->users_registered);dt(COL_REG,dy,b,0x6060a0ff,1);}
+            {char b[8];snprintf(b,sizeof(b),"%d",ss->users_playing);   dt(COL_PLAY,dy,b,COL_OPEN_GREEN,1);}
+            {char b[8];snprintf(b,sizeof(b),"%d",ss->users_idle);      dt(COL_IDLE,dy,b,0x5050a0ff,1);}
+        } else {
+            int dy=ry+(ROW_H-1)/2-FH/2;
+            dt(COL_REG,dy,"--",0x2a2a44ff,1);
+        }
+
+        /* Per-row [Refresh] [Rename] [Remove] buttons */
+        {int bx_rem = LSX+LSW-BTN_W-4;
+         int bx_ren = bx_rem-BTN_W-6;
+         int bx_ref = bx_ren-BTN_W_REF-6;
+         int by     = ry+(ROW_H-1-BTN_H)/2;
+         if(dbtn(bx_ref,by,BTN_W_REF,BTN_H,"Refresh",BS_NORMAL))
+             {c->server_cursor=i; action=BTN_SRV_REFRESH;}
+         if(dbtn(bx_ren,by,BTN_W,BTN_H,"Rename",BS_NORMAL))
+             {c->server_cursor=i; action=BTN_SRV_EDIT;}
+         if(dbtn(bx_rem,by,BTN_W,BTN_H,"Remove",BS_NORMAL))
+             {c->server_cursor=i; action=BTN_SRV_DEL;}
+        }
+    }
+
+    /* Bottom buttons — fixed position below 6 rows */
+    {int bot_y = LIST_Y + SRVS_PER_PAGE*ROW_H + 12;
+     if(bot_y>WIN_H-56) bot_y=WIN_H-56;
+     int half=(LSW-4)/2;
+     if(dbtn(LSX,      bot_y,half,34,"+ Add game server",BS_NORMAL)) action=BTN_SRV_ADD;
+     int can_join=(c->server_cursor>=0&&c->server_cursor<c->server_count&&
+                   c->server_list[c->server_cursor].online==1&&
+                   c->server_list[c->server_cursor].auth_status>=0);
+     if(dbtn(LSX+half+4,bot_y,LSW-half-4,34,"Join game server",
+             can_join?BS_ACTIVE:BS_DISABLED)&&can_join) action=BTN_SRV_CONNECT;
+    }
+
+    /* ================================================================
+     * ADD popup — 4 fields: host, port, nick, password
+     * No alias; server's own name is used automatically.
+     * ================================================================ */
+    if(c->server_popup_open==1){
+        int pw=480,ph=316,px=(WIN_W-pw)/2,py=(WIN_H-ph)/2;
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+        fr(0,0,WIN_W,WIN_H,0x000000b0);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+        /* Restore click for popup elements only; outside click closes popup */
+        g_mouse.clicked = saved_click;
+        if(saved_click && !pt_in(g_mouse.x,g_mouse.y,px,py,pw,ph)){
+            c->server_popup_open=0; g_mouse.clicked=0; goto done_srv_list; }
+        g_popup_blocked=0; /* popup content is interactive */
+        fr(px,py,pw,ph,0x10102aff);
+        fr(px,py,pw,26,0x1a1a40ff);  /* header bar */
+        dr(px,py,pw,ph,COL_PIECE_I); /* border after header — covers all edges */
+        dtc(px+pw/2,py+7,"Add game server",COL_LTGRAY,1);
+
+        const char *lbls[4]={"Host / IP address","Port","Username","Password"};
+        const char *phs [4]={"192.168.1.10","31457","Player","(required)"};
+        TextField  *tfs [4]={&c->tf_srv_host,&c->tf_srv_port,
+                             &c->tf_srv_nick,&c->tf_srv_pass};
+        int is_pass[4]={0,0,0,1};
+        int fi, FR=52;
+        /* Disable fields while testing */
+        int testing=(c->srv_test_state==1||c->srv_test_state==2);
+        for(fi=0;fi<4;fi++){
+            int fy=py+32+fi*FR;
+            int foc=(c->tf_srv_focus==fi)&&!testing;
+            int fw2=pw-28;
+            dt(px+14,fy,lbls[fi],foc?0x7070c0ff:0x4040a0ff,1);
+            uint32_t fbg=testing?0x080810ff:foc?0x1a1a38ff:0x0e0e1eff;
+            uint32_t fbo=testing?0x1a1a28ff:foc?0x7070c0ff:0x222244ff;
+            fr(px+14,fy+16,fw2,26,fbg); dr(px+14,fy+16,fw2,26,fbo);
+            if(!testing&&pt_in(g_mouse.x,g_mouse.y,px+14,fy+16,fw2,26)&&g_mouse.clicked)
+                c->tf_srv_focus=fi;
+            {char disp[130]="";
+             if(tfs[fi]->len>0){
+                 if(is_pass[fi]){int k;for(k=0;k<tfs[fi]->len&&k<127;k++)disp[k]='*';
+                     if(foc){disp[tfs[fi]->len]='_';disp[tfs[fi]->len+1]='\0';}else disp[tfs[fi]->len]='\0';}
+                 else snprintf(disp,sizeof(disp),"%s%s",tfs[fi]->text,foc?"_":"");
+                 dt(px+18,fy+21,disp,testing?0x505060ff:COL_WHITE,1);
+             } else {
+                 dt(px+18,fy+21,phs[fi],0x303050ff,1);
+                 if(foc) dt(px+18,fy+21,"_",0x6060a0ff,1);}
+            }
+        }
+
+        /* Status / error message area */
+        {int my=py+ph-88;
+         if(c->srv_test_state==1||c->srv_test_state==2){
+             /* Spinner dots */
+             int dots=(c->srv_test_ticks/10)%4;
+             char spin[32]; snprintf(spin,sizeof(spin),"%s%.*s",c->srv_test_msg,dots,"...");
+             dtc(px+pw/2,my+8,spin,0x8080c0ff,1);
+         } else if(c->srv_test_state==-1){
+             dtc(px+pw/2,my+8,c->srv_test_msg,COL_INGAME_RED,1);
+         }}
+
+        /* Buttons */
+        {int bby=py+ph-50; int bw2=(pw-42)/2;
+         BtnStyle add_bs=testing?BS_DISABLED:BS_ACTIVE;
+         if(dbtn(px+14,    bby,bw2,34,"Test & Add",add_bs)&&!testing) action=BTN_SRV_ADD_OK;
+         if(dbtn(px+28+bw2,bby,bw2,34,"Cancel",BS_NORMAL)){
+             c->server_popup_open=0;
+             if(c->srv_test_sock!=INVALID_SOCK){sock_close(c->srv_test_sock);c->srv_test_sock=INVALID_SOCK;}
+             c->srv_test_state=0;
+         }}
+    }
+
+    /* ================================================================
+     * RENAME popup — single alias field
+     * ================================================================ */
+    if(c->server_popup_open==3){
+        int pw=420,ph=140,px=(WIN_W-pw)/2,py=(WIN_H-ph)/2;
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+        fr(0,0,WIN_W,WIN_H,0x000000b0);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+        g_mouse.clicked = saved_click;
+        if(saved_click && !pt_in(g_mouse.x,g_mouse.y,px,py,pw,ph)){
+            c->server_popup_open=0; c->server_edit_idx=-1; g_mouse.clicked=0; goto done_srv_list; }
+        g_popup_blocked=0;
+        fr(px,py,pw,ph,0x10102aff);
+        fr(px,py,pw,26,0x1a1a40ff);
+        dr(px,py,pw,ph,COL_PIECE_I);
+        {char title[80];
+         const char *sname=(c->server_edit_idx>=0&&c->server_edit_idx<c->server_count)
+             ?c->server_list[c->server_edit_idx].host:"server";
+         snprintf(title,sizeof(title),"Rename — %s",sname);
+         dtc(px+pw/2,py+7,title,COL_LTGRAY,1);}
+        dt(px+14,py+34,"Alias (leave blank to use server name)",0x4040a0ff,1);
+        {int foc=c->tf_srv_rename.focused;
+         int fw2=pw-28;
+         fr(px+14,py+50,fw2,28,foc?0x1a1a38ff:0x0e0e1eff);
+         dr(px+14,py+50,fw2,28,foc?0x7070c0ff:0x222244ff);
+         if(pt_in(g_mouse.x,g_mouse.y,px+14,py+50,fw2,28)&&g_mouse.clicked)
+             c->tf_srv_rename.focused=1;
+         {char disp[130];
+          snprintf(disp,sizeof(disp),"%s%s",c->tf_srv_rename.text,foc?"_":"");
+          if(c->tf_srv_rename.len>0) dt(px+18,py+56,disp,COL_WHITE,1);
+          else { dt(px+18,py+56,"(server name)",0x303050ff,1);
+                 if(foc) dt(px+18,py+56,"_",0x6060a0ff,1);}}
+        }
+        {int bby=py+ph-44; int bw2=(pw-42)/2;
+         if(dbtn(px+14,    bby,bw2,32,"Rename",BS_ACTIVE)) action=BTN_SRV_RENAME_OK;
+         if(dbtn(px+28+bw2,bby,bw2,32,"Cancel",BS_NORMAL)){c->server_popup_open=0;c->server_edit_idx=-1;}
+        }
+    }
+
+    /* ── ABOUT POPUP (server list) ── */
+    if(c->about_popup_open) { render_about_popup(c, saved_click); }
+
+    /* ── KEYMAP POPUP (server list) ── */
+    if(c->keymap_popup_open) { render_keymap_popup(c, saved_click); }
+
+    done_srv_list:;
+    if(action!=BTN_NONE) client_on_button(c,action);
+    SDL_RenderPresent(g_rend);
+}
+void sdl_render_connect(ClientCtx*c){
+    BtnId action = BTN_NONE;
+    int is_authing = (c->state == CS_AUTH);
+
+    const int cx = WIN_W/2;
+    const int fw = 320;   /* form width */
+    const int fh = 28;    /* field height */
+    const int lh = 14;    /* label height */
+    const int lx = cx - fw/2;
+
+    const int Y_SERVER_LBL = 140;
+    const int Y_SERVER_FLD = Y_SERVER_LBL + lh;
+    const int Y_PORT_LBL   = Y_SERVER_FLD + fh + 8;
+    const int Y_PORT_FLD   = Y_PORT_LBL   + lh;
+    const int Y_NICK_LBL   = Y_PORT_FLD   + fh + 8;
+    const int Y_NICK_FLD   = Y_NICK_LBL   + lh;
+    const int Y_PASS_LBL   = Y_NICK_FLD   + fh + 8;
+    const int Y_PASS_FLD   = Y_PASS_LBL   + lh;
+    const int Y_SOUND      = Y_PASS_FLD   + fh + 14;
+    const int Y_SLIDER     = Y_SOUND      + 30 + 6;
+    const int Y_CONNECT    = Y_SLIDER     + 30 + 8;
+    const int Y_QUIT       = Y_CONNECT    + 38 + 4;
+    const int Y_ERROR      = Y_QUIT       + 32 + 10;
+
+    /* Panel height — tall enough to contain the error message too */
+    const int PX = lx - 16;
+    const int PY = Y_SERVER_LBL - 14;
+    const int PW = fw + 32;
+    const int PH = (Y_ERROR + 22 + 12) - PY;
+
+    SDL_SetRenderDrawColor(g_rend, 0x0d, 0x0d, 0x1a, 0xff);
+    SDL_RenderClear(g_rend);
+
+    /* Title */
+    fr(0,0,WIN_W,120,0x12122aff); dr(0,0,WIN_W,120,COL_BORDER);
+    dts(cx - tw("LineClash",3)/2, 20, "LineClash", COL_PIECE_I, 3);
+    {char ver[32]; snprintf(ver,sizeof(ver),"v%s",TETRINETZ_VERSION);
+     dtc(cx, 76, ver, COL_GRAY, 1);}
+
+    /* Form panel */
+    fr(PX,PY,PW,PH,0x12122aff); dr(PX,PY,PW,PH,COL_BORDER);
+
+    if (is_authing) {
+        dtc(cx, PY+PH/2-10, "Authenticating...", COL_HOSTGOLD, 1);
+        dtc(cx, PY+PH/2+10, "Please wait", COL_GRAY, 1);
+    } else {
+        /* Server — full width */
+        dt(lx,Y_SERVER_LBL,"Server",COL_LTGRAY,1);
+        if(draw_textfield(lx,Y_SERVER_FLD,fw,fh,&c->tf_host,"localhost")){
+            c->tf_host.focused=1;c->tf_port.focused=c->tf_nick.focused=c->tf_pass.focused=0;}
+
+        /* Port — full width (same as server) */
+        dt(lx,Y_PORT_LBL,"Port",COL_LTGRAY,1);
+        if(draw_textfield(lx,Y_PORT_FLD,fw,fh,&c->tf_port,"31457")){
+            c->tf_port.focused=1;c->tf_host.focused=c->tf_nick.focused=c->tf_pass.focused=0;}
+
+        /* Username */
+        dt(lx,Y_NICK_LBL,"Username",COL_LTGRAY,1);
+        if(draw_textfield(lx,Y_NICK_FLD,fw,fh,&c->tf_nick,"Player")){
+            c->tf_nick.focused=1;c->tf_host.focused=c->tf_port.focused=c->tf_pass.focused=0;}
+
+        /* Password */
+        dt(lx,Y_PASS_LBL,"Password",COL_LTGRAY,1);
+        {
+            /* When credentials are cached for this username, show filled asterisks
+               in the placeholder so it looks like the password is already entered */
+            int creds_active = c->have_saved_creds
+                             && strcmp(c->saved_nick, c->tf_nick.text)==0
+                             && !c->tf_pass.len;
+            if(draw_passfield(lx,Y_PASS_FLD,fw,fh,&c->tf_pass,
+                              creds_active ? "********" : "")){
+                c->tf_pass.focused=1;
+                c->tf_host.focused=c->tf_port.focused=c->tf_nick.focused=0;
+            }
+        }
+
+        /* SFX + Music — side by side */
+        {int hw=(fw-4)/2;
+         if(dtog(lx,Y_SOUND,hw,30,"SFX: OFF","SFX: ON",c->sound_enabled))
+             action=BTN_TOGGLE_SOUND;
+         {BtnStyle ms=music_get_enabled()?BS_TOGON:BS_NORMAL;
+          if(dbtn(lx+hw+4,Y_SOUND,hw,30,"Music",ms)) action=BTN_TOGGLE_MUSIC;}}
+
+        /* SFX + Music volume sliders — same width/height as buttons above */
+        {int hw=(fw-4)/2;
+         {int sx=lx,sy=Y_SLIDER,sw=hw,sh=30;
+               float _v=sound_get_sfx_volume();
+               int track=sw-2; int filled=(int)(_v*track);
+               fr(sx,sy,sw,sh,0x16182aff);        /* background */
+               if(filled>0) fr(sx+1,sy+1,filled,sh-2,0x3a5a9aff); /* filled */
+               fr(sx+1+filled,sy+1,track-filled,sh-2,0x1c1e30ff); /* empty  */
+               dr(sx,sy,sw,sh,0x4a4a80ff);        /* border on top */
+               if(g_mouse.held&&pt_in(g_mouse.x,g_mouse.y,sx,sy,sw,sh)) c->sfx_slider_drag=1;
+               if(!g_mouse.held) c->sfx_slider_drag=0;
+               if(c->sfx_slider_drag){
+                   float nv=(float)(g_mouse.x-(sx+1))/track;
+                   if(nv<0.0f)nv=0.0f; else if(nv>1.0f)nv=1.0f;
+                   sound_set_sfx_volume(nv); client_save_settings(c);}
+         }
+         {int sx=lx+hw+4,sy=Y_SLIDER,sw=hw,sh=30;
+               float _v=music_get_volume();
+               int track=sw-2; int filled=(int)(_v*track);
+               fr(sx,sy,sw,sh,0x16182aff);        /* background */
+               if(filled>0) fr(sx+1,sy+1,filled,sh-2,0x3a5a9aff); /* filled */
+               fr(sx+1+filled,sy+1,track-filled,sh-2,0x1c1e30ff); /* empty  */
+               dr(sx,sy,sw,sh,0x4a4a80ff);        /* border on top */
+               if(g_mouse.held&&pt_in(g_mouse.x,g_mouse.y,sx,sy,sw,sh)) c->music_slider_drag=1;
+               if(!g_mouse.held) c->music_slider_drag=0;
+               if(c->music_slider_drag){
+                   float nv=(float)(g_mouse.x-(sx+1))/track;
+                   if(nv<0.0f)nv=0.0f; else if(nv>1.0f)nv=1.0f;
+                   music_set_volume(nv); client_save_settings(c);}
+         }}
+
+        /* Connect — full width */
+        if(dbtn(lx,Y_CONNECT,fw,36,"CONNECT",BS_ACTIVE)) action=BTN_CONNECT;
+
+        /* Quit — full width */
+        if(dbtn(lx,Y_QUIT,fw,28,"Quit",BS_NORMAL)) action=BTN_QUIT;
+
+        /* Error/success — word-wrapped to fit inside panel */
+        if(c->connect_error[0]) {
+            int is_ok = (strncmp(c->connect_error,"Account",7)==0 ||
+                         strncmp(c->connect_error,"Logged",6)==0);
+            uint32_t ecol = is_ok ? COL_OPEN_GREEN : COL_INGAME_RED;
+            /* Truncate to panel width — ~fw/8 chars per line at scale 1 */
+            char line1[80], line2[80];
+            int clen = (int)strlen(c->connect_error);
+            int chars_per_line = fw / (FW+1);
+            if(clen <= chars_per_line){
+                dtc(cx, Y_ERROR, c->connect_error, ecol, 1);
+            } else {
+                /* split at last space before chars_per_line */
+                int split = chars_per_line;
+                while(split>0 && c->connect_error[split]!=' ') split--;
+                if(split==0) split=chars_per_line;
+                strncpy(line1, c->connect_error, split); line1[split]='\0';
+                strncpy(line2, c->connect_error+split+1, sizeof(line2)-1);
+                dtc(cx, Y_ERROR,    line1, ecol, 1);
+                dtc(cx, Y_ERROR+14, line2, ecol, 1);
+            }
+        }
+    }
+
+    dtc(cx,WIN_H-24,"Tab = next field     Enter = connect",COL_DKGRAY,1);
+    if(action!=BTN_NONE) client_on_button(c,action);
+    SDL_RenderPresent(g_rend);
+}
+
+/* ============================== LOBBY SELECT ============================== */
+void sdl_render_lobby_select(ClientCtx*c){
+    int i;
+    BtnId action=BTN_NONE;
+
+    /* Layout */
+    const int TITLE_H = 80;
+    const int list_x  = WIN_W/2 - 480;
+    const int list_w  = 960;
+    const int list_y  = TITLE_H + 16;
+    const int hdr_h   = 22;
+    const int row_h   = 64;
+
+    const int ROOMS_PER_PAGE = 3;
+    int total_pages = c->lobby_list_count > 0 ? (c->lobby_list_count+ROOMS_PER_PAGE-1)/ROOMS_PER_PAGE : 1;
+    /* clamp page */
+    if(c->lobby_page >= total_pages) c->lobby_page = total_pages-1;
+    if(c->lobby_page < 0) c->lobby_page = 0;
+    int page_start = c->lobby_page * ROOMS_PER_PAGE;
+    int page_end   = page_start + ROOMS_PER_PAGE;
+    if(page_end > c->lobby_list_count) page_end = c->lobby_list_count;
+    int list_rows  = ROOMS_PER_PAGE; /* always 3 rows height for stable layout */
+    int list_bot   = list_y + hdr_h + list_rows * row_h;
+    int join_y     = list_bot + 8;
+    int lb_y       = join_y + 44;   /* leaderboard below join button */
+
+    SDL_SetRenderDrawColor(g_rend,0x0d,0x0d,0x1a,0xff);
+    SDL_RenderClear(g_rend);
+
+    /* Block all background interaction when any popup is open */
+    int any_popup_early = (c->motd_popup_open||c->keymap_popup_open||c->about_popup_open);
+    if(any_popup_early) g_popup_blocked=1;
+
+    /* Title bar */
+    fr(0,0,WIN_W,TITLE_H,0x12122aff); dr(0,0,WIN_W,TITLE_H,COL_BORDER);
+    {int tx=20;
+     dts(tx,12,"LineClash",COL_PIECE_I,3);
+     {char sub[96]; snprintf(sub,sizeof(sub),"v%s  (%s)",TETRINETZ_VERSION,BUILD_DATE);
+      int tw3=tw("LineClash",3);
+      dtc(tx+tw3/2,58,sub,COL_GRAY,1);}}
+
+    /* Top-right buttons: Keymap | Music | SFX | Quit | < Back */
+    if(dbtn(WIN_W-74,4,66,22,"< Back",BS_NORMAL))  action=BTN_BACK_CONNECT;
+    if(dbtn(WIN_W-146,4,66,22,"Quit",BS_NORMAL))   action=BTN_QUIT;
+    if(dbtn(WIN_W-218,4,64,22,"About",BS_NORMAL))  action=BTN_SRV_ABOUT;
+    if(dbtn(WIN_W-288,4,64,22,"Keymap",BS_NORMAL)) action=BTN_KEYMAP_POPUP;
+    {BtnStyle ss=c->sound_enabled?BS_TOGON:BS_NORMAL;
+     if(dbtn(WIN_W-358,4,64,22,"SFX",ss))          action=BTN_TOGGLE_SOUND;}
+    {BtnStyle ms=music_get_enabled()?BS_TOGON:BS_NORMAL;
+     if(dbtn(WIN_W-428,4,64,22,"Music",ms))        action=BTN_TOGGLE_MUSIC;}
+    /* SFX + Music volume sliders — beneath SFX/Music buttons */
+    {int sx=WIN_W-358,sy=28,sw=64,sh=20;
+     float _v=sound_get_sfx_volume();
+     int track=sw-2; int filled=(int)(_v*track);
+     fr(sx,sy,sw,sh,0x16182aff);        /* background */
+     if(filled>0) fr(sx+1,sy+1,filled,sh-2,0x3a5a9aff); /* filled */
+     fr(sx+1+filled,sy+1,track-filled,sh-2,0x1c1e30ff); /* empty  */
+     dr(sx,sy,sw,sh,0x4a4a80ff);        /* border on top */
+     if(g_mouse.held&&pt_in(g_mouse.x,g_mouse.y,sx,sy,sw,sh)) c->sfx_slider_drag=1;
+     if(!g_mouse.held) c->sfx_slider_drag=0;
+     if(c->sfx_slider_drag){
+         float nv=(float)(g_mouse.x-(sx+1))/track;
+         if(nv<0.0f)nv=0.0f; else if(nv>1.0f)nv=1.0f;
+         sound_set_sfx_volume(nv); client_save_settings(c);}
+    }
+    {int sx=WIN_W-428,sy=28,sw=64,sh=20;
+     float _v=music_get_volume();
+     int track=sw-2; int filled=(int)(_v*track);
+     fr(sx,sy,sw,sh,0x16182aff);        /* background */
+     if(filled>0) fr(sx+1,sy+1,filled,sh-2,0x3a5a9aff); /* filled */
+     fr(sx+1+filled,sy+1,track-filled,sh-2,0x1c1e30ff); /* empty  */
+     dr(sx,sy,sw,sh,0x4a4a80ff);        /* border on top */
+     if(g_mouse.held&&pt_in(g_mouse.x,g_mouse.y,sx,sy,sw,sh)) c->music_slider_drag=1;
+     if(!g_mouse.held) c->music_slider_drag=0;
+     if(c->music_slider_drag){
+         float nv=(float)(g_mouse.x-(sx+1))/track;
+         if(nv<0.0f)nv=0.0f; else if(nv>1.0f)nv=1.0f;
+         music_set_volume(nv); client_save_settings(c);}
+    }
+
+    /* Logged-in-as strip — between title bar and room list */
+    {int sy=TITLE_H+2;
+     const char *plbl = c->priv_level==1 ? "[ADM]" :
+                        c->priv_level==2 ? "[MGR]" : "[USR]";
+     char uinfo[64];
+     snprintf(uinfo,sizeof(uinfo),"Logged in as: %s  %s",c->auth_nick,plbl);
+     dtc(WIN_W/2,sy+1,uinfo,COL_HOSTGOLD,1); /* all privilege badges gold */
+    }
+
+    /* Column headers */
+    fr(list_x, list_y, list_w, hdr_h, 0x1a1a30ff);
+    dr(list_x, list_y, list_w, hdr_h, COL_BORDER);
+    dt(list_x+30,  list_y+5, "Room",    COL_LTGRAY, 1);
+    dt(list_x+240, list_y+5, "Players", COL_LTGRAY, 1);
+    dt(list_x+360, list_y+5, "Status",  COL_LTGRAY, 1);
+    dt(list_x+460, list_y+5, "Mode",    COL_LTGRAY, 1);
+
+    /* Lobby rows */
+    if(!c->lobby_list_count)
+        dtc(list_x+list_w/2, list_y+hdr_h+28, "Waiting for lobby list...", COL_GRAY, 1);
+
+    /* Pagination arrows — only shown when more than ROOMS_PER_PAGE rooms */
+    if(total_pages > 1){
+        int ay = list_y + hdr_h + (ROOMS_PER_PAGE * row_h)/2 - 8;
+        /* Left arrow */
+        {BtnStyle bs = c->lobby_page > 0 ? BS_NORMAL : BS_DISABLED;
+         if(dbtn(list_x - 28, ay, 22, 18, "<", bs))
+             if(c->lobby_page>0){c->lobby_page--;c->lobby_cursor=c->lobby_page*ROOMS_PER_PAGE;}}
+        /* Right arrow */
+        {BtnStyle bs = c->lobby_page < total_pages-1 ? BS_NORMAL : BS_DISABLED;
+         if(dbtn(list_x + list_w + 6, ay, 22, 18, ">", bs))
+             if(c->lobby_page<total_pages-1){c->lobby_page++;c->lobby_cursor=c->lobby_page*ROOMS_PER_PAGE;}}
+    }
+
+    for(i=page_start; i<page_end; i++){
+        LobbyInfo *lb = &c->lobby_list[i];
+        int row_idx = i - page_start;
+        int ry      = list_y + hdr_h + row_idx*row_h;
+        int is_cur  = (i == c->lobby_cursor);
+        int max_p   = lb->max_players > 0 ? lb->max_players : MAX_PLAYERS;
+        int is_full = (lb->player_count >= max_p);
+        BtnId rbid  = (BtnId)(BTN_LOBBY_ROW_0+i);
+
+        /* Row bg + click */
+        {int hov = pt_in(g_mouse.x,g_mouse.y, list_x,ry, list_w,row_h-2);
+         uint32_t bg = is_cur?0x22224aff:hov?0x1a1a38ff:(i%2?0x12121cff:0x0f0f18ff);
+         fr(list_x,ry,list_w,row_h-2,bg);
+         dr(list_x,ry,list_w,row_h-2,is_cur?0x5050c0ff:COL_BORDER);
+         if(hov&&g_mouse.clicked) action = is_cur ? BTN_LOBBY_JOIN : rbid;}
+
+        if(is_cur) dt(list_x-12,ry+row_h/2-FH,">",COL_PIECE_I,2);
+
+        /* ── Line 1: Room name  |  Status badge  |  Player count + bar ── */
+        {char rname[MAX_LOBBY_NAME];
+         snprintf(rname,sizeof(rname),"Room %d",lb->id);
+         int mid=ry+row_h/2;
+         dt(list_x+10,mid-FH*2-2,rname,is_cur?COL_WHITE:COL_LTGRAY,2);}
+
+        /* Status badge — right of name, vertically centred */
+        {const char *stat; uint32_t sc,sbg;
+         if(lb->paused&&lb->in_game){stat="PAUSED";  sc=0xffaa00ff; sbg=0x2a1800ff;}
+         else if(lb->in_game)       {stat="PLAYING"; sc=COL_INGAME_RED;  sbg=0x2a0808ff;}
+         else if(is_full)           {stat="FULL";    sc=COL_FULL_ORANGE; sbg=0x2a1800ff;}
+         else                       {stat="WAITING"; sc=COL_OPEN_GREEN;  sbg=0x082008ff;}
+         int sw=(int)strlen(stat)*(FW+1)+12;
+         int mid=ry+row_h/2;
+         int bx=list_x+list_w-sw-90;
+         fr(bx,mid-10,sw,20,sbg); dr(bx,mid-10,sw,20,sc);
+         dt(bx+6,mid-6,stat,sc,1);}
+
+        /* Player count + fill bar — centred vertically in row */
+        {char pc[12]; int bfw=76;
+         uint32_t bc=lb->in_game?COL_INGAME_RED:is_full?COL_FULL_ORANGE:COL_OPEN_GREEN;
+         snprintf(pc,sizeof(pc),"%d/%d",lb->player_count,max_p);
+         int px2=list_x+list_w-bfw-6;
+         int mid=ry+row_h/2;               /* vertical centre of row */
+         dt(px2,mid-FH*2-2,pc,bc,2);       /* text just above centre */
+         {int bfill=lb->player_count*bfw/max_p;
+          fr(px2,mid+5,bfw,4,0x202030ff);  /* bar 7px below centre */
+          fr(px2,mid+5,bfill,4,bc);}}
+
+        /* ── Line 2a (upper badge row): SPECIALS | LAST WINS | TAUNTS | SPEED UP ── */
+        /* ── Line 2b (lower badge row): GARBAGE mode ── */
+        #define CBADGE(lbl,on,sc_on,sc_off,bg_on,bg_off,bx2,by2)         { int _on=(on); uint32_t _sc=_on?(sc_on):(sc_off);           int _bw=tw((lbl),1)+10;           fr((bx2),(by2),_bw,15,_on?(bg_on):(bg_off)); dr((bx2),(by2),_bw,15,_sc);           dt((bx2)+5,(by2)+2,(lbl),_sc,1); (bx2)+=_bw+5; }
+
+        {int bx2=list_x+10;
+         int ya=ry+row_h-34; /* upper badge row */
+         int yb=ry+row_h-17; /* lower badge row */
+
+         /* Upper row: game option badges */
+         {char lbl[24]; snprintf(lbl,sizeof(lbl),"SPECIALS %s",!lb->no_attacks?"ON":"OFF");
+          CBADGE(lbl,!lb->no_attacks,COL_OPEN_GREEN,0x404060ff,0x061806ff,0x0a0a18ff,bx2,ya)}
+         {char lbl[24]; snprintf(lbl,sizeof(lbl),"LAST WINS %s",lb->last_player_wins?"ON":"OFF");
+          CBADGE(lbl,lb->last_player_wins,COL_OPEN_GREEN,0x404060ff,0x061806ff,0x0a0a18ff,bx2,ya)}
+         {char lbl[20]; snprintf(lbl,sizeof(lbl),"TAUNTS %s",!lb->no_taunts?"ON":"OFF");
+          CBADGE(lbl,!lb->no_taunts,0xffaa00ff,0x505040ff,0x1a0e00ff,0x0a0a18ff,bx2,ya)}
+         {char lbl[20]; snprintf(lbl,sizeof(lbl),"SPEED UP %s",lb->speedup_enabled?"ON":"OFF");
+          CBADGE(lbl,lb->speedup_enabled,0xffcc00ff,0x505040ff,0x1a1400ff,0x0a0a18ff,bx2,ya)}
+         {char lbl[16]; snprintf(lbl,sizeof(lbl),"HOLD %s",lb->hold_enabled?"ON":"OFF");
+          CBADGE(lbl,lb->hold_enabled,0x60c0ffff,0x404060ff,0x06181aff,0x0a0a18ff,bx2,ya)}
+
+         /* Lower row: garbage mode + targeting */
+         bx2=list_x+10;
+         {int gdl=lb->garbage_system;
+          char lbl[28]; snprintf(lbl,sizeof(lbl),"GARBAGE: %s",gdl?"GUIDELINE":"CLASSIC");
+          uint32_t sc=gdl?0x8888ffff:0x6868a0ff;
+          int bw=tw(lbl,1)+10;
+          fr(bx2,yb,bw,15,gdl?0x08082aff:0x0c0c1aff);
+          dr(bx2,yb,bw,15,sc);
+          dt(bx2+5,yb+2,lbl,sc,1); bx2+=bw+5;}
+         {const char *tgt_s=lb->garbage_targeting==0?"TARGET: ALL":lb->garbage_targeting==1?"TARGET: RANDOM":"TARGET: FOCUSED";
+          uint32_t sc2=0x8060c0ff; int bw2=tw(tgt_s,1)+10;
+          fr(bx2,yb,bw2,15,0x0c0820ff); dr(bx2,yb,bw2,15,sc2);
+          dt(bx2+5,yb+2,tgt_s,sc2,1);}
+        }
+        #undef CBADGE
+    }
+
+    /* JOIN ROOM — full list width, directly below rows */
+    if(c->lobby_list_count > 0){
+        LobbyInfo *sel = &c->lobby_list[c->lobby_cursor];
+        int max_p = sel->max_players>0 ? sel->max_players : MAX_PLAYERS;
+        int can_join = !sel->in_game && sel->player_count < max_p;
+        BtnStyle bs = can_join ? BS_ACTIVE : BS_DISABLED;
+        if(dbtn(list_x, join_y, list_w, 36, "JOIN ROOM", bs) && can_join)
+            action = BTN_LOBBY_JOIN;
+    }
+
+    /* Leaderboards + Players Online — three fixed-height panels side by side */
+    {
+        const int LB_H  = 200;
+        const int gap   = 8;
+        const int third = (list_w - gap*2) / 3;
+        const int plx   = list_x;
+        const int tlx   = list_x + third + gap;
+        const int olx   = list_x + (third + gap)*2;
+        const int pw    = third;
+        const int tw2   = third;
+        const int ow    = list_w - (third + gap)*2;
+        const int row   = 16;
+        const int hdr_rows = 2;
+        int vis;
+
+        /* ---- PLAYERS LEADERBOARD panel ---- */
+        dpanel(plx, lb_y, pw, LB_H, "PLAYERS LEADERBOARD");
+        {
+            int hx  = plx+4;
+            int hdy = lb_y+20;
+            dt(hx+16, hdy, "Player", 0x5050a0ff, 1);
+            dt(hx+pw-tw("Atk",1)-8-tw("W",1)-16, hdy, "W",   0x5050a0ff, 1);
+            dt(hx+pw-tw("Atk",1)-8,               hdy, "Atk", 0x5050a0ff, 1);
+            fr(plx, hdy+13, pw, 1, COL_BORDER);
+            int ry2 = hdy + 15;
+            vis = (LB_H - (ry2 - lb_y)) / row;
+            if(c->server_lb_count == 0){
+                dt(plx+6, ry2, "No games yet", 0x404060ff, 1);
+            } else {
+                int start = c->server_lb_scroll;
+                if(start > c->server_lb_count - vis) start = c->server_lb_count - vis;
+                if(start < 0) start = 0;
+                for(i = start; i < c->server_lb_count && i < start+vis && i < SERVER_LB_MAX; i++){
+                    ServerLbEntry *e = &c->server_lb[i];
+                    uint32_t nc = i==0?COL_HOSTGOLD:i==1?COL_LTGRAY:i==2?0xcc8844ff:COL_GRAY;
+                    fr(plx, ry2, pw, row-1, (i-start)%2?0x0e0e18ff:0x0b0b14ff);
+                    {char rn[4];snprintf(rn,sizeof(rn),"%d",i+1); dt(hx+2,ry2+2,rn,0x404060ff,1);}
+                    {char nk[18];strncpy(nk,e->nick,17);nk[17]='\0'; dt(hx+16,ry2+2,nk,nc,1);}
+                    {char wn[8];snprintf(wn,sizeof(wn),"%d",e->wins);
+                     dt(hx+pw-tw("Atk",1)-8-tw(wn,1)-8,ry2+2,wn,nc,1);}
+                    {char an[8];snprintf(an,sizeof(an),"%d",e->attacks);
+                     dt(hx+pw-tw(an,1)-6,ry2+2,an,0x6060a0ff,1);}
+                    ry2+=row;
+                }
+                /* Scroll indicator */
+                if(c->server_lb_count > vis){
+                    char si[16];snprintf(si,sizeof(si),"%d/%d",start+1,c->server_lb_count);
+                    dt(plx+pw-tw(si,1)-4,lb_y+LB_H-12,si,0x404060ff,1);}
+            }
+        }
+
+        /* ---- TEAMS LEADERBOARD panel ---- */
+        dpanel(tlx, lb_y, tw2, LB_H, "TEAMS LEADERBOARD");
+        {
+            int hx  = tlx+4;
+            int hdy = lb_y+20;
+            dt(hx+4,   hdy, "Team", 0x5050a0ff, 1);
+            dt(hx+tw2-tw("W",1)-tw("Mbr",1)-20, hdy, "Mbr", 0x5050a0ff, 1);
+            dt(hx+tw2-tw("W",1)-8,              hdy, "W",   0x5050a0ff, 1);
+            fr(tlx, hdy+13, tw2, 1, COL_BORDER);
+            int ry2 = hdy + 15;
+            vis = (LB_H - (ry2 - lb_y)) / row;
+            if(c->server_team_lb_count == 0){
+                dt(tlx+6, ry2, "No teams yet", 0x404060ff, 1);
+            } else {
+                int start = c->server_team_lb_scroll;
+                if(start > c->server_team_lb_count - vis) start = c->server_team_lb_count - vis;
+                if(start < 0) start = 0;
+                for(i = start; i < c->server_team_lb_count && i < start+vis && i < SERVER_LB_MAX; i++){
+                    ServerTeamLbEntry *e = &c->server_team_lb[i];
+                    uint32_t nc = i==0?COL_HOSTGOLD:i==1?COL_LTGRAY:i==2?0xcc8844ff:COL_GRAY;
+                    fr(tlx, ry2, tw2, row-1, (i-start)%2?0x0e0e18ff:0x0b0b14ff);
+                    {char rn[4];snprintf(rn,sizeof(rn),"%d",i+1); dt(hx+2,ry2+2,rn,0x404060ff,1);}
+                    {char tn[14];strncpy(tn,e->team,13);tn[13]='\0'; dt(hx+16,ry2+2,tn,nc,1);}
+                    {char mn[6];snprintf(mn,sizeof(mn),"%d",e->members);
+                     dt(hx+tw2-tw("W",1)-tw(mn,1)-20,ry2+2,mn,0x6060a0ff,1);}
+                    {char wn[8];snprintf(wn,sizeof(wn),"%d",e->wins);
+                     dt(hx+tw2-tw(wn,1)-8,ry2+2,wn,nc,1);}
+                    ry2+=row;
+                }
+                if(c->server_team_lb_count > vis){
+                    char si[16];snprintf(si,sizeof(si),"%d/%d",start+1,c->server_team_lb_count);
+                    dt(tlx+tw2-tw(si,1)-4,lb_y+LB_H-12,si,0x404060ff,1);}
+            }
+        }
+
+        /* ---- PLAYERS ONLINE panel ---- */
+        dpanel(olx, lb_y, ow, LB_H, "PLAYERS ONLINE");
+        {
+            int hx  = olx+4;
+            int hdy = lb_y+20;
+            /* Three columns: Nick | Room | Status
+               Room column narrowed so Status isn't flush against the right border */
+            int col_nick=hx+14;
+            int col_room=hx+ow*55/100;   /* pushed right a bit less — was 5/12 ≈ 42% */
+            int col_stat=hx+ow*75/100;   /* fixed offset, not pinned to right edge */
+            dt(col_nick, hdy, "Nick",   0x5050a0ff, 1);
+            dt(col_room, hdy, "Room",   0x5050a0ff, 1);
+            dt(col_stat, hdy, "Status", 0x5050a0ff, 1);
+            fr(olx, hdy+13, ow, 1, COL_BORDER);
+            int ry2 = hdy + 15;
+            vis = (LB_H - (ry2 - lb_y)) / row;
+            if(c->online_player_count==0){
+                dt(olx+6, ry2, "No players online", 0x404060ff, 1);
+            } else {
+                int start=0, k;
+                for(k=start;k<c->online_player_count&&k<start+vis;k++){
+                    OnlinePlayer *op=&c->online_players[k];
+                    int playing=op->playing;
+                    uint32_t nc=playing?COL_OPEN_GREEN:0x7070a0ff;
+                    fr(olx, ry2, ow, row-1, k%2?0x0e0e18ff:0x0b0b14ff);
+                    /* Nick */
+                    {char nk[14];strncpy(nk,op->nick,13);nk[13]='\0';
+                     dt(col_nick,ry2+2,nk,COL_LTGRAY,1);}
+                    /* Room */
+                    {char rm[10];
+                     if(op->room_id>0) snprintf(rm,sizeof(rm),"Room %d",op->room_id);
+                     else              strncpy(rm,"Lobby",sizeof(rm));
+                     dt(col_room,ry2+2,rm,0x6060a0ff,1);}
+                    /* Status */
+                    dt(col_stat,ry2+2,
+                       playing?"Playing":"Idle",nc,1);
+                    ry2+=row;
+                }
+                if(c->online_player_count>vis){
+                    char si[16];snprintf(si,sizeof(si),"%d total",c->online_player_count);
+                    dt(olx+ow-tw(si,1)-4,lb_y+LB_H-12,si,0x404060ff,1);}
+            }
+        }
+
+        /* ---- MOTD panel — between leaderboards and global chat ---- */
+        {
+            int motd_y = lb_y + LB_H + 6;
+            int motd_h = 28;
+            const char *motd = c->motd[0] ? c->motd : "Welcome to LineClash!";
+            fr(list_x,motd_y,list_w,motd_h,0x0a0a1eff); dr(list_x,motd_y,list_w,motd_h,COL_PIECE_I);
+            dt(list_x+6,motd_y+4,"MOTD:",COL_PIECE_I,1);
+            dt(list_x+6+tw("MOTD: ",1),motd_y+4,motd,COL_LTGRAY,1);
+            /* Admin: click to edit MOTD */
+            if(c->priv_level<=2){
+                if(dbtn(list_x+list_w-70,motd_y+4,66,20,"Edit",BS_NORMAL))
+                    action=BTN_MOTD_EDIT;
+            }
+
+        /* ---- Global Chat panel — below MOTD, half the available height ---- */
+        {
+            int cy   = motd_y + motd_h + 4;
+            int avail = WIN_H - cy - 10;
+            int ch   = avail / 2;
+            if(ch < 60) ch = 60;
+            if(ch > 40){
+                int lh=FH+3;
+                int sb_w=8, input_h=20; /* input always visible for all users */
+                int msg_area_h=ch-22-1-input_h; /* header+sep+input */
+                int maxl=msg_area_h/lh; if(maxl<1)maxl=1;
+                /* Clamp scroll */
+                int max_scroll=c->schat_count-maxl; if(max_scroll<0)max_scroll=0;
+                if(c->schat_scroll>max_scroll)c->schat_scroll=max_scroll;
+                if(c->schat_scroll<0)c->schat_scroll=0;
+
+                fr(list_x,cy,list_w,ch,0x0a120aff);
+                dr(list_x,cy,list_w,ch,0x2a5a2aff);
+                dt(list_x+4,cy+3,"SERVER CHAT",0x44aa44ff,1);
+                {   int btn_w=tw("Chat (Tab)",1)+14;
+                    if(dbtn(list_x+list_w-sb_w-btn_w-2,cy+2,btn_w,16,"Chat (Tab)",BS_NORMAL))
+                        action=BTN_GLOBAL_CHAT;
+                }
+                fr(list_x,cy+20,list_w,1,0x1a3a1aff);
+
+                /* Messages with scroll */
+                {int end=c->schat_count-c->schat_scroll; if(end<0)end=0;
+                 int start=end-maxl; if(start<0)start=0; int gi;
+                 int msg_w=list_w-sb_w;
+                 for(gi=start;gi<end;gi++){
+                     int ty=cy+22+(gi-start)*lh;
+                     uint32_t col=c->schat[gi].colour;
+                     if(c->schat[gi].age>300)col=(col&0xffffff00)|0x80;
+                     char cl[128]; int mc=(msg_w-8)/(FW+1); if(mc>127)mc=127;
+                     strncpy(cl,c->schat[gi].text,mc);cl[mc]='\0';
+                     dt(list_x+4,ty,cl,col,1);
+                }}
+
+                /* Scrollbar */
+                {int sty=cy+22, sth=ch-22-input_h;
+                 int sbx=list_x+list_w-sb_w;
+                 fr(sbx,sty,sb_w,sth,0x061006ff);
+                 if(max_scroll>0){
+                     int th=sth*maxl/(c->schat_count>0?c->schat_count:1);
+                     if(th<10)th=10;
+                     int ty2=sty+(sth-th)*(max_scroll-c->schat_scroll)/max_scroll;
+                     uint32_t thumb_col=c->schat_sb_drag?0x44aa44ff:0x2a6a2aff;
+                     fr(sbx+1,ty2,sb_w-2,th,thumb_col);
+                     /* Start drag on mousedown over thumb */
+                     if(g_mouse.held&&pt_in(g_mouse.x,g_mouse.y,sbx+1,ty2,sb_w-2,th)
+                        &&!c->schat_sb_drag){
+                         c->schat_sb_drag=1;
+                         c->schat_sb_drag_y0=g_mouse.y;
+                         c->schat_sb_drag_scroll0=c->schat_scroll;
+                     }
+                     /* Continue drag */
+                     if(c->schat_sb_drag&&g_mouse.held){
+                         int dy=g_mouse.y-c->schat_sb_drag_y0;
+                         int ds=dy*(max_scroll+1)/(sth-th+1);
+                         c->schat_scroll=c->schat_sb_drag_scroll0-ds;
+                         if(c->schat_scroll<0)c->schat_scroll=0;
+                         if(c->schat_scroll>max_scroll)c->schat_scroll=max_scroll;
+                     }
+                     /* Release drag */
+                     if(!g_mouse.held) c->schat_sb_drag=0;
+                     /* Click track to jump */
+                     if(pt_in(g_mouse.x,g_mouse.y,sbx,sty,sb_w,sth)&&g_mouse.clicked
+                        &&!pt_in(g_mouse.x,g_mouse.y,sbx+1,ty2,sb_w-2,th)){
+                         int rel=g_mouse.y-sty;
+                         c->schat_scroll=max_scroll-(rel*max_scroll/sth);
+                     }
+                 } else {
+                     if(!g_mouse.held) c->schat_sb_drag=0;
+                 }}
+
+                /* Input box — visible for all users */
+                {   int iy=cy+ch-input_h;
+                    fr(list_x,iy-1,list_w,1,0x1a4a1aff);
+                    uint32_t ibg=c->schat_input.active?0x061606ff:0x040c04ff;
+                    uint32_t ibo=c->schat_input.active?0x44cc44ff:0x1a4a1aff;
+                    fr(list_x,iy,list_w,input_h,ibg);
+                    dr(list_x,iy,list_w,input_h,ibo);
+                    if(c->schat_input.active){
+                        char disp[256]; snprintf(disp,sizeof(disp),"> %s_",c->schat_input.text);
+                        dt(list_x+4,iy+(input_h-FH)/2,disp,COL_OPEN_GREEN,1);
+                    } else {
+                        dt(list_x+4,iy+(input_h-FH)/2,"Tab or click to chat...",0x2a5a2aff,1);
+                    }
+                    if(pt_in(g_mouse.x,g_mouse.y,list_x,cy,list_w,ch)
+                       &&g_mouse.clicked&&!c->schat_input.active)
+                        action=BTN_GLOBAL_CHAT;
+                }
+            }
+        }
+        }
+        (void)hdr_rows;
+    }
+
+    g_popup_blocked = c->motd_popup_open || c->keymap_popup_open || c->about_popup_open;
+    int saved_click_ls = g_mouse.clicked; /* capture before popup blocks it */
+    if(g_popup_blocked) g_mouse.clicked = 0;
+    /* MOTD edit popup */
+    if(c->motd_popup_open){
+        int pw=560,ph=120,px=(WIN_W-pw)/2,py=(WIN_H-ph)/2;
+        int saved_click_motd=saved_click_ls;
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+        fr(0,0,WIN_W,WIN_H,0x000000b0);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+        if(saved_click_motd&&!pt_in(g_mouse.x,g_mouse.y,px,py,pw,ph)){
+            c->motd_popup_open=0; g_mouse.clicked=0; }
+        else {
+        fr(px,py,pw,ph,0x10102aff);
+        fr(px,py,pw,28,0x1a1a40ff);
+        dr(px,py,pw,ph,COL_PIECE_I);
+        dtc(px+pw/2,py+9,"Edit MOTD",COL_LTGRAY,1);
+        dt(px+14,py+34,"Message of the Day:",0x4040a0ff,1);
+        {int foc=c->tf_motd.focused, fw2=pw-28;
+         fr(px+14,py+48,fw2,26,foc?0x1a1a38ff:0x0e0e1eff);
+         dr(px+14,py+48,fw2,26,foc?0x7070c0ff:0x222244ff);
+         if(pt_in(g_mouse.x,g_mouse.y,px+14,py+48,fw2,26)&&g_mouse.clicked) c->tf_motd.focused=1;
+         {char disp[130];snprintf(disp,sizeof(disp),"%s%s",c->tf_motd.text,foc?"_":"");
+          dt(px+18,py+54,c->tf_motd.len>0?disp:"(enter motd)",
+             c->tf_motd.len>0?COL_WHITE:0x404060ff,1);}
+        }
+        {int bby=py+ph-40,bw2=(pw-42)/2;
+         if(dbtn(px+14,bby,bw2,32,"Save",BS_ACTIVE)) action=BTN_MOTD_POPUP_OK;
+         if(dbtn(px+28+bw2,bby,bw2,32,"Cancel",BS_NORMAL)) c->motd_popup_open=0;
+        }
+        } /* end else (popup content) */
+    }
+
+    /* ── ABOUT POPUP (lobby-select) ── */
+    if(c->about_popup_open) { render_about_popup(c, saved_click_ls); }
+
+    /* ── KEYMAP POPUP (lobby-select) ── */
+    if(c->keymap_popup_open) { render_keymap_popup(c, saved_click_ls); }
+
+    if(action!=BTN_NONE) client_on_button(c,action);
+    SDL_RenderPresent(g_rend);
+}
+
+/* ============================== GAME SCREEN ============================== */
+void sdl_render_game(ClientCtx*c){
+    int any_popup_g = (c->kick_popup_open||c->team_popup_open||
+                       c->game_options_popup_open||c->ai_players_popup_open||
+                       c->keymap_popup_open);
+    int saved_click_g = g_mouse.clicked;
+    g_popup_blocked = any_popup_g;
+    if(any_popup_g) g_mouse.clicked=0;
+    g_rtick++;
+    int i,opp_x,opp_y;
+    int fx=OWN_FIELD_X,fy=OWN_FIELD_Y;
+    int fw2=FIELD_WIDTH*BLOCK_SIZE,fh2=FIELD_HEIGHT*BLOCK_SIZE;
+    int sbx=SIDEBAR_X,sbw=SIDEBAR_W;
+    int lby,lb_h=0;
+    char buf[80];
+    BtnId action=BTN_NONE;
+
+    SDL_SetRenderDrawColor(g_rend,0x1a,0x1a,0x2e,0xff);
+    SDL_RenderClear(g_rend);
+
+    /* Header */
+    fr(0,0,WIN_W,28,0x12122aff);dr(0,0,WIN_W,28,COL_BORDER);
+    /* Back to lobby button — top left */
+    if(dbtn(4,3,120,22,"BACK TO LOBBY",BS_NORMAL)) action=BTN_BACK_TO_LOBBIES;
+    {char base[64];
+     snprintf(base,sizeof(base),"Room %d  |  %s",c->room_id,c->nick);
+     dt(132,8,base,COL_LTGRAY,1);
+     {int bx=132+tw(base,1);
+      /* All role/privilege/spectator badges in gold */
+      const char *role = c->is_host ? " [HOST]" : " [PLAYER]";
+      dt(bx,8,role,COL_HOSTGOLD,1); bx+=tw(role,1);
+      if(c->priv_level==1)   { dt(bx,8," [ADM]",COL_HOSTGOLD,1); bx+=tw(" [ADM]",1); }
+      else if(c->priv_level==2){ dt(bx,8," [MGR]",COL_HOSTGOLD,1); bx+=tw(" [MGR]",1); }
+      else if(c->priv_level==3){ dt(bx,8," [USR]",COL_HOSTGOLD,1); bx+=tw(" [USR]",1); }
+      if(c->is_spectator)    { dt(bx,8," [SPECTATOR]",COL_HOSTGOLD,1); }
+     }}
+    /* Header right side: ping far-right, score/browse to its left */
+    {
+        /* Build ping string and measure it */
+        char ping_str[24]; uint32_t ping_col;
+        if (c->ping_ms < 0)
+            { snprintf(ping_str,sizeof(ping_str),"PING: --"); ping_col=0x606060ff; }
+        else if (c->ping_ms < 60)
+            { snprintf(ping_str,sizeof(ping_str),"PING: %dms",c->ping_ms); ping_col=0x40ff80ff; }
+        else if (c->ping_ms < 150)
+            { snprintf(ping_str,sizeof(ping_str),"PING: %dms",c->ping_ms); ping_col=0xffcc40ff; }
+        else
+            { snprintf(ping_str,sizeof(ping_str),"PING: %dms",c->ping_ms); ping_col=0xff4040ff; }
+        int ping_w = tw(ping_str,1);
+        int ping_x = WIN_W - ping_w - 8;
+        dt(ping_x, 8, ping_str, ping_col, 1);
+
+        /* Score info left of ping with 12px gap */
+        int score_rx = ping_x - 12;
+        if(!c->is_spectator){
+            snprintf(buf,sizeof(buf),"Lvl:%d  Lines:%d  Score:%d",
+                     c->my_field.level, c->my_field.lines, c->my_field.score);
+            dt(score_rx - tw(buf,1), 8, buf, COL_OPEN_GREEN, 1);
+        } else {
+            const char *hint = "<- -> to browse";
+            dt(score_rx - tw(hint,1), 8, hint, 0x6060a0ff, 1);
+        }
+    }
+
+    /* Own field — or watched player's field when spectating/eliminated */
+    /* Own field header — identical style to opponent boards (dopp) */
+    if(!((c->is_spectator && c->state==CS_PLAYING) || c->state==CS_GAMEOVER)){
+        /* Panel border background */
+        fr(fx-2,fy-16,fw2+4,fh2+20,COL_HIGHLIGHT);
+        dr(fx-2,fy-16,fw2+4,fh2+20,COL_BORDER);
+        /* Slot chip: always "1" — gold, left side */
+        fr(fx-2,fy-16,FW+6,16,0x1a1a00ff);
+        dt(fx,fy-14,"1",COL_HOSTGOLD,1);
+        /* Nick */
+        {int nick_x=fx+FW+5;
+         dt(nick_x,fy-14,c->nick,COL_WHITE,1);}
+        /* HOST / ADMIN badges — right side */
+        if(c->priv_level<=2){
+            int bw=tw("[ADMIN]",1)+2;
+            dt(fx+fw2-bw,fy-14,"[ADMIN]",COL_HOSTGOLD,1);
+        } else if(c->is_host){
+            int bw=tw("HOST",1)+2;
+            dt(fx+fw2-bw,fy-14,"HOST",COL_HOSTGOLD,1);
+        }
+    }
+    /* Target ring on own field when self is selected as attack target */
+    {uint32_t own_border = (c->attack_target==c->slot && c->state==CS_PLAYING
+                            && !c->paused && !c->is_spectator)
+                           ? 0xffff00ff : 0x5050a0ff;
+     dr(fx-2,fy-2,fw2+4,fh2+4,own_border);}
+    {
+    int can_browse = (c->is_spectator && c->state==CS_PLAYING) || c->state==CS_GAMEOVER;
+    if(can_browse){
+        /* Find a valid slot to display */
+        int ws = c->spec_watch_slot;
+        if(ws<=0||ws>MAX_PLAYERS||!c->opp_nicks[ws-1][0]){
+            int fi;
+            for(fi=0;fi<MAX_PLAYERS;fi++){
+                if(fi+1!=c->slot&&c->opp_nicks[fi][0]){ws=fi+1;break;}
+            }
+            c->spec_watch_slot=ws;
+        }
+        if(ws>=1&&ws<=MAX_PLAYERS&&c->opp_nicks[ws-1][0]){
+            Field *wf=&c->opp_fields[ws-1];
+            dfield(fx,fy,BLOCK_SIZE,wf,NULL,0);
+            fr(fx,fy-18,fw2,18,0x0a0a1eff);
+            {char wb[40];snprintf(wb,sizeof(wb),"%s: %s",
+                c->state==CS_GAMEOVER?"SPECTATING":"Watching",c->opp_nicks[ws-1]);
+             dtc(fx+fw2/2,fy-15,wb,c->state==CS_GAMEOVER?COL_INGAME_RED:0xaaaaffff,1);}
+            if(!c->opp_alive[ws-1]){
+                SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+                fr(fx,fy,fw2,fh2,0x00000088);
+                SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+                dtc(fx+fw2/2,fy+fh2/2-6,"ELIMINATED",COL_INGAME_RED,1);}
+            dtc(fx+8,fy+fh2/2,"<",COL_LTGRAY,2);
+            dtc(fx+fw2-8,fy+fh2/2,">",COL_LTGRAY,2);
+            if(g_mouse.clicked){
+                if(pt_in(g_mouse.x,g_mouse.y,fx,fy,fw2/2,fh2)){
+                    int s=c->spec_watch_slot,tries;
+                    for(tries=0;tries<MAX_PLAYERS;tries++){
+                        s=((s-2+MAX_PLAYERS)%MAX_PLAYERS)+1;
+                        if(s!=c->slot&&c->opp_nicks[s-1][0]){c->spec_watch_slot=s;break;}
+                    }
+                } else if(pt_in(g_mouse.x,g_mouse.y,fx+fw2/2,fy,fw2/2,fh2)){
+                    int s=c->spec_watch_slot,tries;
+                    for(tries=0;tries<MAX_PLAYERS;tries++){
+                        s=(s%MAX_PLAYERS)+1;
+                        if(s!=c->slot&&c->opp_nicks[s-1][0]){c->spec_watch_slot=s;break;}
+                    }
+                }
+            }
+        } else {
+            fr(fx,fy,fw2,fh2,0x0a0a14ff);
+            dtc(fx+fw2/2,fy+fh2/2,"No active players",COL_GRAY,1);
+        }
+    } else {
+        dfield(fx,fy,BLOCK_SIZE,&c->my_field,
+               (c->state==CS_PLAYING&&!c->paused)?&c->cur:NULL,
+               (c->state==CS_PLAYING&&!c->paused));
+        /* ── Pending garbage meter — left of field, guideline mode only ── */
+        if(c->state==CS_PLAYING && !c->paused && c->garbage_system==1 && c->pending_garbage>0){
+            int mg=c->pending_garbage; if(mg>FIELD_HEIGHT) mg=FIELD_HEIGHT;
+            int mw=6, mh=FIELD_HEIGHT*BLOCK_SIZE;
+            int mx=fx-mw-3, my2=fy;
+            /* Background track */
+            fr(mx,my2,mw,mh,0x0a0a14ff); dr(mx,my2,mw,mh,0x202030ff);
+            /* Filled portion — red, grows from bottom */
+            int fill_h = mg * BLOCK_SIZE;
+            /* Pulse intensity */
+            int pp=(int)(g_rtick%30);
+            uint8_t pal2=(uint8_t)(pp<15?160+pp*4:220-(pp-15)*4);
+            uint32_t gc=(mg>=8)?((uint32_t)(0xff0000ff|(pal2))): /* danger: bright red */
+                         (mg>=4)?0xff4400ff:0xff8800ff;  /* warning: orange; caution: amber */
+            /* override with pulse alpha */
+            gc=(gc&0xffffff00)|pal2;
+            fr(mx, my2+mh-fill_h, mw, fill_h, gc);
+            dr(mx,my2,mw,mh,0x804040ff);
+            /* Count label */
+            if(mg>=1){char gc2[4];snprintf(gc2,sizeof(gc2),"%d",mg);
+             dt(mx+(mw-FW)/2-1, my2+mh-fill_h-FH-2, gc2, 0xff6060ff, 1);}
+        }
+        /* Highlight special blocks in own field with animated glow */
+        if(c->state==CS_PLAYING) {
+            int bsz = BLOCK_SIZE;
+            /* Animate: pulse border alpha 80..ff over 60 frames */
+            int ph = (int)(g_rtick % 60);
+            uint8_t pal = (uint8_t)(ph < 30 ? 128 + ph*4 : 248 - (ph-30)*4);
+            for(int sy=0;sy<FIELD_HEIGHT;sy++) for(int sx2=0;sx2<FIELD_WIDTH;sx2++) {
+                uint8_t v=c->my_field.cells[sy][sx2];
+                if(v>8&&v<=8+NUM_SPECIALS) {
+                    uint32_t bc = (SC[v-8]&0xffffff00)|pal;
+                    dr(fx+sx2*bsz-1, fy+sy*bsz-1, bsz+2, bsz+2, bc);
+                }
+            }
+        }
+    }
+    } /* end can_browse block */
+
+    /* Paused overlay — show for all players; only non-spectators can resume */
+    if(c->paused){
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+        fr(fx,fy,fw2,fh2,0x00000099);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+        dtc(fx+fw2/2,fy+fh2/2-14,"PAUSED",COL_HOSTGOLD,2);
+        if(!c->is_spectator)
+            if(dbtn(fx+fw2/2-50,fy+fh2/2+10,100,28,"RESUME",BS_ACTIVE)) action=BTN_RESUME;
+    }
+
+    /* Status effect overlays (darkness, confusion, immunity, mutate) */
+    if(!c->is_spectator && c->state==CS_PLAYING){
+        if(c->darkness_timer>0){
+            int vis_rows=3;
+            SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+            fr(fx,fy,fw2,fh2-(vis_rows*BLOCK_SIZE),0x000000ee);
+            SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+            dtc(fx+fw2/2,fy+10,"DARKNESS",0x8060ffff,1);
+            dtc(fx+fw2/2,fy+22,"(limited vision)",0x5040aaff,1);
+        }
+        if(c->confusion_timer>0){
+            SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+            fr(fx,fy,fw2,10,0xff60a033);
+            SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+            dtc(fx+fw2/2,fy+1,"CONFUSED",0xff60a0ff,1);
+        }
+        if(c->immunity_timer>0){
+            SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+            dr(fx-2,fy-2,fw2+4,fh2+4,0x40ffcc88);
+            dr(fx-3,fy-3,fw2+6,fh2+6,0x40ffcc44);
+            SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+            dtc(fx+fw2/2,fy+1,"IMMUNE",0x40ffccff,1);
+        }
+        if(c->mutate_timer>0){
+            dtc(fx+fw2/2,fy+fh2-12,"MUTATED",0xffaa40ff,1);
+        }
+    }
+
+    /* ---- Attack bar — full window width below own field ---- */
+    {
+        BtnId ab=draw_attack_bar(0,ATTACK_BAR_Y,WIN_W,ATTACK_BAR_H,c);
+        if(ab!=BTN_NONE) action=ab;
+    }
+
+    /* ---- Sidebar ---- */
+    /* Hold piece */
+    {/* Build hold key hint from keymap */
+     char _hk[12];
+     int _hsc=c->km.hold;
+     if(_hsc==6) snprintf(_hk,sizeof(_hk),"[C]");
+     else if(_hsc==225||_hsc==229) snprintf(_hk,sizeof(_hk),"[Sft]");
+     else if(_hsc>=4&&_hsc<=29) snprintf(_hk,sizeof(_hk),"[%c]",(char)('A'+_hsc-4));
+     else snprintf(_hk,sizeof(_hk),"[%d]",_hsc);
+     dhold(sbx, 36, sbw, 86, c->hold.type, c->hold_used, _hk);}
+    /* Next piece */
+    dnext(sbx,130,sbw,86,&c->next);
+
+    /* PLAYER WINS — per-room session leaderboard */
+    {int py=224, ph=c->lb_count>0?(c->lb_count*16+22):36;
+     int row_h=16, i;
+     dpanel(sbx,py,sbw,ph,"PLAYER WINS");
+     if(c->lb_count==0){
+         dt(sbx+4,py+20,"No games yet",0x404060ff,1);
+     } else {
+         for(i=0;i<c->lb_count&&i<7;i++){
+             int ry=py+18+i*row_h;
+             uint32_t col=(i==0)?COL_HOSTGOLD:(i==1)?COL_LTGRAY:(i==2)?0xcc8844ff:COL_GRAY;
+             {char rank[4];snprintf(rank,sizeof(rank),"%d.",i+1);dt(sbx+3,ry,rank,col,1);}
+             {char nick[12];strncpy(nick,c->leaderboard[i].nick,11);nick[11]=0;dt(sbx+20,ry,nick,col,1);}
+             {char wins[16];
+              if(c->leaderboard[i].streak>=2)
+                  snprintf(wins,sizeof(wins),"%d 🔥%d",c->leaderboard[i].wins,c->leaderboard[i].streak);
+              else
+                  snprintf(wins,sizeof(wins),"%d",c->leaderboard[i].wins);
+              dt(sbx+sbw-tw(wins,1)-4,ry,wins,c->leaderboard[i].streak>=2?0xff8800ff:col,1);}
+         }
+     }
+     lby=py+ph+6;}
+
+    /* TEAM WINS — per-room session team leaderboard */
+    {int ph=c->team_lb_count>0?(c->team_lb_count*16+22):36;
+     int row_h=16, i;
+     dpanel(sbx,lby,sbw,ph,"TEAM WINS");
+     if(c->team_lb_count==0){
+         dt(sbx+4,lby+20,"No team games yet",0x404060ff,1);
+     } else {
+         for(i=0;i<c->team_lb_count&&i<6;i++){
+             int ry=lby+18+i*row_h;
+             uint32_t col=(i==0)?COL_HOSTGOLD:(i==1)?COL_LTGRAY:(i==2)?0xcc8844ff:COL_GRAY;
+             {char rank[4];snprintf(rank,sizeof(rank),"%d.",i+1);dt(sbx+3,ry,rank,col,1);}
+             {char team[12];strncpy(team,c->team_leaderboard[i].nick,11);team[11]=0;dt(sbx+20,ry,team,col,1);}
+             {char wins[6];snprintf(wins,sizeof(wins),"%d",c->team_leaderboard[i].wins);
+              dt(sbx+sbw-tw(wins,1)-4,ry,wins,col,1);}
+         }
+     }
+     lb_h=ph; lby=lby+ph;}
+
+
+    /* ---- READY / ACTIONS section ---- */
+    {
+        int by=lby+6;
+
+        if(c->state==CS_IN_LOBBY){
+            /* Ready roster */
+            {int ri;
+             fr(sbx,by,sbw,1,COL_BORDER); by+=4;
+             {uint32_t rc=c->is_ready?COL_OPEN_GREEN:0x606080ff;
+              dt(sbx+4,by,c->is_ready?"[RDY]":"[   ]",rc,1);
+              dt(sbx+46,by,c->nick,COL_LTGRAY,1);
+              if(c->is_host) dt(sbx+sbw-tw("HOST",1)-6,by,"HOST",COL_HOSTGOLD,1);}
+             by+=14;
+             for(ri=0;ri<MAX_PLAYERS;ri++){
+                 if(ri+1==c->slot||!c->opp_nicks[ri][0]) continue;
+                 uint32_t rc=c->opp_ready[ri]?COL_OPEN_GREEN:0x606080ff;
+                 dt(sbx+4,by,c->opp_ready[ri]?"[RDY]":"[   ]",rc,1);
+                 dt(sbx+46,by,c->opp_nicks[ri],COL_LTGRAY,1);
+                 by+=14;}
+             by+=6;}
+
+            /* START GAME (host only) — top of stack */
+            if(c->is_host){
+                int all_ready=c->is_ready, ri;
+                for(ri=0;ri<MAX_PLAYERS;ri++){
+                    if(ri+1==c->slot||!c->opp_nicks[ri][0]) continue;
+                    if(!c->opp_ready[ri]){all_ready=0;break;}}
+                BtnStyle sbs=all_ready?BS_ACTIVE:BS_DISABLED;
+                if(dbtn(sbx+4,by,sbw-8,26,"START GAME",sbs)&&all_ready) action=BTN_START_GAME;
+                by+=30;}
+
+            /* READY button */
+            {BtnStyle rbs=c->is_ready?BS_TOGON:BS_NORMAL;
+             if(dbtn(sbx+4,by,sbw-8,26,"READY",rbs)&&!c->is_spectator) action=BTN_READY;
+             by+=30;}
+
+            /* GAME OPTIONS button */
+            {BtnStyle gobs=(c->is_host||c->priv_level<=2)?BS_ACTIVE:BS_NORMAL;
+             if(dbtn(sbx+4,by,sbw-8,26,"Game Options",gobs)) action=BTN_GAME_OPTIONS;
+             by+=30;}
+
+            /* TEAM button */
+            {char tlbl[32];
+             snprintf(tlbl,sizeof(tlbl),"Team: %s",c->team[0]?c->team:"(none)");
+             if(dbtn(sbx+4,by,sbw-8,26,tlbl,BS_NORMAL)) action=BTN_TEAM_POPUP;
+             by+=30;}
+
+            /* AI PLAYERS button (host/admin only) */
+            if(c->bots_allowed&&(c->is_host||c->priv_level<=2)){
+                if(dbtn(sbx+4,by,sbw-8,26,"AI Players",BS_NORMAL)) action=BTN_AI_PLAYERS;
+                by+=30;}
+        }
+
+        if(c->state==CS_GAMEOVER){
+            fr(sbx,lby+lb_h+6,sbw,1,COL_BORDER);
+            int wy=lby+lb_h+14;
+            dt(sbx+4,wy,"Eliminated",0xff6060ff,1); wy+=14;
+            dt(sbx+4,wy,"Waiting for round to",COL_GRAY,1); wy+=13;
+            dt(sbx+4,wy,"end...",COL_GRAY,1);
+        }
+        if(c->state==CS_PLAYING&&!c->is_spectator){
+            if(c->paused){
+                if(dbtn(sbx+4,by,sbw-8,26,"RESUME",BS_ACTIVE)) action=BTN_RESUME;
+            } else {
+                if(dbtn(sbx+4,by,sbw-8,26,"Pause",BS_NORMAL)) action=BTN_PAUSE;}
+            by+=30;
+            /* END GAME — only for host, admin, or priv≤2 */
+            if(c->is_host||c->priv_level<=2){
+                if(dbtn(sbx+4,by,sbw-8,24,"END GAME",BS_NORMAL)) action=BTN_END_GAME;
+                by+=28;
+            }
+        }
+    }
+
+    /* ---- Opponents with per-player TAUNT button below each board ---- */
+    /* OPP_FIELD_H+18 = board panel height; +16 taunt btn gap; row pitch = OPP_FIELD_H+34+taunt */
+    {
+        int taunt_btn_h = (!c->no_taunts && c->state==CS_PLAYING && !c->is_spectator) ? 16 : 0;
+        int row_pitch   = OPP_FIELD_H + 34 + taunt_btn_h;
+        opp_x=OPP_START_X; opp_y=OWN_FIELD_Y+16;
+        for(i=0;i<MAX_PLAYERS;i++){
+            if(i+1==c->slot||!c->opp_nicks[i][0]) continue;
+            dopp(opp_x,opp_y,&c->opp_fields[i],c->opp_nicks[i],c->opp_alive[i],c->opp_spectator[i],display_id(c,i+1));
+            /* Target ring when this opponent is the attack target */
+            if(c->attack_target==i+1 && c->state==CS_PLAYING && !c->paused && !c->is_spectator){
+                dr(opp_x-3,opp_y-18,OPP_FIELD_W+6,OPP_FIELD_H+22,0xffff00ff);
+                dr(opp_x-2,opp_y-17,OPP_FIELD_W+4,OPP_FIELD_H+20,0xffcc0080);}
+            /* Click opponent board to watch — works for both spectators and eliminated players */
+            {int can_watch=(c->is_spectator||c->state==CS_GAMEOVER);
+             int is_watched=(can_watch&&c->spec_watch_slot==i+1);
+             if(is_watched){
+                 fr(opp_x-3,opp_y-18,OPP_FIELD_W+6,OPP_FIELD_H+22,0x2a2a50ff);
+                 dr(opp_x-3,opp_y-18,OPP_FIELD_W+6,OPP_FIELD_H+22,0x8080ffff);}
+             if(can_watch&&g_mouse.clicked&&
+                pt_in(g_mouse.x,g_mouse.y,opp_x-3,opp_y-18,OPP_FIELD_W+6,OPP_FIELD_H+22))
+                 c->spec_watch_slot=i+1;
+            }
+
+            /* TAUNT button — disabled for spectators and when paused */
+            if(taunt_btn_h>0){
+                int tby  = opp_y + OPP_FIELD_H + 4;
+                int is_spec = c->opp_spectator[i];
+                int can  = (!is_spec && c->taunt_cooldown==0 && !c->paused);
+                int hov  = can && pt_in(g_mouse.x,g_mouse.y,opp_x-2,tby,OPP_FIELD_W+4,12);
+                fr(opp_x-2,tby,OPP_FIELD_W+4,12,hov?0x3a1000ff:0x160800ff);
+                dr(opp_x-2,tby,OPP_FIELD_W+4,12,can?0x884400ff:0x2a1a0aff);
+                const char *tlbl = is_spec?"SPECTATOR":c->paused?"PAUSED":"TAUNT";
+                uint32_t tcol = is_spec?0x4040a0ff:c->paused?COL_HOSTGOLD:can?0xffaa00ff:0x443320ff;
+                dtc(opp_x+OPP_FIELD_W/2,tby+1,tlbl,tcol,1);
+                if(hov&&g_mouse.clicked){
+                    char tbuf[MAX_MSG_LEN];
+                    snprintf(tbuf,sizeof(tbuf),"taunt %s",c->opp_nicks[i]);
+                    net_send(c->sock,tbuf); c->taunt_cooldown=300;}
+            }
+
+            opp_x+=OPP_FIELD_W+14;
+            if(opp_x+OPP_FIELD_W>WIN_W-4){opp_x=OPP_START_X; opp_y+=row_pitch;}
+        }
+    }
+
+    /* ---- Chat + Activity panel side by side ---- */
+    {
+        int cy  = CHAT_Y;
+        int cw  = WIN_W*6/10;
+        int aw  = WIN_W - cw - 2;
+        if(draw_chat_panel(0,cy,cw,CHAT_H,c)) action=BTN_OPEN_CHAT;
+        draw_activity_log(cw+2,cy,aw,CHAT_H,c);
+    }
+
+    /* Status strip */
+    fr(0,WIN_H-22,WIN_W,22,0x0a0a1aff);dr(0,WIN_H-22,WIN_W,22,COL_BORDER);
+    if(c->state==CS_IN_LOBBY){
+         dt(4,WIN_H-17,c->is_host?"HOST -- click START":"Waiting for host",
+            c->is_host?COL_HOSTGOLD:COL_LTGRAY,1);
+    } else if(c->state==CS_PLAYING){
+         if(c->is_spectator)      dt(4,WIN_H-17,"SPECTATING",0xaaaaffff,1);
+         else if(c->paused)       dt(4,WIN_H-17,"PAUSED",COL_HOSTGOLD,1);
+         else                     dt(4,WIN_H-17,"PLAYING",COL_OPEN_GREEN,1);
+    } else if(c->state==CS_GAMEOVER){
+         dt(4,WIN_H-17,"ELIMINATED",COL_INGAME_RED,1);
+    }
+
+    draw_winner(c);
+
+    /* ---- Team name popup overlay ---- */
+    /* ---- Kick / Ban notification popup ---- */
+    if(c->kick_popup_open){
+        int pw=380,ph=140,px=(WIN_W-pw)/2,py=(WIN_H-ph)/2;
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+        fr(0,0,WIN_W,WIN_H,0x00000099);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+        g_mouse.clicked=saved_click_g;
+        g_popup_blocked=0; /* popup content is interactive */
+        /* box: red=ban, orange=kick, blue=admin disconnect */
+        int _is_admin_kill=(strstr(c->kick_popup_msg,"administrator")!=NULL);
+        uint32_t border_col=_is_admin_kill?0x4488ffff:
+                            c->kick_popup_is_ban?0xff3333ff:0xff8800ff;
+        fr(px,py,pw,ph,0x08101aff);
+        dr(px,py,pw,ph,border_col);
+        /* title */
+        const char *title=_is_admin_kill?"Connection Terminated":
+                          c->kick_popup_is_ban?"You have been banned":"You have been kicked";
+        dtc(px+pw/2,py+10,title,border_col,1);
+        /* horizontal rule */
+        fr(px+8,py+26,pw-16,1,border_col);
+        /* reason — scale 2 so it's unmissable, wrap at 22 chars */
+        {int mc=22; char ln1[64]="",ln2[64]="";
+         int rlen=(int)strlen(c->kick_popup_msg);
+         if(rlen==0){
+             dtc(px+pw/2,py+48,"(no reason given)",0xaaaaaaff,1);
+         } else if(rlen<=mc){
+             dtc(px+pw/2,py+46,c->kick_popup_msg,0xffee88ff,2);
+         } else {
+             int sp=mc;
+             while(sp>0&&c->kick_popup_msg[sp]!=' ') sp--;
+             if(!sp) sp=mc;
+             strncpy(ln1,c->kick_popup_msg,sp); ln1[sp]='\0';
+             strncpy(ln2,c->kick_popup_msg+sp+1,sizeof(ln2)-1);
+             dtc(px+pw/2,py+40,ln1,0xffee88ff,2);
+             dtc(px+pw/2,py+60,ln2,0xffee88ff,2);
+         }}
+        /* OK button — no hint text */
+        if(dbtn(px+(pw-80)/2,py+ph-38,80,26,"OK",BS_ACTIVE)) action=BTN_KICK_POPUP_OK;
+    }
+
+    if(c->team_popup_open){
+        int pw=320,ph=100,px=(WIN_W-pw)/2,py=(WIN_H-ph)/2;
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+        fr(0,0,WIN_W,WIN_H,0x00000088);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+        g_mouse.clicked=saved_click_g;
+        if(saved_click_g&&!pt_in(g_mouse.x,g_mouse.y,px,py,pw,ph)){
+            c->team_popup_open=0; g_mouse.clicked=0; }
+        else {
+        g_popup_blocked=0;
+        fr(px,py,pw,ph,0x14142aff); dr(px,py,pw,ph,COL_PIECE_I);
+        dtc(px+pw/2,py+10,"Set Team Name",COL_LTGRAY,1);
+        /* text field */
+        {int fx2=px+8,fw2=pw-16,fh2=24;
+         fr(fx2,py+28,fw2,fh2,0x1e1e3aff); dr(fx2,py+28,fw2,fh2,0x8080c0ff);
+         {char disp[130];
+          snprintf(disp,sizeof(disp),"%s_",c->tf_team_popup.text);
+          dt(fx2+4,py+34,disp,COL_WHITE,1);}}
+        /* buttons */
+        if(dbtn(px+8,py+64,(pw-24)/2,26,"Set",BS_ACTIVE))    action=BTN_TEAM_POPUP_SET;
+        if(dbtn(px+16+(pw-24)/2,py+64,(pw-24)/2,26,"Cancel",BS_NORMAL)) c->team_popup_open=0;
+        /* hint */
+        dtc(px+pw/2,py+ph-8,"Enter = set  |  Esc = cancel",0x404060ff,1);
+        } /* end else */
+    }
+
+    /* ── GAME OPTIONS POPUP ── */
+    if(c->game_options_popup_open){
+        int pw=380, ph=394;
+        int px=(WIN_W-pw)/2, py=(WIN_H-ph)/2;
+        int can_edit=(c->is_host||c->priv_level<=2);
+        /* Read-only table is more compact — shrink popup height for non-editors */
+        if(!can_edit){ ph=320; py=(WIN_H-ph)/2; }
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+        fr(0,0,WIN_W,WIN_H,0x00000099);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+        g_mouse.clicked=saved_click_g;
+        if(g_mouse.clicked&&!pt_in(g_mouse.x,g_mouse.y,px,py,pw,ph)){
+            c->game_options_popup_open=0; g_mouse.clicked=0; }
+        else {
+        g_popup_blocked=0; /* enable hover/click inside popup */
+        fr(px,py,pw,ph,0x10102aff); dr(px,py,pw,ph,COL_PIECE_I);
+        dtc(px+pw/2,py+10,"Game Options",COL_LTGRAY,2);
+        if(can_edit){
+        /* ── Interactive toggle buttons for host/admin ── */
+        #define OPT_ROW(label,state_on,sc_on,sc_off,btn_id,row_y) \
+        { int on=(state_on); uint32_t sc=on?(sc_on):(sc_off); \
+          int bx=px+12,by2=(row_y),bw2=pw-24,bh2=36; \
+          int hv=pt_in(g_mouse.x,g_mouse.y,bx,by2,bw2,bh2); \
+          fr(bx,by2,bw2,bh2,on?0x061006ff:0x160606ff); \
+          if(hv) fr(bx,by2,bw2,bh2,0xffffff18); \
+          dr(bx,by2,bw2,bh2,sc); \
+          {char lbl[40]; snprintf(lbl,sizeof(lbl),"%s [%s]",(label),on?"ON":"OFF"); \
+           dtc(bx+bw2/2,by2+bh2/2-FH,lbl,sc,2);} \
+          if(hv&&g_mouse.clicked){action=(btn_id);g_mouse.clicked=0;} }
+        #define CYC_ROW(label,val_label,sc,btn_id,row_y) \
+        { int bx=px+12,by2=(row_y),bw2=pw-24,bh2=36; \
+          int hv=pt_in(g_mouse.x,g_mouse.y,bx,by2,bw2,bh2); \
+          fr(bx,by2,bw2,bh2,0x080820ff); \
+          if(hv) fr(bx,by2,bw2,bh2,0xffffff18); \
+          dr(bx,by2,bw2,bh2,(sc)); \
+          {char lbl[48]; snprintf(lbl,sizeof(lbl),"%s [%s]",(label),(val_label)); \
+           dtc(bx+bw2/2,by2+bh2/2-FH,lbl,(sc),2);} \
+          if(hv&&g_mouse.clicked){action=(btn_id);g_mouse.clicked=0;} }
+        OPT_ROW("Specials",  !c->no_attacks,      COL_OPEN_GREEN, 0x804040ff, BTN_TOGGLE_ATTACKS, py+44)
+        OPT_ROW("Last Wins", c->last_player_wins,  COL_OPEN_GREEN, 0x804040ff, BTN_TOGGLE_ENDLESS, py+86)
+        OPT_ROW("Taunts",   !c->no_taunts,        0xffaa00ff,     0x806040ff, BTN_TOGGLE_TAUNTS,  py+128)
+        OPT_ROW("Speed Up",  c->speedup_enabled,   0xffcc00ff,     0x806040ff, BTN_TOGGLE_SPEEDUP, py+170)
+        OPT_ROW("Hold Piece",c->hold_enabled,      COL_OPEN_GREEN, 0x804040ff, BTN_TOGGLE_HOLD,   py+212)
+        {const char *gs_lbl=c->garbage_system?"Guideline":"Classic";
+         CYC_ROW("Garbage",gs_lbl,0x6060c0ff,BTN_TOGGLE_GARBAGE_SYSTEM,py+254)}
+        {const char *gt_lbl=c->garbage_targeting==0?"All":c->garbage_targeting==1?"Random":"Focused";
+         CYC_ROW("Target",gt_lbl,0x8060c0ff,BTN_TOGGLE_GARBAGE_TARGET,py+296)}
+        #undef OPT_ROW
+        #undef CYC_ROW
+        } else {
+        /* ── Read-only status table for non-host players ── */
+        #define STAT_ROW(label,val_str,val_col,row_y) \
+        { int bx=px+12,by2=(row_y),bw2=pw-24,bh2=28; \
+          fr(bx,by2,bw2,bh2,0x0a0a18ff); dr(bx,by2,bw2,bh2,0x222244ff); \
+          dt(bx+10,by2+bh2/2-FH/2,(label),0x8080a0ff,1); \
+          dt(bx+bw2-tw((val_str),1)-10,by2+bh2/2-FH/2,(val_str),(val_col),1); }
+        STAT_ROW("Specials",  !c->no_attacks    ?"ON":"OFF", !c->no_attacks    ?COL_OPEN_GREEN:0x804040ff, py+44)
+        STAT_ROW("Last Wins", c->last_player_wins?"ON":"OFF", c->last_player_wins?COL_OPEN_GREEN:0x804040ff, py+78)
+        STAT_ROW("Taunts",   !c->no_taunts     ?"ON":"OFF", !c->no_taunts     ?0xffaa00ff:0x806040ff,     py+112)
+        STAT_ROW("Speed Up",  c->speedup_enabled ?"ON":"OFF", c->speedup_enabled ?0xffcc00ff:0x806040ff,    py+146)
+        STAT_ROW("Hold Piece",c->hold_enabled    ?"ON":"OFF", c->hold_enabled    ?COL_OPEN_GREEN:0x804040ff, py+180)
+        {const char *gs=c->garbage_system?"Guideline":"Classic";
+         STAT_ROW("Garbage",gs,0x8080ffff,py+214)}
+        {const char *gt=c->garbage_targeting==0?"All":c->garbage_targeting==1?"Random":"Focused";
+         STAT_ROW("Target",gt,0xa060c0ff,py+248)}
+        #undef STAT_ROW
+        dtc(px+pw/2,py+ph-52,"Only the host can change these settings.",0x505070ff,1);
+        }
+        if(dbtn(px+12,py+ph-44,pw-24,32,"Close",BS_NORMAL))
+            c->game_options_popup_open=0;
+        }
+    }
+
+    /* ── AI PLAYERS POPUP ── */
+    if(c->ai_players_popup_open){
+        int pw=320, ph=220;
+        int px=(WIN_W-pw)/2, py=(WIN_H-ph)/2;
+        int nbot=0, nplayers=1;
+        for(int bi=0;bi<MAX_PLAYERS;bi++){
+            if(c->opp_nicks[bi][0]) nplayers++;
+            if(c->opp_is_bot[bi]) nbot++;}
+        int room_full=(nplayers>=MAX_PLAYERS);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
+        fr(0,0,WIN_W,WIN_H,0x00000099);
+        SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+        g_mouse.clicked=saved_click_g;
+        if(g_mouse.clicked&&!pt_in(g_mouse.x,g_mouse.y,px,py,pw,ph)){
+            c->ai_players_popup_open=0; g_mouse.clicked=0; }
+        else {
+        g_popup_blocked=0;
+        fr(px,py,pw,ph,0x10102aff); dr(px,py,pw,ph,0x6060c0ff);
+        dtc(px+pw/2,py+12,"AI Players",COL_LTGRAY,2);
+        {char bc[48]; snprintf(bc,sizeof(bc),"Bots: %d    Players: %d / %d",nbot,nplayers,MAX_PLAYERS);
+         dtc(px+pw/2,py+32,bc,COL_GRAY,1);}
+        {int bw3=(pw-24-4)/3;
+         BtnStyle es=room_full?BS_DISABLED:BS_NORMAL;
+         BtnStyle ms=room_full?BS_DISABLED:BS_NORMAL;
+         BtnStyle hs=room_full?BS_DISABLED:BS_NORMAL;
+         if(dbtn(px+12,          py+52,bw3,34,"Easy",  es)) action=BTN_ADD_BOT_EASY;
+         if(dbtn(px+12+bw3+2,    py+52,bw3,34,"Medium",ms)) action=BTN_ADD_BOT_MEDIUM;
+         if(dbtn(px+12+2*(bw3+2),py+52,bw3,34,"Hard",  hs)) action=BTN_ADD_BOT_HARD;}
+        if(room_full) dtc(px+pw/2,py+93,"Room is full",0xff8080ff,1);
+        {int half=(pw-24-4)/2;
+         BtnStyle rs=nbot>0?BS_NORMAL:BS_DISABLED;
+         if(dbtn(px+12,      py+102,half,34,"Remove Bot",rs)) action=BTN_REMOVE_BOT;
+         if(dbtn(px+14+half, py+102,half,34,"Remove All",rs)){
+             for(int bi=0;bi<MAX_PLAYERS;bi++) if(c->opp_is_bot[bi]){
+                 char rbuf[32]; snprintf(rbuf,sizeof(rbuf),"removebot %d",bi+1);
+                 net_send(c->sock,rbuf);}}}
+        if(dbtn(px+12,py+ph-44,pw-24,32,"Close",BS_NORMAL))
+            c->ai_players_popup_open=0;
+        }
+    }
+
+    /* ── KEYMAP POPUP (game room) ── */
+    if(c->keymap_popup_open) { render_keymap_popup(c, saved_click_g); }
+
+    g_popup_blocked=0;
+    if(action!=BTN_NONE) client_on_button(c,action);
+    SDL_RenderPresent(g_rend);
+}
+
+/* ============================== SDL EVENTS ============================== */
+int sdl_poll_events(ClientCtx *c) {
+    SDL_Event ev;
+    g_mouse.clicked = 0;
+    while (SDL_PollEvent(&ev)) {
+        switch (ev.type) {
+        case SDL_QUIT: return 0;
+        case SDL_KEYDOWN:
+            client_on_key(c, ev.key.keysym.scancode, ev.key.keysym.sym, 0, NULL);
+            break;
+        case SDL_TEXTINPUT:
+            client_on_key(c, 0, 0, 1, ev.text.text);
+            break;
+        case SDL_MOUSEMOTION:
+            g_mouse.x = ev.motion.x;
+            g_mouse.y = ev.motion.y;
+            break;
+        case SDL_MOUSEBUTTONDOWN:
+            if (ev.button.button == SDL_BUTTON_LEFT) {
+                g_mouse.x = ev.button.x;
+                g_mouse.y = ev.button.y;
+                g_mouse.clicked = 1;
+                g_mouse.held = 1;
+            }
+            break;
+        case SDL_MOUSEBUTTONUP:
+            if (ev.button.button == SDL_BUTTON_LEFT) g_mouse.held = 0;
+            break;
+        default: break;
+        }
+    }
+    return c->running;
+}
+
+/* ============================== SDL INIT/SHUTDOWN ============================== */
+int sdl_init(void) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+        fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
+        return 0;
+    }
+    g_win = SDL_CreateWindow("LineClash",
+                             SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                             WIN_W, WIN_H, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);
+    if (!g_win) {
+        fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
+        SDL_Quit();
+        return 0;
+    }
+    g_rend = SDL_CreateRenderer(g_win, -1,
+                                SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (!g_rend) {
+        g_rend = SDL_CreateRenderer(g_win, -1, SDL_RENDERER_SOFTWARE);
+        if (!g_rend) {
+            fprintf(stderr, "SDL_CreateRenderer: %s\n", SDL_GetError());
+            SDL_DestroyWindow(g_win); g_win = NULL;
+            SDL_Quit();
+            return 0;
+        }
+    }
+    /* Fix HiDPI / Retina scaling: map our logical coordinate space onto
+     * the full drawable framebuffer regardless of pixel density.
+     * Without this, rendering only covers the top-left quarter on 2x displays. */
+    SDL_RenderSetLogicalSize(g_rend, WIN_W, WIN_H);
+    SDL_SetRenderDrawBlendMode(g_rend, SDL_BLENDMODE_NONE);
+    SDL_StartTextInput();
+    return 1;
+}
+
+void sdl_shutdown(void) {
+    SDL_StopTextInput();
+    if (g_rend) { SDL_DestroyRenderer(g_rend); g_rend = NULL; }
+    if (g_win)  { SDL_DestroyWindow(g_win);    g_win  = NULL; }
+    SDL_Quit();
+}
+
+const char *sdl_get_res_dir(void) {
+#ifdef __APPLE__
+    /* When running as a macOS .app bundle, resources are in Contents/Resources/ */
+    static char path[1024] = {0};
+    if (path[0]) return path;
+    char *base = SDL_GetBasePath();
+    if (base) {
+        snprintf(path, sizeof(path), "%s", base);
+        SDL_free(base);
+        /* If we're inside a bundle, base ends in Contents/MacOS/ — step up */
+        char *p = strstr(path, "Contents/MacOS");
+        if (p) { snprintf(p, sizeof(path)-(p-path), "Contents/Resources/"); }
+    } else {
+        snprintf(path, sizeof(path), "./");
+    }
+    return path;
+#else
+    static char path[1024] = {0};
+    if (path[0]) return path;
+    char *base = SDL_GetBasePath();
+    if (base) { snprintf(path, sizeof(path), "%s", base); SDL_free(base); }
+    else       { snprintf(path, sizeof(path), "./"); }
+    return path;
+#endif
+}
+
+void sdl_text_start(void) {
+    SDL_StartTextInput();
+}
