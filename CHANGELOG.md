@@ -1,41 +1,18 @@
 # Changelog
 
-## v0.9 (current)
+## v1.0.0
 
-### Gameplay
-- **Guideline garbage system** — Back-to-back bonus, combos, perfect clear (10 lines), configurable via `server.cfg`
-- **Pending garbage queue** — In guideline mode, incoming garbage is queued and flushed on lock; cleared lines cancel incoming (counter-attack)
-- **Garbage targeting** — All / Random / Focused modes, per-room settable
-- **Hold piece** — C or Shift; resets each new piece; shown in sidebar with key hint
-- **SRS wall kicks** — Full Super Rotation System for all pieces
-- **Lock delay** — Configurable 0–500ms; lateral and rotation moves reset the timer
-- **Win streaks** — Fire indicator when a player wins consecutive rounds
-- **Reconnect window** — Disconnected players' slots held for configurable seconds
-
-### Bots
-- Bots now use all game rules: guideline garbage, `lines_per_special`, B2B/combos, garbage targeting
-- Full special switch — all 10 special types including switch field, block bomb, clear column
-- Self-beneficial specials target self; offensive specials use room targeting mode
-- Difficulty scales speed, mistake rate, and special-fire frequency
-
-### Server
-- **Persistent room settings** — All 6 room options saved to DB and restored on restart
-- **Fine-grained config** — `btb_bonus`, `combo_cap`, `perfect_clear_bonus`, `garbage_hole_style`
-- **Stats API** — Room settings, garbage config, and lock delay now included in `/api/status`
-
-### GUI Client
-- HiDPI / Retina fix — `SDL_RenderSetLogicalSize` ensures full-window rendering on Mac
-- Lobby list — Two-line room rows with badges for all 6 game options including garbage mode and targeting
-- Game options popup — Clickable during `CS_GAMEOVER` state; `Label [ON/OFF]` format; wider popup; full-width Close button
-- Popup blocking — Hover and click suppressed on background while any popup is open
-- Hold box shows `HOLD [C]` key hint
-
-### CLI Client
-- Lobby list shows CLASSIC/GUIDELINE and TARGET mode columns
-- Keys `[5]` / `[6]` toggle garbage system and targeting in lobby
-
----
-
-## v0.8
-
-- Initial developer release with auth, rooms, specials, bots, leaderboard, spectator mode, sound, team play
+- Multiplayer rooms with up to 8 players, spectator mode, and team play
+- Guideline garbage system with back-to-back bonus, combos, and perfect clear
+- Pending garbage queue with counter-attack on line clears
+- Garbage targeting: All, Random, and Focused modes
+- Hold piece, SRS wall kicks, and configurable lock delay
+- 10 specials: add lines, clear lines, nuke, random clear, switch field, block bomb, gravity, quake, column clear
+- AI bots with configurable difficulty using all game rules and specials
+- Win streaks with fire indicator for consecutive round wins
+- Reconnect window — disconnected players hold their slot
+- Persistent room settings saved and restored across server restarts
+- HTTP stats API on port 31458
+- SDL2 GUI client with HiDPI/Retina support
+- Terminal CLI client for headless and SSH play
+- Admin tool for server management
