@@ -96,12 +96,12 @@ site_header('Multiplayer falling blocks','home','./');
   <h2 class="section-title" id="screenshots-heading">Take a closer look.</h2>
   <p class="section-sub">From the arena to the room browser. Select a thumbnail to open the full screenshot.</p>
   <div class="screenshot-gallery">
-    <?php home_preview('arena','The multiplayer arena'); home_preview('rooms','Rooms & rules'); home_preview('servers','Discover servers'); ?>
+    <?php home_preview('arena','The multiplayer arena'); home_preview('rooms','Rooms & rules'); home_preview('servers','Discover servers'); home_preview('bots','AI difficulty controls'); ?>
   </div>
   <details class="more-screenshots">
-    <summary>More screenshots <span>4 more views</span></summary>
+    <summary>More screenshots <span>3 more views</span></summary>
     <div class="screenshot-gallery">
-      <?php home_preview('bots','AI difficulty controls'); home_preview('rules','Room settings'); home_preview('music','In-game music player'); home_preview('credits','Soundtrack credits'); ?>
+      <?php home_preview('rules','Room settings'); home_preview('music','In-game music player'); home_preview('credits','Soundtrack credits'); ?>
     </div>
   </details>
 </section>
