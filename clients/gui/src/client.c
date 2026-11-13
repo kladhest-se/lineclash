@@ -121,7 +121,9 @@ void client_hmac_sha256_hex(const char pw_hash_hex[65], const char *nonce, char 
  * ============================================================ */
 static const char *server_list_path(void) {
     static char path[512];
-#if defined(PLATFORM_WINDOWS)
+#if defined(PLATFORM_AMIGA)
+    snprintf(path,sizeof(path),"PROGDIR:LineClash.servers");
+#elif defined(PLATFORM_WINDOWS)
     char appdata[MAX_PATH];
     if (SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, appdata) != S_OK) {
         const char *env = getenv("APPDATA");
@@ -145,7 +147,9 @@ static const char *server_list_path(void) {
  * ============================================================ */
 static const char *settings_path(void) {
     static char path[512];
-#if defined(PLATFORM_WINDOWS)
+#if defined(PLATFORM_AMIGA)
+    snprintf(path,sizeof(path),"PROGDIR:LineClash.settings");
+#elif defined(PLATFORM_WINDOWS)
     char appdata[MAX_PATH];
     if (SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, appdata) != S_OK) {
         const char *env = getenv("APPDATA");
@@ -655,6 +659,10 @@ void client_handle_msg(ClientCtx *c, const char *line) {
         return;
     }
 
+    if(!strcmp(cmd,"authmethods")){c->central_supported=strstr(line,"central-v1")!=NULL;return;}
+    if(!strcmp(cmd,"centralcode") && n==2 && strlen(args[0])==8 && strspn(args[0],"0123456789ABCDEF")==8){snprintf(c->central_code,sizeof(c->central_code),"%s",args[0]);sdl_open_account_code(c->central_code);return;}
+    if(!strcmp(cmd,"centralidentity") && n==2 && args[0][0]=='@' && strlen(args[0])<=15){snprintf(c->auth_nick,sizeof(c->auth_nick),"%s",args[0]);snprintf(c->nick,sizeof(c->nick),"%s",args[0]);snprintf(c->central_profile,sizeof(c->central_profile),"%s",args[0]);return;}
+    if(!strcmp(cmd,"centralresume") && n==2 && strlen(args[0])==64){snprintf(c->central_resume,sizeof(c->central_resume),"%s",args[0]);return;}
     /* ---- AUTH RESPONSES (received while in CS_AUTH state) ---- */
     if (!strcmp(cmd,"authok") && n>=2) {
         for(int i=0;i<c->server_count;i++) {
@@ -777,7 +785,9 @@ void client_handle_msg(ClientCtx *c, const char *line) {
          }}
         if (c->state == CS_AUTH) {
             char buf[MAX_MSG_LEN];
-            snprintf(buf,sizeof(buf),"authnick %s", c->auth_nick);
+            if(c->central_mode && !c->central_supported){snprintf(c->connect_error,sizeof(c->connect_error),"This server supports local accounts only");sock_close(c->sock);c->sock=INVALID_SOCK;c->state=CS_CONNECT;return;}
+            if(c->central_mode){if(c->reconnect.active && c->central_resume[0])snprintf(buf,sizeof(buf),"centralresume %s",c->central_resume);else snprintf(buf,sizeof(buf),"centralauth");}
+            else snprintf(buf,sizeof(buf),"authnick %s", c->auth_nick);
             net_send(c->sock, buf);
         }
         return;
@@ -1873,7 +1883,15 @@ void client_on_key(ClientCtx *c, int sc, int sym, int is_text, const char *txt) 
 void client_on_button(ClientCtx *c, BtnId btn) {
     char buf[MAX_MSG_LEN];
     switch(btn) {
+    case BTN_CENTRAL_CONNECT:{
+        c->central_mode=1;c->central_supported=0;c->central_code[0]=0;c->central_resume[0]=0;c->connect_error[0]=0;
+        if(c->sock!=INVALID_SOCK)sock_close(c->sock);
+        c->sock=net_connect(c->tf_host.text[0]?c->tf_host.text:"localhost",atoi(c->tf_port.text)>0?atoi(c->tf_port.text):DEFAULT_PORT);
+        if(c->sock==INVALID_SOCK){c->state=CS_CONNECT;snprintf(c->connect_error,sizeof(c->connect_error),"Cannot connect to server");break;}
+        net_set_nonblocking(c->sock);net_reconnect_stop(&c->reconnect);c->reconnect_blocked=0;c->state=CS_AUTH;c->recv_len=0;c->lobby_list_count=0;c->got_lobby_list=0;c->last_received=net_now_ms();break;
+    }
     case BTN_CONNECT: {
+        c->central_mode=0;c->central_code[0]=0;
         const char *host = c->tf_host.text[0] ? c->tf_host.text : "localhost";
         int port = c->tf_port.text[0] ? atoi(c->tf_port.text) : DEFAULT_PORT;
         const char *nick = c->tf_nick.text[0] ? c->tf_nick.text : NULL;
@@ -2064,6 +2082,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
             { char ps[8]; snprintf(ps,sizeof(ps),"%d",ss->port);
               strncpy(c->tf_port.text,ps,sizeof(c->tf_port.text)-1);
               c->tf_port.len=(int)strlen(ps); }
+            if(c->server_tab==0){client_on_button(c,BTN_CENTRAL_CONNECT);break;}
             if(ss->nick[0]){
                 strncpy(c->tf_nick.text,ss->nick,sizeof(c->tf_nick.text)-1);
                 c->tf_nick.len=(int)strlen(ss->nick);}
@@ -2680,7 +2699,7 @@ void client_run_gui(void) {
     ClientCtx c;
 
     srand((unsigned)time(NULL));
-    net_init();
+    if(!net_init())return;
     memset(&c,0,sizeof(c));
     c.reconnect_window=15;
     c.running=1; c.state=CS_SERVER_LIST; c.sock=INVALID_SOCK; c.srv_test_sock=INVALID_SOCK;

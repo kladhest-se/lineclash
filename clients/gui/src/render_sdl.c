@@ -873,6 +873,8 @@ static void render_music_popup(ClientCtx *c,int saved_click) {
 }
 
 /* ── Shared about popup render ── */
+void sdl_open_account_code(const char *code){char url[128];snprintf(url,sizeof(url),"https://lineclash.kladhest.se/account/%s%s",code[0]?"?code=":"",code);music_link(url);}
+
 static void render_about_popup(ClientCtx *c, int saved_click) {
     int pw=640, ph=540, px=(WIN_W-pw)/2, py=(WIN_H-ph)/2;
 
@@ -1072,6 +1074,7 @@ void sdl_render_server_list(ClientCtx*c){
     if(dbtn(384,146,166,30,"Local network",c->server_tab==2?BS_ACTIVE:BS_NORMAL))action=BTN_LAN_SERVERS;
     if(dbtn(WIN_W-96,22,64,28,"Quit",BS_NORMAL))        action=BTN_QUIT;
     if(dbtn(WIN_W-166,22,62,28,"About",BS_NORMAL))      action=BTN_SRV_ABOUT;
+    if(dbtn(WIN_W-498,22,104,28,c->central_profile[0]?c->central_profile:"Account",BS_NORMAL))sdl_open_account_code("");
     if(dbtn(WIN_W-238,22,64,28,"Settings",BS_NORMAL))     action=BTN_KEYMAP_POPUP;
     {BtnStyle ss=c->sound_enabled?BS_TOGON:BS_NORMAL;
      if(dbtn(WIN_W-310,22,64,28,"SFX",ss))              action=BTN_TOGGLE_SOUND;}
@@ -1421,7 +1424,15 @@ void sdl_render_connect(ClientCtx*c){
     /* Form panel */
     surface(PX-12,PY-4,PW+24,PH+12,0x181f31ff,0x39445eff);
 
-    if (is_authing) {
+    if(is_authing && c->central_mode){
+        dtc(cx,PY+48,"Sign in to LineClash",COL_WHITE,2);
+        dtc(cx,PY+110,"Approve this connection in your browser.",COL_LTGRAY,1);
+        dtc(cx,PY+150,c->central_code[0]?c->central_code:"Requesting a code…",0xbba5f4ff,3);
+        dtc(cx,PY+220,"lineclash.kladhest.se/account/",COL_GRAY,1);
+        dtc(cx,PY+246,"You can also use a browser on another device.",COL_GRAY,1);
+        if(dbtn(lx,PY+290,fw,34,"Open sign-in page",BS_NORMAL))sdl_open_account_code(c->central_code);
+        if(dbtn(lx,PY+336,fw,34,"Back to servers",BS_NORMAL))action=BTN_BACK_CONNECT;
+    } else if (is_authing) {
         dtc(cx, PY+PH/2-10, "Authenticating...", COL_HOSTGOLD, 1);
         dtc(cx, PY+PH/2+10, "Please wait", COL_GRAY, 1);
     } else {
@@ -1497,7 +1508,7 @@ void sdl_render_connect(ClientCtx*c){
         if(dbtn(lx,Y_CONNECT,fw,36,"CONNECT",BS_ACTIVE)) action=BTN_CONNECT;
 
         /* Quit — full width */
-        if(dbtn(lx,Y_QUIT,fw,28,"Quit",BS_NORMAL)) action=BTN_QUIT;
+        if(dbtn(lx,Y_QUIT,fw,28,"Use central account",BS_NORMAL)) action=BTN_CENTRAL_CONNECT;
 
         /* Error/success — word-wrapped to fit inside panel */
         if(c->connect_error[0]) {

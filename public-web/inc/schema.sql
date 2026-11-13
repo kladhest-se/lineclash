@@ -40,3 +40,21 @@ CREATE TABLE IF NOT EXISTS directory_registration_limits (
  source_hash CHAR(64) CHARACTER SET ascii PRIMARY KEY,
  window_start BIGINT NOT NULL, requests INT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS accounts (
+ id CHAR(32) CHARACTER SET ascii PRIMARY KEY,
+ handle VARCHAR(14) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL UNIQUE,
+ password_hash VARCHAR(255) NOT NULL, recovery_hash CHAR(64) CHARACTER SET ascii NOT NULL,
+ active TINYINT NOT NULL DEFAULT 1, created_at BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS account_devices (
+ request_hash CHAR(64) CHARACTER SET ascii PRIMARY KEY,
+ code CHAR(8) CHARACTER SET ascii NOT NULL UNIQUE,
+ server_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ account_id CHAR(32) CHARACTER SET ascii NULL,
+ expires BIGINT NOT NULL,state VARCHAR(16) NOT NULL,
+ FOREIGN KEY(server_id) REFERENCES directory_servers(id),
+ FOREIGN KEY(account_id) REFERENCES accounts(id), INDEX expiry(expires)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS auth_version INT NOT NULL DEFAULT 1;

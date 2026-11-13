@@ -8,6 +8,13 @@
 /* ============================================================
  * Logging — tees to stdout and an optional log file
  * ============================================================ */
+#ifdef PLATFORM_AMIGA
+struct Library *SocketBase;
+int amiga_clock_init(void);void amiga_clock_close(void);uint64_t amiga_now_ms(void);
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+#endif
 static FILE *g_net_logfile = NULL;
 static int   g_net_quiet   = 0;   /* 1 = suppress log_info stdout output */
 
@@ -77,6 +84,11 @@ int str_split(const char *s, char delim, char parts[][MAX_MSG_LEN], int max) {
  * Network init/cleanup
  * ============================================================ */
 int net_init(void) {
+#ifdef PLATFORM_AMIGA
+    SocketBase=OpenLibrary("bsdsocket.library",4);
+    if(!SocketBase){log_error("Start Roadshow, AmiTCP or Miami first");return 0;}
+    if(!amiga_clock_init()){amiga_clock_close();CloseLibrary(SocketBase);SocketBase=NULL;return 0;}
+#endif
 #ifdef PLATFORM_WINDOWS
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2,2), &wsa) != 0) {
@@ -88,6 +100,9 @@ int net_init(void) {
 }
 
 void net_cleanup(void) {
+#ifdef PLATFORM_AMIGA
+    amiga_clock_close();if(SocketBase)CloseLibrary(SocketBase);SocketBase=NULL;
+#endif
 #ifdef PLATFORM_WINDOWS
     WSACleanup();
 #endif
@@ -101,8 +116,12 @@ void net_set_nonblocking(sock_t s) {
     u_long mode = 1;
     ioctlsocket(s, FIONBIO, &mode);
 #else
+#ifdef PLATFORM_AMIGA
+    LONG mode=1;IoctlSocket(s,FIONBIO,(char*)&mode);
+#else
     int flags = fcntl(s, F_GETFL, 0);
     if (flags >= 0) fcntl(s, F_SETFL, flags | O_NONBLOCK);
+#endif
 #endif
 }
 
@@ -127,6 +146,9 @@ sock_t net_listen(int port) {
 #endif
 
     memset(&addr, 0, sizeof(addr));
+#ifdef PLATFORM_AMIGA
+    addr.sin_len=sizeof(addr);
+#endif
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons((uint16)port);
@@ -181,6 +203,9 @@ sock_t net_connect(const char *host, int port) {
     }
 
     memset(&addr, 0, sizeof(addr));
+#ifdef PLATFORM_AMIGA
+    addr.sin_len=sizeof(addr);
+#endif
     addr.sin_family = AF_INET;
     addr.sin_port = htons((uint16)port);
     memcpy(&addr.sin_addr, he->h_addr, he->h_length);
@@ -194,7 +219,7 @@ sock_t net_connect(const char *host, int port) {
 #if defined(PLATFORM_WINDOWS)
     if (rc < 0 && sock_error() != WSAEWOULDBLOCK) {
 #else
-    if (rc < 0 && errno != EINPROGRESS) {
+    if (rc < 0 && sock_error() != EINPROGRESS) {
 #endif
         log_error("connect() failed immediately: %d", sock_error());
         sock_close(s);
@@ -328,7 +353,11 @@ void net_close(sock_t s) {
 #ifdef PLATFORM_WINDOWS
     closesocket(s);
 #else
+#ifdef PLATFORM_AMIGA
+    CloseSocket(s);
+#else
     close(s);
+#endif
 #endif
 }
 
@@ -430,8 +459,12 @@ uint64_t net_now_ms(void) {
 #ifdef PLATFORM_WINDOWS
     return (uint64_t)GetTickCount64();
 #else
+#ifdef PLATFORM_AMIGA
+    return amiga_now_ms();
+#else
     struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+#endif
 #endif
 }
 void net_peer_address(sock_t s, char *out, size_t size, const char *fallback) {

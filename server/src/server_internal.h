@@ -17,6 +17,10 @@ typedef struct {
     int    nick_is_new;
     int    is_tool;        /* 1 = admin tool session, not a game client */
     int    input_capable;
+    int central_state;
+    time_t central_next;
+    char central_nonce[65];
+    char central_resume[65];
     int    is_room_kicked; /* 1 = returned from room-kick, allow reconnect */
     char   client_type[32];
     char   client_platform[32];
@@ -70,3 +74,5 @@ void server_directory_proof(const char *,char out[65]);
 void server_lan_start(void);
 void server_lan_tick(void);
 void server_lan_stop(void);
+
+void server_central_begin(Pending *pending);

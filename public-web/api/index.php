@@ -11,6 +11,7 @@ try {
         if(strlen($body)>2097152) { http_response_code(413); echo '{"error":"Payload too large"}'; exit; }
         $a=json_decode($body,true,32,JSON_THROW_ON_ERROR);
         if(!is_array($a)) throw new InvalidArgumentException('Expected object');
+        if(in_array($a['action']??'',['account-begin','account-poll'],true)){require_once __DIR__.'/../inc/accounts.php';header('Content-Type: text/plain; charset=utf-8');echo account_api($db,$a);exit;}
         $result=($a['action']??'')==='public-register'?public_register($db,$a):announce($db,$a);
     } elseif($_SERVER['REQUEST_METHOD']==='GET') {
         header('Access-Control-Allow-Origin: *');
@@ -56,4 +57,8 @@ try {
     } else { http_response_code(405); header('Allow: GET, POST'); $result=['error'=>'Method not allowed']; }
     echo json_encode($result,JSON_THROW_ON_ERROR|JSON_INVALID_UTF8_SUBSTITUTE);
 } catch(InvalidArgumentException|JsonException $e) { http_response_code(400); echo json_encode(['error'=>$e->getMessage()]); }
+catch(PDOException $e) {
+    http_response_code(503);error_log('LineClash database error: '.$e->getMessage());
+    echo json_encode(['error'=>$e->getCode()==='42S02'?'Website database migration required: run php bin/manage.php migrate':'Service unavailable']);
+}
 catch(Throwable $e) { http_response_code(503); error_log('LineClash service error: '.$e->getMessage()); echo '{"error":"Service unavailable"}'; }

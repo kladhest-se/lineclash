@@ -1091,3 +1091,5 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 .documentation-card p{font-size:16px;line-height:1.7;color:var(--overlay1);margin:0}
 .documentation-layout.documentation-without-sidebar{display:block;max-width:960px}
 @media(max-width:650px){.documentation-cards{grid-template-columns:1fr;gap:16px}.documentation-card{padding:24px}.documentation-tabs{gap:24px;margin-bottom:28px}}
+
+.account-form{max-width:480px;display:grid;gap:18px;margin:24px 0}.account-form label{display:grid;gap:8px}.account-form input{width:100%;padding:12px;background:var(--mantle);color:var(--text);border:1px solid var(--surface1);border-radius:6px}.account-form button{padding:12px;background:var(--mauve);color:var(--base);border:0;border-radius:6px;cursor:pointer}

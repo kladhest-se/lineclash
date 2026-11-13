@@ -120,3 +120,5 @@ void auth_game_ranked(int room,int ranked);
 void auth_game_stopped(int room);
 void auth_game_place(int room,const char *nick,int place);
 #endif /* AUTH_H */
+
+int auth_central_identity(const char *,const char *,char nick[16]);

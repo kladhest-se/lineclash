@@ -1620,6 +1620,7 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
     if (strcmp(cmd, "leaveLobby") == 0) {
         sock_t saved_sock = p->sock; /* save before any removal */
         Pending returning;memset(&returning,0,sizeof(returning));
+        snprintf(returning.central_resume,sizeof(returning.central_resume),"%s",p->central_resume);
         returning.sock=saved_sock;returning.active=returning.auth_ok=1;returning.input_capable=p->input_capable;
         snprintf(returning.pending_nick,sizeof(returning.pending_nick),"%s",p->nick);
         snprintf(returning.ip,sizeof(returning.ip),"%s",p->ip);
@@ -2401,8 +2402,8 @@ void server_run(int port, const char *cfg_path) {
                             g_pending[i].recv_buf[0] = '\0';
                             g_pending[i].recv_len= 0;
                             g_pending[i].active  = 1;
-                            g_pending[i].auth_ok = 0;
-                            g_pending[i].is_tool = 0;
+                            g_pending[i].auth_ok = 0;g_pending[i].central_state=0;g_pending[i].central_nonce[0]=0;g_pending[i].central_resume[0]=0;
+                            g_pending[i].is_tool = 0;g_pending[i].central_state=0;
                             g_pending[i].nick_is_new = 0;
                             g_pending[i].nonce[0] = '\0';
                             g_pending[i].pending_nick[0] = '\0';
@@ -2410,6 +2411,7 @@ void server_run(int port, const char *cfg_path) {
                             found = 1;
                             log_info("New connection from %s", client_ip);
                             net_send(client, "noconnecting LineClash/1.0");
+                            net_send(client,"authmethods central-v1 local-v1");
                             /* Send server name so client can display it */
                             {char sn[MAX_MSG_LEN];
                              snprintf(sn,sizeof(sn),"servername %s",g_cfg.server_name);
@@ -2460,6 +2462,18 @@ void server_run(int port, const char *cfg_path) {
                 char cmd[MAX_MSG_LEN], args[16][MAX_MSG_LEN];
                 int np = proto_parse(line, cmd, args, 16);
 
+                if(!strcmp(cmd,"centralresume") && np==2 && strlen(args[0])==64){
+                    int resumed=0;
+                    for(int l=0;l<g_server.lobby_count;l++)for(int p=0;p<MAX_PLAYERS;p++){
+                        Player *old=&g_server.lobbies[l].players[p];
+                        if(!old->connected && old->reconnect_expires>time(NULL) && old->central_resume[0] && !strcmp(old->central_resume,args[0]) && !auth_is_banned_nick(old->reconnect_nick) && auth_is_activated(old->reconnect_nick)){
+                            snprintf(pend->pending_nick,sizeof(pend->pending_nick),"%s",old->reconnect_nick);auth_make_nonce(pend->central_resume);pend->auth_ok=1;resumed=1;
+                            char message[96];snprintf(message,sizeof(message),"centralidentity %s",pend->pending_nick);net_send(pend->sock,message);snprintf(message,sizeof(message),"centralresume %s",pend->central_resume);net_send(pend->sock,message);net_send(pend->sock,"authok existing Central reconnect verified");
+                        }
+                    }
+                    if(!resumed)net_send(pend->sock,"autherr Central reconnect expired; sign in again");continue;
+                }
+                if(!strcmp(cmd,"centralauth")){server_central_begin(pend);continue;}
                 if(!strcmp(cmd,"directory-proof") && np==2){
                     char proof[65],reply[96];server_directory_proof(args[0],proof);
                     if(proof[0]){snprintf(reply,sizeof(reply),"directory-proof %s",proof);net_send(pend->sock,reply);}
@@ -2574,6 +2588,7 @@ void server_run(int port, const char *cfg_path) {
                 /* ---- Step 1: client sends nick, server issues challenge ---- */
                 if (strcmp(cmd, "authnick") == 0 && np >= 2) {
                     const char *nick = args[0];
+                    if(nick[0]=='@'){net_send(pend->sock,"autherr Central identities require central sign-in");continue;}
                     char msg[MAX_MSG_LEN];
                     int i2, nlen = (int)strlen(nick);
                     int valid = (nlen >= 1 && nlen <= 15);
@@ -2733,6 +2748,7 @@ void server_run(int port, const char *cfg_path) {
                             player->is_admin   = auth_is_admin(nick);
                             player->priv_level = auth_get_priv_level(nick);
                             player->input_capable=pend->input_capable;
+                            snprintf(player->central_resume,sizeof(player->central_resume),"%s",pend->central_resume);
                             strncpy(player->client_type,     pend->client_type,     sizeof(player->client_type)-1);
                             strncpy(player->client_platform, pend->client_platform, sizeof(player->client_platform)-1);
                             strncpy(player->client_version,  pend->client_version,  sizeof(player->client_version)-1);

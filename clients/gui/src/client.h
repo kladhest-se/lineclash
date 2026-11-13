@@ -164,6 +164,7 @@ typedef enum {
     BTN_SRV_RENAME_OK,    /* confirm rename          */
     BTN_SRV_CONNECT,      /* connect to selected     */
     BTN_SRV_ABOUT,        /* show about popup        */
+    BTN_CENTRAL_CONNECT,
     BTN_PUBLIC_SERVERS, BTN_SAVED_SERVERS, BTN_LAN_SERVERS,
     BTN_KEYMAP_POPUP,     /* show keymap editor popup */
     BTN_SRV_REFRESH,      /* force-refresh one server status */
@@ -416,6 +417,8 @@ typedef struct {
     int       team_popup_open;
     int       game_options_popup_open; /* 0=closed 1=open */
     int       ai_players_popup_open;   /* 0=closed 1=open */
+    int central_mode,central_supported;
+    char central_code[9],central_resume[65],central_profile[16];
     int controller_enabled;
     int         settings_tab; /* display, controls, audio */
     int         keymap_popup_open;       /* 0=closed 1=open */
@@ -535,3 +538,5 @@ void sdl_set_ui_options(int scale,int patterns,int contrast);
 void client_cycle_ui_scale(ClientCtx *c);
 int client_probe_greeting(SavedServer *server,const char *message);
 const char *client_server_status(const SavedServer *server);
+
+void sdl_open_account_code(const char *code);

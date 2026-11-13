@@ -29,7 +29,7 @@ ifeq ($(UNAME),Darwin)
 endif
 ifeq ($(UNAME),Linux)
     CC          = gcc
-    CFLAGS      = -Wall -Wextra -O2 -DPLATFORM_POSIX -Wno-format-truncation -Wno-stringop-truncation -Wno-unknown-warning-option $(VERSION_CFLAGS)
+    CFLAGS      = -Wall -Wextra -O2 -DPLATFORM_POSIX -Wno-format-truncation -Wno-stringop-truncation $(VERSION_CFLAGS)
     LDFLAGS     = -lm
     SQLITE_LIBS := $(shell $(CC) -lsqlite3 -shared -o /dev/null 2>/dev/null \
                       && echo "-lsqlite3" \
@@ -40,7 +40,7 @@ endif
 ifeq ($(UNAME),Windows)
     CC          = gcc
     CFLAGS      = -Wall -O2 -DPLATFORM_WINDOWS $(VERSION_CFLAGS)
-    LDFLAGS     = -lws2_32 -lpsapi
+    LDFLAGS     = -lws2_32 -lpsapi -lbcrypt
     SQLITE_LIBS = -lsqlite3
     SERVER      = lineclashd.exe
     ADMIN       = lineclashd-tool.exe
@@ -48,7 +48,7 @@ endif
 ifeq ($(PLATFORM),win32)
     CC          = x86_64-w64-mingw32-gcc
     CFLAGS      = -Wall -O2 -DPLATFORM_WINDOWS $(VERSION_CFLAGS)
-    LDFLAGS     = -lws2_32 -lpsapi
+    LDFLAGS     = -lws2_32 -lpsapi -lbcrypt
     SQLITE_LIBS = -lsqlite3
     SERVER      = lineclashd.exe
     ADMIN       = lineclashd-tool.exe

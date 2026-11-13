@@ -40,11 +40,26 @@
   #include <fcntl.h>
   #include <errno.h>
   #include <sys/select.h>
+#if defined(PLATFORM_AMIGA)
+  #include <proto/exec.h>
+  #include <proto/dos.h>
+  #include <proto/socket.h>
+  #include <sys/filio.h>
+  extern struct Library *SocketBase;
+  #define inet_ntoa(address) ((char*)Inet_NtoA((address).s_addr))
+  #undef SLEEP_MS
+#endif
   typedef int sock_t;
   #define INVALID_SOCK   (-1)
   #define sock_close(s)  net_close(s)
+#if defined(PLATFORM_AMIGA)
+  #define sock_error() Errno()
+  #define SLEEP_MS(ms) Delay(((ms)+19)/20)
+  #define select(n,r,w,e,t) WaitSelect(n,r,w,e,t,NULL)
+#else
   #define sock_error()   errno
   #define SLEEP_MS(ms)   usleep((ms)*1000)
+#endif
 #endif
 
 void net_close(sock_t s);
@@ -187,6 +202,7 @@ typedef struct {
     char   client_platform[32];/* "macos","linux","windows","amiga","" */
     char   client_version[16]; /* version string */
     /* Reconnect window */
+    char central_resume[65];
     char   reconnect_nick[MAX_NICK_LEN]; /* if set, slot is reserved for reconnect */
     time_t reconnect_expires;            /* 0 = not reserved */
     /* Hold piece (server-side: type index, -1=empty) */

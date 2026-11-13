@@ -1,5 +1,8 @@
 /* auth.c — SQLite3 user auth + team + persistent leaderboard */
 #include "auth.h"
+#ifdef PLATFORM_WINDOWS
+#include <bcrypt.h>
+#endif
 #include "config.h"
 #include "../../shared/include/lineclash.h"
 #include <sqlite3.h>
@@ -80,11 +83,13 @@ static int hex2bytes(const char*hex,sha_u8 out[32]){
 
 void auth_make_nonce(char out[AUTH_NONCE_LEN]){
     sha_u8 buf[32];int i;
-    /* Mix time + pointer + rand for nonce entropy */
-    srand((unsigned)time(NULL)^(unsigned)(size_t)out^(unsigned)rand());
-    for(i=0;i<32;i++) buf[i]=(sha_u8)(rand()&0xff);
-    for(i=0;i<32;i++) snprintf(out+i*2,3,"%02x",(unsigned)buf[i]);
-    out[64]='\0';}
+#ifdef PLATFORM_WINDOWS
+    if(BCryptGenRandom(NULL,buf,sizeof(buf),BCRYPT_USE_SYSTEM_PREFERRED_RNG)!=0){log_error("Secure randomness unavailable");exit(1);}
+#else
+    FILE *entropy=fopen("/dev/urandom","rb");if(!entropy || fread(buf,1,sizeof(buf),entropy)!=sizeof(buf)){log_error("Secure randomness unavailable");exit(1);}fclose(entropy);
+#endif
+    for(i=0;i<32;i++)snprintf(out+i*2,3,"%02x",buf[i]);out[64]=0;
+}
 
 /* ============================================================
  * SQLite3 — schema with team + wins columns
@@ -1099,4 +1104,17 @@ void auth_game_place(int room,const char *nick,int place) {
     if(sqlite3_prepare_v2(g_db,"UPDATE game_stats SET placement=? WHERE nick=? COLLATE NOCASE AND placement=0 AND game_id=(SELECT MAX(game_id) FROM games WHERE room_id=?)",-1,&s,NULL)==SQLITE_OK) {
         sqlite3_bind_int(s,1,place); sqlite3_bind_text(s,2,nick,-1,SQLITE_STATIC); sqlite3_bind_int(s,3,room); sqlite3_step(s); sqlite3_finalize(s);
     }
+}
+
+int auth_central_identity(const char *id,const char *handle,char nick[16]){
+    if(strlen(id)!=32 || strspn(id,"0123456789abcdef")!=32 || strlen(handle)<3 || strlen(handle)>14 || strspn(handle,"abcdefghijklmnopqrstuvwxyz0123456789_")!=strlen(handle))return 0;
+    snprintf(nick,16,"@%s",handle);sqlite3_stmt *query=NULL;int ok=0;
+    sqlite3_exec(g_db,"CREATE TABLE IF NOT EXISTS central_identities(account_id TEXT PRIMARY KEY,nick TEXT NOT NULL UNIQUE)",NULL,NULL,NULL);
+    if(sqlite3_prepare_v2(g_db,"SELECT nick FROM central_identities WHERE account_id=?",-1,&query,NULL)!=SQLITE_OK)return 0;
+    sqlite3_bind_text(query,1,id,-1,SQLITE_TRANSIENT);
+    if(sqlite3_step(query)==SQLITE_ROW){ok=!strcmp((const char*)sqlite3_column_text(query,0),nick);sqlite3_finalize(query);return ok;}
+    sqlite3_finalize(query);if(auth_nick_exists(nick))return 0;
+    char secret[65];auth_make_nonce(secret);if(auth_register(nick,secret)!=AUTH_NEW_USER)return 0;
+    if(sqlite3_prepare_v2(g_db,"INSERT INTO central_identities(account_id,nick) VALUES(?,?)",-1,&query,NULL)!=SQLITE_OK)return 0;
+    sqlite3_bind_text(query,1,id,-1,SQLITE_TRANSIENT);sqlite3_bind_text(query,2,nick,-1,SQLITE_TRANSIENT);ok=sqlite3_step(query)==SQLITE_DONE;sqlite3_finalize(query);return ok;
 }
