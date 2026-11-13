@@ -29,7 +29,7 @@ F2, F4, F6 and F7 are reserved for those options and cannot be assigned to gamep
 
 ## Xbox and PlayStation controllers
 
-The desktop client uses SDL's controller mappings for supported Xbox and PlayStation pads over USB or Bluetooth. Enable **Controller input** in Settings → Display. Support depends on the operating system, connection and SDL mapping for the specific model. The terminal client does not use controllers.
+The desktop client uses SDL's controller mappings for supported Xbox and PlayStation pads over USB or Bluetooth. Enable **Controller input** in Settings → Display. Support depends on the operating system, connection and SDL mapping for the specific model.
 
 | Xbox / PlayStation | In-game action |
 | --- | --- |

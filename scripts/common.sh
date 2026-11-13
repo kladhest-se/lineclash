@@ -9,7 +9,6 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT/dist"
 CLIENT_DIR="$ROOT/clients/gui"
 SERVER_DIR="$ROOT/server"
-CLI_DIR="$ROOT/clients/cli"
 SHARED_DIR="$ROOT/shared"
 
 # ── Colours ───────────────────────────────────────────────────

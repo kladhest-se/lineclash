@@ -30,21 +30,17 @@
 </tbody>
 </table>
 <p>Close the client before backing up or changing these files. Saved authentication hashes can grant account access: keep them private. To reset preferences, close the game and rename the settings file; the next launch uses defaults. Keep the original file if you want to restore your bindings later.</p>
-<h3 id="clients-terminal-client-macos-and-linux">Terminal client — macOS and Linux</h3>
-<p>The terminal client is available from a source build on macOS and Linux. It is not part of the native Windows client target. Open a terminal and run:</p>
-<pre><code class="language-sh">./clients/cli/lineclash-cli localhost 31457
-</code></pre>
-<p>For saved connections, see the options supported by your installed version:</p>
-<pre><code class="language-sh">./clients/cli/lineclash-cli --help
-./clients/cli/lineclash-cli --list
-./clients/cli/lineclash-cli --connect YOUR_SAVED_ALIAS
-</code></pre>
-<p><code>--cfg PATH</code> selects a separate credentials file. The help output shows its default location. Adding profiles with <code>--password</code> or supplying a password as a positional argument can expose it through shell history and process listings. Protect saved credentials as carefully as passwords.</p>
-<p>Follow the contextual footer for each screen. In a room, <strong>R</strong> readies, <strong>S</strong> starts as host, <strong>T</strong> edits the team, <strong>E/M/H</strong> adds an easy/medium/hard bot, <strong>X</strong> removes a bot and <strong>Q</strong> leaves. During play, arrows move, Up/Z rotate, Down soft-drops, Space hard-drops, C holds and Tab opens chat. Number keys target specials. Use the contextual quit/leave command to exit.</p>
-<p>The terminal client uses the legacy board-reporting protocol; rounds involving it are casual. The desktop client supports server-processed inputs for eligible ranked rounds.</p>
 <h3 id="clients-connection-problems">Connection problems</h3>
 <p>Check the server host and game port first; the HTTP status port is not a game endpoint. <strong>Unreachable</strong> usually requires checking that the server is running, its address is correct and the game port is reachable through the firewall. <strong>Wrong credentials</strong> requires the correct password for that server. <strong>Server full</strong> requires a free slot, while <strong>Protocol mismatch</strong> requires a compatible client/server version. Access-denied or banned accounts require assistance from that server's administrator.</p>
-<p>During an active-game connection loss, automatic reconnect freezes local play while the server reserves your slot. Escape cancels recovery in the GUI; Q/Escape cancels in the terminal. An expired reservation, completed round or server restart requires reconnecting normally. See <a href="../../documentation/basics/#playing">game basics</a>.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>
+<p>During an active-game connection loss, automatic reconnect freezes local play while the server reserves your slot. Escape cancels recovery in the desktop client. An expired reservation, completed round or server restart requires reconnecting normally. See <a href="../../documentation/basics/#playing">game basics</a>.</p>
+<h3 id="clients-central-lineclash-accounts">Central LineClash accounts</h3>
+<p>Public-server joins use central browser approval. The client displays an eight-character code and opens <code>https://lineclash.example.org/account/</code>. Create an account or sign in, verify the server name/address and approve only the code currently shown in your game. You can use a browser on another device. A browser session lets you approve later connections without entering the password again.</p>
+<p>The website stores a password hash and provides a recovery code once when registering. Keep that code private. Recovery changes the password, rotates the recovery code and invalidates earlier browser sessions. The game server never receives the central password or a reusable central login token.</p>
+<p>Central handles appear as <code>@handle</code> and have an immutable account ID. They are mapped separately on each server; an existing local account with a matching name is never claimed automatically. Each server keeps control of its own permissions, bans and local game records. No existing local statistics are automatically transferred to a central profile.</p>
+<p>The Account button opens your website profile. Private/LAN play still supports local accounts and does not require the central website. Older clients can keep using local accounts on updated servers. Central approval requires a verified, live public directory identity for the server. During a central-service outage, existing games continue and local-account play remains available; new central sign-ins are unavailable.</p>
+<p>The game TCP stream remains unencrypted. Browser authentication and server verification use HTTPS; chat and gameplay can be observed or altered on an untrusted network. A reconnect token is restricted to a reserved slot on one server and expires with that short reconnect window; it is not a central account credential.</p>
+<h3 id="clients-native-amigaos-3x-preview">Native AmigaOS 3.x preview</h3>
+<p>The experimental native frontend targets a 68020 without an FPU, AmigaOS 3.x and a running bsdsocket.library TCP/IP stack. It opens a 640×256, sixteen-colour Intuition screen. Use arrows, Space, Z, C, Tab, number keys and the mouse. Central approval displays the same website URL/code and can be completed on another device. Public discovery uses AmiSSL certificate and hostname verification in a separate process. The initial native frontend has no music/SFX playback or modern gamepad integration. See the repository's Amiga guide for build and emulator checks.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>
 <section class="documentation-chapter" id="controls"><h2 id="controls-controls-and-accessibility">Controls and accessibility</h2>
 <h3 id="controls-default-desktop-controls">Default desktop controls</h3>
 <table>
@@ -107,7 +103,7 @@
 </ul>
 <p>F2, F4, F6 and F7 are reserved for those options and cannot be assigned to gameplay actions. Website controls also have visible keyboard-focus outlines, and the background respects reduced-motion preferences.</p>
 <h3 id="controls-xbox-and-playstation-controllers">Xbox and PlayStation controllers</h3>
-<p>The desktop client uses SDL's controller mappings for supported Xbox and PlayStation pads over USB or Bluetooth. Enable <strong>Controller input</strong> in Settings → Display. Support depends on the operating system, connection and SDL mapping for the specific model. The terminal client does not use controllers.</p>
+<p>The desktop client uses SDL's controller mappings for supported Xbox and PlayStation pads over USB or Bluetooth. Enable <strong>Controller input</strong> in Settings → Display. Support depends on the operating system, connection and SDL mapping for the specific model.</p>
 <table>
 <thead>
 <tr>

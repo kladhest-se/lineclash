@@ -9,9 +9,6 @@ clients/gui/src/buildnum.h
 clients/gui/**/*.o
 clients/gui/**/*.a
 clients/gui/build/
-clients/cli/lineclash-cli
-clients/cli/**/*.o
-clients/cli/build/
 build_number.txt
 
 # Packaging
@@ -68,3 +65,5 @@ tests/test_discovery
 clients/amiga/LineClash
 LineClash.servers
 LineClash.settings
+
+clients/amiga/build/

@@ -1,14 +1,11 @@
 export
 
-.PHONY: all server client cli clean help run-server run-client run-cli
+.PHONY: all server client amiga clean help run-server run-client
 
-# The terminal client uses POSIX terminal facilities.
-HOST_OS := $(shell uname -s 2>/dev/null || echo Windows)
-ifneq ($(filter Windows MINGW% MSYS% CYGWIN%,$(HOST_OS)),)
 all: server client
-else
-all: server client cli
-endif
+
+amiga:
+	$(MAKE) -C clients/amiga
 
 server:
 	$(MAKE) -C server all
@@ -16,13 +13,9 @@ server:
 client:
 	$(MAKE) -C clients/gui all
 
-cli:
-	$(MAKE) -C clients/cli all
-
 clean:
 	$(MAKE) -C server clean
 	$(MAKE) -C clients/gui clean
-	$(MAKE) -C clients/cli clean
 	$(MAKE) -C tests clean
 
 run-server: server
@@ -31,19 +24,14 @@ run-server: server
 run-client: client
 	./clients/gui/lineclash
 
-run-cli: cli
-	./clients/cli/lineclash-cli
-
 help:
 	@echo "LineClash"
 	@echo "  make             build everything"
 	@echo "  make server      build lineclashd + lineclashd-tool"
 	@echo "  make client      build SDL2 GUI client"
-	@echo "  make cli         build terminal client"
 	@echo "  make clean       clean all build artifacts"
 	@echo "  make run-server  build and start the server"
 	@echo "  make run-client  build and launch the GUI client"
-	@echo "  make run-cli     build and launch the CLI client"
 
 # Local release preparation. These targets never publish or push tags.
 PYTHON ?= python3
@@ -67,6 +55,7 @@ directory-test:
 web-test: server
 	$(PYTHON) tests/test_web_offline.py
 	$(PYTHON) tests/test_web_mariadb.py
+	$(PYTHON) tests/test_web_accounts.py
 	$(PYTHON) tests/test_directory_e2e.py
 
 web-js-test:

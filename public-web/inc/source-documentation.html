@@ -13,10 +13,6 @@
 <pre><code class="language-sh">./clients/gui/lineclash
 </code></pre>
 <p>Add <code>localhost</code> with game port <code>31457</code>, enter a nickname and password, connect and join a room. A new nickname registers when server registration is enabled. Use Quit or close the window to stop the client.</p>
-<h3 id="development-start-the-terminal-client-macos-and-linux">Start the terminal client — macOS and Linux</h3>
-<pre><code class="language-sh">./clients/cli/lineclash-cli localhost 31457
-</code></pre>
-<p>Follow the on-screen connection prompts and contextual controls. Use <code>--help</code> for saved connection options. The terminal client is not built by the default Windows target.</p>
 <h3 id="development-administration-tool">Administration tool</h3>
 <pre><code class="language-sh">./server/lineclashd-tool --help
 </code></pre>
@@ -24,7 +20,7 @@
 <h3 id="development-rebuild-after-changes">Rebuild after changes</h3>
 <p>Run <code>make -j4</code> again from the project root. Stop running programs before replacing their binaries. For a clean rebuild, run <code>make clean</code> followed by <code>make -j4</code>. Keep your configuration and database when rebuilding.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>
 <section class="documentation-chapter" id="windows"><h2 id="windows-build-and-run-on-windows">Build and run on Windows</h2>
-<p>Target: native Windows 10/11 x64 using MSYS2 UCRT64. The SDL2 GUI, dedicated server and administration tool build on Windows. The terminal client uses POSIX terminal facilities and is excluded from the default Windows build.</p>
+<p>Target: native Windows 10/11 x64 using MSYS2 UCRT64. The SDL2 GUI, dedicated server and administration tool build on Windows.</p>
 <p>Install <a href="https://www.msys2.org/">MSYS2</a>, open its <strong>UCRT64</strong> terminal, update with <code>pacman -Syu</code> (restart the terminal and repeat if requested), then:</p>
 <pre><code class="language-sh">pacman -S --needed make git mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-sqlite3 mingw-w64-ucrt-x86_64-python
 git clone https://github.com/kladhest-se/lineclash.git

@@ -1,6 +1,6 @@
 # Platform verification
 
-Run `bash scripts/verify-platform.sh` (or `make verify`) in a clean checkout on each target OS. It runs offline release-tool tests, a clean parallel build, field/network/authentication checks, real HTTP and trust/reconnect protocol tests, and a headless GUI reconnect lifecycle test. macOS/Linux also run the actual terminal-client reconnect tests. Logs are saved under `dist/verification/`. Repository CI is disabled for now; run these checks manually before a release.
+Run `bash scripts/verify-platform.sh` (or `make verify`) in a clean checkout on each target OS. It runs offline release-tool tests, a clean parallel build, field/network/authentication checks, real HTTP and trust/reconnect protocol tests, and a headless GUI reconnect lifecycle test. Logs are saved under `dist/verification/`. Repository CI is disabled for now; run these checks manually before a release.
 
 Install the following on Windows in the MSYS2 UCRT64 environment:
 
@@ -8,7 +8,7 @@ Install the following on Windows in the MSYS2 UCRT64 environment:
 pacman -S --needed make git mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-sqlite3 mingw-w64-ucrt-x86_64-python
 ```
 
-The Windows gate builds the server, administration tool and SDL2 GUI, runs portable C tests over loopback TCP, and runs the Python HTTP/protocol suites. The POSIX-only C fork harness and terminal client are excluded there. Windows process-statistics calls and executable/library targets have platform-specific implementations. Interactive administration on Windows has fewer terminal facilities than POSIX; single-command/authentication paths are portable.
+The Windows gate builds the server, administration tool and SDL2 GUI, runs portable C tests over loopback TCP, and runs the Python HTTP/protocol suites. The POSIX-only C fork harness is excluded there. Windows process-statistics calls and executable/library targets have platform-specific implementations. Interactive administration on Windows has fewer terminal facilities than POSIX; single-command/authentication paths are portable.
 
 Evidence from this development host: macOS native builds and runtime suites pass; MinGW compiles the shared/server/GUI sources, including the bundled audio decoders for Windows. The latest cross-build also links all three Windows x64 executables against genuine Windows SDL2/SQLite libraries and checks recursive DLL imports. It does not execute Windows binaries. No Linux container engine or native Windows runner is available here, so Linux/Windows runtime and installer validation require manual checks on those platforms. GUI lifecycle checks are headless; they do not replace visual gameplay testing on each OS.
 

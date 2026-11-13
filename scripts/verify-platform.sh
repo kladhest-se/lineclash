@@ -18,8 +18,4 @@ case "$platform" in
     *) make -j"${JOBS:-4}" ;;
 esac
 make -C tests unit integration gui music music-ui discovery PYTHON="${PYTHON:-python3}"
-case "$platform" in
-    MINGW*|MSYS*|CYGWIN*) ;;
-    *) make -C tests client-integration PYTHON="${PYTHON:-python3}" ;;
-esac
 printf 'PASS: native build and runtime verification on %s\n' "$platform"

@@ -1,6 +1,6 @@
 # Development, tests and packaging
 
-Native builds support macOS, Linux and Windows x64. Windows builds include the GUI, dedicated server and administration tool; the terminal client and POSIX process harness are for macOS/Linux. See [Windows build and packaging](WINDOWS.md). Windows runtime validation requires a Windows host; cross-linking is separate evidence. Amiga branches remain unvalidated.
+Native builds support macOS, Linux and Windows x64. Windows builds include the GUI, dedicated server and administration tool; the POSIX process harness runs on macOS/Linux. See [Windows build and packaging](WINDOWS.md). Windows runtime validation requires a Windows host; cross-linking is separate evidence. Amiga branches remain unvalidated.
 
 ## Checks
 
@@ -25,7 +25,7 @@ make -C tests unit CFLAGS='-Wall -Wextra -g -O1 -I../shared/include -fsanitize=a
 
 ## Release metadata
 
-`version.mk` is the release-version source. `get-version.sh` supplies version, numeric build metadata and UTC date to Makefiles and scripts. Build numbers default to `major*10000 + minor*100 + patch`; set the environment variable `BUILD_NUMBER` to a numeric CI build identifier to distinguish builds of one release. `SOURCE_DATE_EPOCH` fixes the generated date for reproducibility. Packaging and test scripts do not increment counters or rewrite build headers. CI builds server artifacts on each packaging platform; integration jobs build a native server and the Linux images include SQLite headers and Python 3. Header generation uses atomic replacement and only changes content when metadata changes. Both clean and parallel builds are supported; header dependencies trigger recompilation.
+`version.mk` is the release-version source. `get-version.sh` supplies version, numeric build metadata and UTC date to Makefiles and scripts. Build numbers default to `major*10000 + minor*100 + patch`; set the environment variable `BUILD_NUMBER` to a numeric CI build identifier to distinguish builds of one release. `SOURCE_DATE_EPOCH` fixes the generated date for reproducibility. Packaging and test scripts do not increment counters or rewrite build headers. Build and verify server artifacts natively on each packaging platform. Linux build hosts need SQLite headers and Python 3. Header generation uses atomic replacement and only changes content when metadata changes. Both clean and parallel builds are supported; header dependencies trigger recompilation.
 
 ```sh
 make VERSION=1.0.1
@@ -40,7 +40,6 @@ Build all binaries on the destination platform first. Native scripts:
 ```sh
 ./scripts/build-server.sh
 ./scripts/build-client.sh
-./scripts/build-cli.sh
 # macOS, unsigned/ad-hoc signed local DMG:
 ./scripts/package-macos.sh
 # Optional macOS developer identity:
@@ -69,7 +68,7 @@ Music-specific checks: `make -C tests music music-ui`. The UI test uses a dummy 
 
 ## Web-service checks
 
-Run `make directory-test` for offline delivery checks. With `LINECLASH_WEB_CONFIG` pointing to a disposable MariaDB database, run `make web-test` for PHP API and real dedicated-server upload/shutdown tests. The `test:web-directory` job runs these against MariaDB. See [web services](WEB-SERVICES.md).
+Run `make directory-test` for offline delivery checks. With `LINECLASH_WEB_CONFIG` pointing to a disposable MariaDB database, run `make web-test` for PHP API and real dedicated-server upload/shutdown tests. See [web services](WEB-SERVICES.md).
 
 See [discovery, ranked history, health reports, replays and music shortcuts](ENHANCEMENTS.md) for the latest controls, deployment changes and verification limits.
 

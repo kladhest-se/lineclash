@@ -113,14 +113,6 @@ In another terminal, from the project root:
 
 Add `localhost` with game port `31457`, enter a nickname and password, connect and join a room. A new nickname registers when server registration is enabled. Use Quit or close the window to stop the client.
 
-## Start the terminal client — macOS and Linux
-
-```sh
-./clients/cli/lineclash-cli localhost 31457
-```
-
-Follow the on-screen connection prompts and contextual controls. Use `--help` for saved connection options. The terminal client is not built by the default Windows target.
-
 ## Administration tool
 
 ```sh

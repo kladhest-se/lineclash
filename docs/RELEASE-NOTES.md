@@ -2,7 +2,7 @@
 
 - Repair HTTP status JSON and slow-client handling.
 - Harden authenticated identity, gameplay state and special inventory checks.
-- Automatically reconnect GUI and terminal clients within the server grace period.
+- Automatically reconnect desktop clients within the server grace period.
 - Add platform verification, reconnect regressions and deployment documentation.
 
 Native binaries require SDL2 for the GUI and SQLite. Native ZIPs are not standalone installers.

@@ -12,7 +12,7 @@ SERVER ?= ../server/lineclashd
 UNAME := $(shell uname -s 2>/dev/null || echo Windows)
 LDFLAGS ?=
 ifneq ($(filter Windows MINGW% MSYS% CYGWIN%,$(UNAME)),)
-LDFLAGS += -lws2_32
+LDFLAGS += -lws2_32 -lbcrypt
 WEB_LIBS = -lwinhttp
 C_INTEGRATION =
 else
@@ -53,14 +53,11 @@ test_net: test_net.c $(SHARED)
 test_auth: test_auth.c ../server/src/auth.c ../server/src/config.c $(SHARED)
 	$(CC) $(CFLAGS) $^ -o $@ -lm $(LDFLAGS) -lsqlite3
 
-.PHONY: gui client-integration
+.PHONY: gui
 gui:
 	$(MAKE) -C ../clients/gui
 	$(CC) $(CFLAGS) test_gui.c ../clients/gui/src/client.o ../clients/gui/src/directory.o ../clients/gui/src/render_sdl.o ../clients/gui/src/sound.o ../clients/gui/src/music.o ../clients/gui/src/music_decoder.o ../clients/gui/src/mod.o ../clients/gui/build/*.o -o test_gui $(LDFLAGS) $(TEST_SDL_LIBS) $(WEB_LIBS) -lm
 	./test_gui
-
-client-integration:
-	$(PYTHON) test_cli_reconnect.py ../clients/cli/lineclash-cli
 
 .PHONY: music
 music:

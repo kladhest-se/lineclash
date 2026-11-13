@@ -141,8 +141,7 @@ def native_files(root=ROOT, windows=None, runtime_dirs=(), objdump=None):
     entries = [('server/lineclashd'+suffix, 'bin/lineclashd'+suffix),
                ('server/lineclashd-tool'+suffix, 'bin/lineclashd-tool'+suffix),
                ('clients/gui/lineclash'+suffix, 'bin/lineclash'+suffix)]
-    if not windows: entries.append(('clients/cli/lineclash-cli','bin/lineclash-cli'))
-    else:
+    if windows:
         from windows_runtime import runtime_files
         executables=[root/path for path,name in entries]
         for dll in runtime_files(executables,[p.parent for p in executables]+list(runtime_dirs),objdump):

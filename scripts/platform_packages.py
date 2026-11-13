@@ -33,7 +33,7 @@ def preflight(env):
 
 
 def sign_binaries(root,identity):
-    for rel in ['clients/gui/lineclash','clients/cli/lineclash-cli','server/lineclashd','server/lineclashd-tool']:
+    for rel in ['clients/gui/lineclash','server/lineclashd','server/lineclashd-tool']:
         binary=root/rel
         call(['codesign','--force','--timestamp','--options','runtime','--sign',identity,binary])
         call(['codesign','--verify','--strict',binary])
@@ -110,5 +110,5 @@ def verify_installers(record,folder,root):
         else:
             if not record.get('signing_identity'):raise RuntimeError('Missing macOS signing identity')
             call(['codesign','--verify','--strict',folder/name])
-            for rel in ['clients/gui/lineclash','clients/cli/lineclash-cli','server/lineclashd','server/lineclashd-tool']:
+            for rel in ['clients/gui/lineclash','server/lineclashd','server/lineclashd-tool']:
                 call(['codesign','--verify','--strict',root/rel])

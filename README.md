@@ -17,7 +17,6 @@ Up to 8 players per room, AI bots, 14 specials, and full guideline gameplay. Ope
 - Reconnect window — disconnected players hold their slot
 - HTTP stats API on port 31458
 - SDL2 GUI client with HiDPI/Retina support
-- Terminal CLI client for headless or SSH play
 
 ## Build
 
@@ -32,9 +31,6 @@ make server
 
 # GUI client
 make client
-
-# Terminal client
-make cli
 ```
 
 **macOS**
@@ -64,9 +60,6 @@ cp server/lineclashd.cfg.example ./lineclashd.cfg
 
 # GUI client
 ./clients/gui/lineclash
-
-# Terminal client
-./clients/cli/lineclash-cli <server>
 
 # Admin tool
 ./server/lineclashd-tool --help

@@ -78,10 +78,10 @@ class ReleaseTests(unittest.TestCase):
         files={'version.mk':'VERSION ?= 1.0.0\n','get-version.sh':'#!/bin/sh\n',
                'Makefile':'all:\n','LICENSE.md':'license fixture','README.md':'readme fixture',
                'docs/RELEASE-NOTES.md':'Release notes','server/lineclashd.cfg.example':'port=31457\n',
-               'clients/gui/src/client.c':'source','clients/cli/src/client.c':'source',
+               'clients/gui/src/client.c':'source',
                'server/src/server.c':'source','shared/src/net.c':'source','tests/test.c':'test',
                'scripts/test.py':'# fixture','public-web/index.php':'<?php echo "test";',
-               '.gitignore':'outputs/\nserver/lineclashd\nserver/lineclashd-tool\nclients/gui/lineclash\nclients/cli/lineclash-cli\n*.exe\nbuild/\n*.o\n__pycache__/\n'}
+               '.gitignore':'outputs/\nserver/lineclashd\nserver/lineclashd-tool\nclients/gui/lineclash\n*.exe\nbuild/\n*.o\n__pycache__/\n'}
         for name,data in files.items():
             p=self.root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(data)
         for args in (['git','init','-q'],['git','config','user.name','Release Test'],

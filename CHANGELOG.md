@@ -2,10 +2,12 @@
 
 ## Unreleased
 
+- Remove the terminal game client and its build, packaging and test targets.
+
 - Add Sci-fi Theme menu music and an 18-track streaming game library with player controls and complete soundtrack attribution.
 
 - Bind joins to authenticated accounts and enforce gameplay state, board shape and special inventory.
-- Add bounded automatic GUI/terminal reconnects, connection-health probes and round-specific slot recovery.
+- Add bounded automatic desktop reconnects, connection-health probes and round-specific slot recovery.
 - Add native platform gates, portable tests and Windows build/system-statistics fixes.
 - Integrate the archive's release coordinator with external GitHub profiles, tagged releases, checksums and resumable publication.
 
@@ -31,7 +33,6 @@
 - Persistent room settings saved and restored across server restarts
 - HTTP stats API on port 31458
 - SDL2 GUI client with HiDPI/Retina support
-- Terminal CLI client for headless and SSH play
 - Admin tool for server management
 
 ### Directory services and menu playback

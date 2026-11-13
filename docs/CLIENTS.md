@@ -21,30 +21,24 @@ Preferences and saved server entries are stored locally:
 
 Close the client before backing up or changing these files. Saved authentication hashes can grant account access: keep them private. To reset preferences, close the game and rename the settings file; the next launch uses defaults. Keep the original file if you want to restore your bindings later.
 
-## Terminal client — macOS and Linux
-
-The terminal client is available from a source build on macOS and Linux. It is not part of the native Windows client target. Open a terminal and run:
-
-```sh
-./clients/cli/lineclash-cli localhost 31457
-```
-
-For saved connections, see the options supported by your installed version:
-
-```sh
-./clients/cli/lineclash-cli --help
-./clients/cli/lineclash-cli --list
-./clients/cli/lineclash-cli --connect YOUR_SAVED_ALIAS
-```
-
-`--cfg PATH` selects a separate credentials file. The help output shows its default location. Adding profiles with `--password` or supplying a password as a positional argument can expose it through shell history and process listings. Protect saved credentials as carefully as passwords.
-
-Follow the contextual footer for each screen. In a room, **R** readies, **S** starts as host, **T** edits the team, **E/M/H** adds an easy/medium/hard bot, **X** removes a bot and **Q** leaves. During play, arrows move, Up/Z rotate, Down soft-drops, Space hard-drops, C holds and Tab opens chat. Number keys target specials. Use the contextual quit/leave command to exit.
-
-The terminal client uses the legacy board-reporting protocol; rounds involving it are casual. The desktop client supports server-processed inputs for eligible ranked rounds.
-
 ## Connection problems
 
 Check the server host and game port first; the HTTP status port is not a game endpoint. **Unreachable** usually requires checking that the server is running, its address is correct and the game port is reachable through the firewall. **Wrong credentials** requires the correct password for that server. **Server full** requires a free slot, while **Protocol mismatch** requires a compatible client/server version. Access-denied or banned accounts require assistance from that server's administrator.
 
-During an active-game connection loss, automatic reconnect freezes local play while the server reserves your slot. Escape cancels recovery in the GUI; Q/Escape cancels in the terminal. An expired reservation, completed round or server restart requires reconnecting normally. See [game basics](GAME-BASICS.md).
+During an active-game connection loss, automatic reconnect freezes local play while the server reserves your slot. Escape cancels recovery in the desktop client. An expired reservation, completed round or server restart requires reconnecting normally. See [game basics](GAME-BASICS.md).
+
+## Central LineClash accounts
+
+Public-server joins use central browser approval. The client displays an eight-character code and opens `https://lineclash.kladhest.se/account/`. Create an account or sign in, verify the server name/address and approve only the code currently shown in your game. You can use a browser on another device. A browser session lets you approve later connections without entering the password again.
+
+The website stores a password hash and provides a recovery code once when registering. Keep that code private. Recovery changes the password, rotates the recovery code and invalidates earlier browser sessions. The game server never receives the central password or a reusable central login token.
+
+Central handles appear as `@handle` and have an immutable account ID. They are mapped separately on each server; an existing local account with a matching name is never claimed automatically. Each server keeps control of its own permissions, bans and local game records. No existing local statistics are automatically transferred to a central profile.
+
+The Account button opens your website profile. Private/LAN play still supports local accounts and does not require the central website. Older clients can keep using local accounts on updated servers. Central approval requires a verified, live public directory identity for the server. During a central-service outage, existing games continue and local-account play remains available; new central sign-ins are unavailable.
+
+The game TCP stream remains unencrypted. Browser authentication and server verification use HTTPS; chat and gameplay can be observed or altered on an untrusted network. A reconnect token is restricted to a reserved slot on one server and expires with that short reconnect window; it is not a central account credential.
+
+## Native AmigaOS 3.x preview
+
+The experimental native frontend targets a 68020 without an FPU, AmigaOS 3.x and a running bsdsocket.library TCP/IP stack. It opens a 640×256, sixteen-colour Intuition screen. Use arrows, Space, Z, C, Tab, number keys and the mouse. Central approval displays the same website URL/code and can be completed on another device. Public discovery uses AmiSSL certificate and hostname verification in a separate process. The initial native frontend has no music/SFX playback or modern gamepad integration. See the repository's Amiga guide for build and emulator checks.

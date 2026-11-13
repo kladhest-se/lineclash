@@ -1,6 +1,6 @@
 # Windows build and packaging
 
-Target: native Windows 10/11 x64 using MSYS2 UCRT64. The SDL2 GUI, dedicated server and administration tool build on Windows. The terminal client uses POSIX terminal facilities and is excluded from the default Windows build.
+Target: native Windows 10/11 x64 using MSYS2 UCRT64. The SDL2 GUI, dedicated server and administration tool build on Windows.
 
 Install [MSYS2](https://www.msys2.org/), open its **UCRT64** terminal, update with `pacman -Syu` (restart the terminal and repeat if requested), then:
 

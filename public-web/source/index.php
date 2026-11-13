@@ -82,12 +82,8 @@ xcode-select --install
 
 <span class="c"># Build the desktop client</span>
 make -j4 client
-<span class="c"># Build the terminal client</span>
-make -j4 cli
 <span class="c"># Launch the desktop client</span>
-./clients/gui/lineclash
-<span class="c"># Or use the terminal client</span>
-./clients/cli/lineclash-cli localhost 31457</pre>
+./clients/gui/lineclash</pre>
   </div>
   <div id="tab-linux" class="tab-panel" role="tabpanel">
 <pre class="code-block"><span class="s">sudo zypper</span> install -y gcc make git libSDL2-devel libcurl-devel
@@ -98,13 +94,8 @@ make -j4 cli
 <span class="c"># Desktop client (SDL2)</span>
 make -j4 client
 
-<span class="c"># Terminal client</span>
-make -j4 cli
-
 <span class="c"># Launch the desktop client</span>
-./clients/gui/lineclash
-<span class="c"># Or use the terminal client</span>
-./clients/cli/lineclash-cli localhost 31457</pre>
+./clients/gui/lineclash</pre>
   </div>
 
 <div id="tab-windows" class="tab-panel" role="tabpanel">
@@ -129,6 +120,11 @@ make -j4 client
 </div>
 
 
+<section class="community-section"><h2>AmigaOS 3.x preview</h2><p>The native 68020 client uses Intuition, bsdsocket.library and AmiSSL for HTTPS directory discovery. No SDL or FPU is required. This is an experimental build; audio playback is not implemented.</p>
+<pre class="code-block">make amiga
+# A different installed cross-toolchain:
+make -C clients/amiga AMIGA_TOOLS=/path/to/m68k-amigaos-toolchain
+</pre><p>Run <code>clients/amiga/LineClash</code> on AmigaOS 3.x with a running Roadshow, AmiTCP or Miami stack. For public discovery, install AmiSSL 4.10 or newer with its certificates and assigns. Keep the executable named <code>LineClash</code> so its directory worker can launch.</p></section>
 
 <script>
 /* ── Tab switching ─────────────────────────────────────── */

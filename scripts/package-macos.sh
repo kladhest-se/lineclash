@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/package-macos.sh — Build LineClash.app + lineclashd.app → DMG
-# Requires: macOS, client/lineclash + server/lineclashd + cli/lineclash-cli already built
+# Requires: macOS, clients/gui/lineclash + server/lineclashd already built
 # Usage: ./scripts/package-macos.sh [--sign "Developer ID Application: Name (TEAM)"]
 source "$(dirname "$0")/common.sh"
 
@@ -135,11 +135,6 @@ cp -r "$BUNDLE"     "$ST/LineClash/LineClash.app"
 cp "$SERVER_DIR/lineclashd" "$ST/LineClash/lineclashd"
 chmod +x "$ST/LineClash/lineclashd"
 
-[[ -f "$CLI_DIR/lineclash-cli" ]] && {
-    cp "$CLI_DIR/lineclash-cli" "$ST/LineClash/lineclash-cli"
-    chmod +x "$ST/LineClash/lineclash-cli"
-    ok "lineclash-cli added"
-}
 [[ -f "$SERVER_DIR/lineclashd-tool" ]] && {
     cp "$SERVER_DIR/lineclashd-tool" "$ST/LineClash/lineclashd-tool"
     chmod +x "$ST/LineClash/lineclashd-tool"
@@ -160,7 +155,6 @@ CLIENT:  Double-click LineClash.app — or drag to Applications.
 SERVER:  Run from Terminal: ./lineclashd (port 31457).
          Admin tool: ./lineclashd-tool --help
 
-CLI:     ./lineclash-cli <server>
 EOF
 
 ZIP_OUT="$DIST_DIR/LineClash-$VERSION-macos-$MAC_ARCH.zip"

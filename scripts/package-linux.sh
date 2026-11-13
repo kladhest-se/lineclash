@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/package-linux.sh — Package Linux binaries into tar.gz + RPM + DEB
-# Requires: client/lineclash + server/lineclashd + cli/lineclash-cli already built (native)
+# Requires: clients/gui/lineclash + server/lineclashd already built (native)
 # Usage: ./scripts/package-linux.sh [--rpm] [--opensuse] [--deb] [--all]
 source "$(dirname "$0")/common.sh"
 
@@ -41,7 +41,6 @@ _build_staging() {
     cp "$SERVER_DIR/lineclashd"   "$rr/usr/sbin/lineclashd";        chmod 755 "$rr/usr/sbin/lineclashd"
     [[ -f "$SERVER_DIR/lineclashd-tool" ]] && {
         cp "$SERVER_DIR/lineclashd-tool" "$rr/usr/bin/lineclashd-tool"; chmod 755 "$rr/usr/bin/lineclashd-tool"; }
-    cp "$CLI_DIR/lineclash-cli"   "$rr/usr/bin/lineclash-cli";      chmod 755 "$rr/usr/bin/lineclash-cli"
 
     cp -R "$ROOT/music" "$rr/usr/share/lineclash/music"
     cp "$ROOT/CREDITS.md" "$rr/usr/share/doc/lineclash/CREDITS.md"
@@ -79,7 +78,6 @@ if [[ $DO_RPM -eq 1 ]]; then
     EXTRA=""
     [[ -f "$RR/usr/sbin/lineclashd" ]]      && EXTRA="$EXTRA\n/usr/sbin/lineclashd"
     [[ -f "$RR/usr/bin/lineclashd-tool" ]]  && EXTRA="$EXTRA\n/usr/bin/lineclashd-tool"
-    [[ -f "$RR/usr/bin/lineclash-cli" ]]    && EXTRA="$EXTRA\n/usr/bin/lineclash-cli"
 
     cat > "$TOP/SPECS/lineclash.spec" << SPEC
 Name:        lineclash
@@ -143,7 +141,6 @@ if [[ $DO_OPENSUSE -eq 1 ]]; then
     EXTRA=""
     [[ -f "$RR/usr/sbin/lineclashd" ]]      && EXTRA="$EXTRA\n/usr/sbin/lineclashd"
     [[ -f "$RR/usr/bin/lineclashd-tool" ]]  && EXTRA="$EXTRA\n/usr/bin/lineclashd-tool"
-    [[ -f "$RR/usr/bin/lineclash-cli" ]]    && EXTRA="$EXTRA\n/usr/bin/lineclash-cli"
 
     _suse_one() {
         local leap_ver="$1" dist_tag="$2"

@@ -39,7 +39,7 @@ make release-prepare
 
 `plan` is offline and prints destinations, version and commands. `build` runs scripts/verify-platform.sh, then creates:
 
-- A native platform archive containing server, administration tool, GUI, POSIX terminal client where supported, license, docs, soundtrack credits, the complete music library and an example configuration.
+- A native platform archive containing server, administration tool, GUI, license, docs, soundtrack credits, the complete music library and an example configuration.
 - A complete source tar.gz and website tar.gz.
 - BUILD-PROVENANCE.json and SHA256SUMS.
 
