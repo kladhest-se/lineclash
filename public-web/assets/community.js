@@ -1,0 +1,2 @@
+"use strict";
+document.addEventListener('click',async event=>{const button=event.target.closest('[data-copy-address]');if(!button)return;const feedback=button.closest('.server-card').querySelector('.copy-feedback');try{await navigator.clipboard.writeText(button.dataset.copyAddress);feedback.textContent='Address copied';button.textContent='Copied';}catch{feedback.textContent='Select and copy the address above.';}});

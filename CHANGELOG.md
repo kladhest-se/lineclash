@@ -64,3 +64,11 @@
 - Protect config and backup filenames from HTTP access and update the deployment instructions.
 
 - Website refresh now bootstraps missing config.inc.php from the linted sample, without overwriting existing files; dry runs only preview this action.
+
+### Integrated public community website
+
+- Add live servers, population/match totals, ranked leaders and recent matches directly to the homepage.
+- Share responsive navigation, styling and footer across server browsing, leaderboards, match history, statistics, profiles and replays.
+- Add server search/open-slot filters, address copying, leaderboard server filters and paginated match history.
+- Keep the promotional homepage available during database outages and preserve legacy directory/profile/replay links.
+- Cover the integrated pages, escaped names, filters, pagination and outage states in real MariaDB tests.

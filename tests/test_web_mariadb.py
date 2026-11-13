@@ -73,6 +73,32 @@ with tempfile.TemporaryFile() as log:
         invalid_raw=b'[1]'
         invalid=dict(g,game_id=3,replay_gzip=base64.b64encode(gzip.compress(invalid_raw)).decode(),replay_sha256=hashlib.sha256(invalid_raw).hexdigest())
         assert call(payload=dict(payload,games=[invalid]))[0]==400
+        for path in ['/', '/servers/', '/leaderboards/', '/matches/', '/statistics/', '/directory/']:
+            code,body=call(path);assert code==200,(path,code,body[:300])
+            text=body.decode();assert 'aria-label="Main"' in text and 'Leaderboards' in text and 'assets/site.css' in text,path
+        home=call('/')[1].decode();assert 'Live servers' in home and 'On the leaderboard' in home and 'Fresh from the arena' in home
+        assert '&lt;Winner&gt;' in home and '<Winner>' not in home
+        servers=call('/servers/?q='+id)[1].decode()
+        assert '0 live servers in this view' in servers
+        assert call('/servers/?availability=invalid')[0]==400
+        assert call('/matches/?mode=invalid')[0]==400
+        assert call('/matches/?offset=-1')[0]==400
+        filtered=call('/leaderboards/?server='+id)[1].decode();assert '&lt;Winner&gt;' in filtered
+        ranked=call('/matches/?server='+id+'&mode=ranked')[1].decode();assert 'Match #2' in ranked and 'Match #1<' not in ranked
+        assert 'Player results' in call('/directory/match.php?'+key)[1].decode()
+        assert 'A local rivalry' in call('/directory/player.php?'+urlencode(dict(server=id,nick='<Winner>')))[1].decode()
+        # Bounded pagination preserves server/mode filters and escapes display names.
+        extra=[]
+        for i in range(100,151):
+            extra.append(dict(game_id=i,room_id=1,started_at='2026-11-13 10:00:00',ended_at='2026-11-13 10:05:00',winner_nick='',winner_team='',player_count=1))
+        assert call(payload=dict(payload,games=extra))[0]==200
+        first=call('/matches/?server='+id+'&mode=casual')[1].decode()
+        assert 'Next' in first and 'mode=casual' in first and 'offset=50' in first
+        second=call('/matches/?server='+id+'&mode=casual&offset=50')[1].decode();assert 'Previous' in second and 'Page 2' in second
+        assert 'Copy address' in call('/servers/')[1].decode()
+        assert call(payload=dict(payload,games=[],status={}))[0]==200
+        unknown=call('/servers/?availability=open&q=Test')[1].decode();assert '&lt;Test &amp; server&gt;' not in unknown
+        print('PASS: integrated homepage, shared navigation, full community pages, HTML escaping, filters and pagination')
         print('PASS: ranked/casual filters, player counters/history, replay integrity and native discovery feed')
         print('PASS: MariaDB migration, provisioning, auth, live listing, deduplication, out-of-order delivery, validation, HTML escaping and private routes')
     finally:

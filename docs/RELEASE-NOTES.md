@@ -19,3 +19,7 @@ Native public server discovery, favourites/recents and filters now complement th
 ### Interface and deployment refresh
 
 The GUI now uses a high-resolution bundled Roboto font, a unified slate/mint palette, rounded controls, clearer server rows and useful empty states. A protected website refresh helper and a Leap 16 / Apache deployment guide cover the web002/dbs001/mgt001 topology, including certificate-verified remote MariaDB connections.
+
+### Community website integration
+
+The homepage now includes live server browsing, community totals, ranked leaders and recent matches. Dedicated Servers, Leaderboards, Matches and Statistics pages share the main site's navigation and styling, including player profiles and replays. Search, open-slot filtering, address copying and paginated history are included. Existing database tables and config.inc.php continue to work; no new migration is required for this UI change.

@@ -60,5 +60,6 @@ release-tools-test:
 directory-test:
 	$(PYTHON) tests/test_directory.py
 web-test: server
+	$(PYTHON) tests/test_web_offline.py
 	$(PYTHON) tests/test_web_mariadb.py
 	$(PYTHON) tests/test_directory_e2e.py

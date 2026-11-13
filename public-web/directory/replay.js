@@ -12,7 +12,7 @@
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(data.replay_source)))).map(n=>n.toString(16).padStart(2,'0')).join('');
   if(digest!==g.replay_sha256)throw Error('Replay checksum mismatch — playback refused');
   $('status').textContent='Checksum verified. '+(Number(g.replay_truncated)?'Partial trace: recording limit reached.':'Complete recorded trace.');
-  key.set('download','1');$('download').href='../api/?'+key;
+  key.set('download','1');$('download').href='../api/?'+key;$('download').hidden=false;
   const duration=events[events.length-1].elapsed_ms, seek=$('seek'), ctx=$('board').getContext('2d');seek.max=duration;$('play').disabled=false;
   let playing=false, position=0, previous=0;
   const colors=['#232634','#e78284','#a6d189','#8caaee','#e5c890','#ca9ee6','#81c8be','#ef9f76','#babbf1','#737994'];

@@ -1,456 +1,10 @@
 <?php
-$version    = '1.0.0';
-$year       = date('Y');
-$github_url = 'https://github.com/kladhest-se/lineclash';
-$kofi_url   = 'https://ko-fi.com/frossmant';
-?><!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LineClash — Multiplayer Falling Blocks</title>
-<meta name="description" content="Fast, brutal multiplayer falling blocks. Open source, self-hosted, up to 8 players.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-/* ── Catppuccin Frappé ─────────────────────────────────── */
-:root {
-  --crust:    #232634;
-  --mantle:   #292c3c;
-  --base:     #303446;
-  --surface0: #414559;
-  --surface1: #51576d;
-  --surface2: #626880;
-  --overlay0: #737994;
-  --overlay1: #838ba7;
-  --subtext1: #b5bfe2;
-  --text:     #c6d0f5;
-  --lavender: #babbf1;
-  --blue:     #8caaee;
-  --sapphire: #85c1dc;
-  --sky:      #99d1db;
-  --teal:     #81c8be;
-  --green:    #a6d189;
-  --yellow:   #e5c890;
-  --peach:    #ef9f76;
-  --red:      #e78284;
-  --mauve:    #ca9ee6;
-  --pink:     #f4b8e4;
-  --rosewater:#f2d5cf;
-
-  --mono: 'Space Mono', monospace;
-  --sans: 'Inter', system-ui, sans-serif;
-
-  --radius: 8px;
-  --radius-lg: 14px;
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
-
-body {
-  background: var(--crust);
-  color: var(--text);
-  font-family: var(--sans);
-  font-size: 16px;
-  line-height: 1.65;
-  -webkit-font-smoothing: antialiased;
-}
-
-a { color: var(--mauve); text-decoration: none; }
-a:hover { text-decoration: underline; }
-a:focus-visible { outline: 2px solid var(--mauve); outline-offset: 3px; border-radius: 3px; }
-
-/* ── Nav ─────────────────────────────────────────────────── */
-.nav {
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  background: rgba(35, 38, 52, 0.90);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--surface0);
-}
-.nav-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 0 28px;
-  height: 58px;
-}
-.nav-logo {
-  font-family: var(--mono);
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.5px;
-}
-.nav-logo .clash { color: var(--mauve); }
-.nav-links {
-  display: flex;
-  gap: 32px;
-  list-style: none;
-  font-size: 14px;
-  font-weight: 500;
-}
-.nav-links a { color: var(--overlay1); transition: color .15s; }
-.nav-links a:hover { color: var(--text); text-decoration: none; }
-.nav-btn {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 8px 18px;
-  background: var(--mauve);
-  color: var(--crust);
-  border-radius: var(--radius);
-  transition: opacity .15s;
-}
-.nav-btn:hover { opacity: .85; text-decoration: none; }
-
-/* ── Hero ─────────────────────────────────────────────────── */
-.hero {
-  position: relative;
-  min-height: 100svh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-#hero-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: .18;
-  pointer-events: none;
-}
-.hero-content {
-  position: relative;
-  z-index: 2;
-  text-align: center;
-  padding: 80px 28px 60px;
-  max-width: 720px;
-  margin: 0 auto;
-}
-.hero-eyebrow {
-  display: inline-block;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .15em;
-  text-transform: uppercase;
-  color: var(--green);
-  background: rgba(166, 209, 137, .1);
-  border: 1px solid rgba(166, 209, 137, .25);
-  border-radius: 100px;
-  padding: 5px 16px;
-  margin-bottom: 32px;
-}
-.hero-title {
-  font-family: var(--mono);
-  font-size: clamp(56px, 11vw, 108px);
-  font-weight: 700;
-  line-height: .9;
-  letter-spacing: -3px;
-  margin-bottom: 28px;
-}
-.hero-title .line  { color: var(--text); }
-.hero-title .clash { color: var(--mauve); }
-.hero-sub {
-  font-size: 18px;
-  color: var(--subtext1);
-  max-width: 480px;
-  margin: 0 auto 44px;
-  line-height: 1.6;
-}
-.hero-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-/* ── Buttons ──────────────────────────────────────────────── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 26px;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 600;
-  transition: all .15s;
-  cursor: pointer;
-}
-.btn:hover { text-decoration: none; }
-.btn-primary { background: var(--mauve); color: var(--crust); }
-.btn-primary:hover { background: var(--lavender); }
-.btn-outline {
-  background: transparent;
-  color: var(--subtext1);
-  border: 1px solid var(--surface1);
-}
-.btn-outline:hover { border-color: var(--overlay1); color: var(--text); }
-
-/* ── Sections ─────────────────────────────────────────────── */
-.section {
-  padding: 96px 28px;
-  max-width: 1000px;
-  margin: 0 auto;
-}
-.section-divider {
-  height: 1px;
-  background: var(--surface0);
-  max-width: 1000px;
-  margin: 0 auto;
-}
-.eyebrow {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .15em;
-  text-transform: uppercase;
-  color: var(--blue);
-  margin-bottom: 12px;
-}
-.section-title {
-  font-family: var(--mono);
-  font-size: clamp(26px, 4vw, 38px);
-  font-weight: 700;
-  letter-spacing: -1px;
-  margin-bottom: 12px;
-  color: var(--text);
-}
-.section-sub {
-  color: var(--overlay1);
-  font-size: 15px;
-  max-width: 520px;
-  margin-bottom: 52px;
-  line-height: 1.6;
-}
-
-/* ── Feature cards ────────────────────────────────────────── */
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
-}
-.feature-card {
-  background: var(--base);
-  border: 1px solid var(--surface0);
-  border-radius: var(--radius-lg);
-  padding: 28px;
-  transition: border-color .2s, transform .2s;
-}
-.feature-card:hover {
-  border-color: var(--surface2);
-  transform: translateY(-2px);
-}
-.feature-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  margin-bottom: 16px;
-}
-.icon-mauve  { background: rgba(202,158,230,.15); }
-.icon-blue   { background: rgba(140,170,238,.15); }
-.icon-green  { background: rgba(166,209,137,.15); }
-.icon-peach  { background: rgba(239,159,118,.15); }
-.icon-sky    { background: rgba(153,209,219,.15); }
-.icon-yellow { background: rgba(229,200,144,.15); }
-.feature-card h3 {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-.feature-card p { font-size: 14px; color: var(--overlay1); line-height: 1.6; }
-
-/* ── Specials ─────────────────────────────────────────────── */
-.specials-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.special-chip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--base);
-  border: 1px solid var(--surface0);
-  border-radius: var(--radius);
-  padding: 10px 16px;
-  transition: border-color .15s;
-}
-.special-chip:hover { border-color: var(--mauve); }
-.special-chip-key {
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .05em;
-  color: var(--mauve);
-  background: rgba(202,158,230,.12);
-  border-radius: 4px;
-  padding: 2px 7px;
-  white-space: nowrap;
-}
-.special-chip-name { font-size: 13px; font-weight: 600; color: var(--subtext1); }
-
-/* ── Build tabs ───────────────────────────────────────────── */
-.tab-bar {
-  display: flex;
-  border-bottom: 1px solid var(--surface0);
-  margin-bottom: -1px;
-  gap: 0;
-}
-.tab-btn {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  padding: 10px 22px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--overlay0);
-  cursor: pointer;
-  transition: color .15s, border-color .15s;
-  margin-bottom: -1px;
-}
-.tab-btn:hover { color: var(--text); }
-.tab-btn.active { color: var(--mauve); border-bottom-color: var(--mauve); }
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
-pre.code-block {
-  background: var(--mantle);
-  border: 1px solid var(--surface0);
-  border-radius: 0 var(--radius-lg) var(--radius-lg) var(--radius-lg);
-  padding: 28px;
-  font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.8;
-  overflow-x: auto;
-  color: var(--text);
-  margin-top: 0;
-}
-.c { color: var(--overlay0); }   /* comment */
-.k { color: var(--mauve); }      /* keyword / command */
-.s { color: var(--green); }      /* string / success */
-
-/* ── Platforms ────────────────────────────────────────────── */
-.platform-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 36px;
-}
-.platform-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--subtext1);
-  background: var(--base);
-  border: 1px solid var(--surface0);
-  border-radius: 100px;
-  padding: 6px 16px;
-}
-.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
-
-/* ── Source cards ─────────────────────────────────────────── */
-.source-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-}
-.source-card {
-  background: var(--base);
-  border: 1px solid var(--surface0);
-  border-radius: var(--radius-lg);
-  padding: 24px;
-  transition: border-color .2s;
-}
-.source-card:hover { border-color: var(--mauve); }
-.source-card h3 {
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--mauve);
-  margin-bottom: 8px;
-}
-.source-card p { font-size: 13px; color: var(--overlay1); margin-bottom: 16px; line-height: 1.5; }
-.source-link {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--overlay0);
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.source-link:hover { color: var(--mauve); text-decoration: none; }
-
-/* ── Ko-fi ────────────────────────────────────────────────── */
-.kofi-wrap { margin-bottom: 44px; }
-.kofi-wrap a:hover { text-decoration: none; }
-
-/* ── Footer ───────────────────────────────────────────────── */
-footer {
-  border-top: 1px solid var(--surface0);
-  background: var(--mantle);
-  padding: 36px 28px;
-}
-.footer-inner {
-  max-width: 1000px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-.footer-logo { font-family: var(--mono); font-size: 14px; color: var(--overlay0); }
-.footer-logo .clash { color: var(--mauve); }
-.footer-links { display: flex; gap: 24px; list-style: none; }
-.footer-links a { font-size: 13px; color: var(--overlay0); }
-.footer-links a:hover { color: var(--text); text-decoration: none; }
-.footer-copy { font-size: 12px; color: var(--surface2); }
-
-/* ── Responsive ───────────────────────────────────────────── */
-@media (max-width: 640px) {
-  .nav-links { display: none; }
-  .hero-title { letter-spacing: -2px; }
-  .footer-inner { flex-direction: column; text-align: center; }
-  .footer-links { justify-content: center; }
-}
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-}
-</style>
-</head>
-<body>
-<div style="text-align:center;padding:1rem"><a href="directory/">Live servers &amp; game statistics</a></div>
-
-<nav class="nav" role="navigation" aria-label="Main">
-  <div class="nav-inner">
-    <span class="nav-logo">Line<span class="clash">Clash</span></span>
-    <ul class="nav-links">
-      <li><a href="#features">Features</a></li>
-      <li><a href="#specials">Specials</a></li>
-      <li><a href="#build">Build</a></li>
-      <li><a href="#source">Source</a></li>
-    </ul>
-    <a class="nav-btn" href="<?= htmlspecialchars($github_url) ?>">GitHub</a>
-  </div>
-</nav>
-
+require_once __DIR__.'/inc/community.php';
+$version='1.0.0'; $year=date('Y'); $github_url='https://github.com/kladhest-se/lineclash'; $kofi_url='https://ko-fi.com/frossmant';
+$community=community_load();
+site_header('Multiplayer falling blocks','home','./');
+?>
+<main id="main">
 <section class="hero" aria-labelledby="hero-heading">
   <canvas id="hero-canvas" aria-hidden="true"></canvas>
   <div class="hero-content">
@@ -458,12 +12,21 @@ footer {
     <h1 class="hero-title" id="hero-heading">
       <span class="line">Line</span><span class="clash">Clash</span>
     </h1>
-    <p class="hero-sub">Fast, brutal multiplayer falling blocks. Up to 8 players, AI bots, 10 specials, full guideline gameplay. Self-hosted.</p>
+    <p class="hero-sub">Fast, brutal multiplayer falling blocks. Up to 8 players, AI bots, 14 specials, full guideline gameplay. Self-hosted.</p>
     <div class="hero-actions">
-      <a class="btn btn-primary" href="#build">Build it</a>
-      <a class="btn btn-outline" href="<?= htmlspecialchars($github_url) ?>">View source</a>
+      <a class="btn btn-primary" href="servers/">Find a server</a>
+      <a class="btn btn-outline" href="#build">Get the game</a>
     </div>
   </div>
+</section>
+
+
+<section class="community-shell" aria-labelledby="community-heading">
+<div class="section-heading"><div><p class="eyebrow">The community</p><h2 id="community-heading">A good match is never far away.</h2><p>Find a server, follow your rivals, and see how the last round ended.</p></div><a class="section-link" href="statistics/">All statistics →</a></div>
+<?php community_metrics($community); if(!community_notice($community)): ?>
+<section class="community-section" id="servers"><div class="section-heading"><div><h2>Live servers</h2><p>Your next room is waiting.</p></div><a class="section-link" href="servers/">Browse all servers →</a></div><?php community_servers($community['servers'],6); ?><p class="copy-note">Copy an address and add it to your server list in LineClash.</p></section>
+<div class="community-columns"><section id="leaderboards"><div class="section-heading"><div><h2>On the leaderboard</h2><p>Ranked wins. Local rivalries.</p></div><a class="section-link" href="leaderboards/">Full leaderboard →</a></div><?php community_leaders($community['leaders'],'./'); ?></section><section id="matches"><div class="section-heading"><div><h2>Fresh from the arena</h2><p>Results and available replays.</p></div><a class="section-link" href="matches/">All matches →</a></div><?php community_matches($community['matches'],'./'); ?></section></div>
+<?php endif; ?>
 </section>
 
 <div class="section-divider"></div>
@@ -471,7 +34,7 @@ footer {
 <!-- Features -->
 <div class="section" id="features">
   <p class="eyebrow">What you get</p>
-  <h2 class="section-title">Fully featured. Nothing missing.</h2>
+  <h2 class="section-title">Built for your next rivalry.</h2>
   <p class="section-sub">Real-time multiplayer with the depth of guideline play and the chaos of specials.</p>
   <div class="features-grid">
     <div class="feature-card">
@@ -487,7 +50,7 @@ footer {
     <div class="feature-card">
       <div class="feature-icon icon-green">🤖</div>
       <h3>AI bots</h3>
-      <p>Configurable difficulty. Bots play with full game rules — garbage targeting, B2B, combos, and all 10 specials.</p>
+      <p>Configurable difficulty. Bots play with full game rules — garbage targeting, B2B, combos, and all 14 specials.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon icon-peach">💾</div>
@@ -502,12 +65,12 @@ footer {
     <div class="feature-card">
       <div class="feature-icon icon-yellow">📦</div>
       <h3>Self-hosted</h3>
-      <p>Run your own server. Packages for macOS, openSUSE Leap, and Ubuntu. One binary, no runtime dependencies.</p>
+      <p>Run your own server. Packages for macOS, openSUSE Leap, and Ubuntu. Lightweight native clients and a dedicated server.</p>
     </div>
   </div>
   <div class="platform-row">
     <div class="platform-chip"><span class="dot"></span>macOS arm64</div>
-    <div class="platform-chip"><span class="dot"></span>openSUSE Leap 15</div>
+    <div class="platform-chip"><span class="dot"></span>openSUSE Leap</div>
     <div class="platform-chip"><span class="dot"></span>Ubuntu 24.04</div>
     <div class="platform-chip"><span class="dot"></span>Any Linux (build from source)</div>
   </div>
@@ -518,22 +81,11 @@ footer {
 <!-- Specials -->
 <div class="section" id="specials">
   <p class="eyebrow">Combat</p>
-  <h2 class="section-title">10 specials. Pick your chaos.</h2>
+  <h2 class="section-title">14 specials. Pick your chaos.</h2>
   <p class="section-sub">Clear lines to earn specials. Fire them at opponents — or yourself when it helps.</p>
   <div class="specials-row">
     <?php
-    $specials = [
-      ['A', 'Add Lines'],
-      ['C', 'Clear Lines'],
-      ['N', 'Nuke'],
-      ['R', 'Random Clear'],
-      ['S', 'Switch Field'],
-      ['B', 'Block Bomb'],
-      ['G', 'Gravity'],
-      ['Q', 'Quake'],
-      ['O', 'Column Clear'],
-      ['→', 'Targeting'],
-    ];
+    $specials = [['a','Add Line'],['c','Clear Line'],['b','Clear Specials'],['r','Random Clear'],['o','Block Bomb'],['q','Quake'],['g','Gravity'],['s','Switch Field'],['n','Nuke'],['i','Immunity'],['v','Clear Column'],['m','Mutate'],['d','Darkness'],['f','Confusion']];
     foreach ($specials as [$key, $name]):
     ?>
     <div class="special-chip">
@@ -550,7 +102,7 @@ footer {
 <div class="section" id="build">
   <p class="eyebrow">Get started</p>
   <h2 class="section-title">Build from source.</h2>
-  <p class="section-sub">A C compiler and SDL2 are all you need. Compiles in seconds.</p>
+  <p class="section-sub">Build the native clients and dedicated server with a C compiler, make, SDL2, SQLite and libcurl.</p>
 
   <div class="tab-bar" role="tablist">
     <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="tab-macos"   onclick="showTab(this,'macos')">macOS</button>
@@ -572,7 +124,7 @@ footer {
   </div>
   <div id="tab-opensuse" class="tab-panel" role="tabpanel">
 <pre class="code-block"><span class="c"># Install dependencies</span>
-<span class="s">sudo zypper</span> install -y gcc make libSDL2-devel sqlite3-devel
+<span class="s">sudo zypper</span> install -y gcc make libSDL2-devel sqlite3-devel libcurl-devel
 
 <span class="c"># Clone and build</span>
 <span class="s">git</span> clone https://github.com/kladhest-se/lineclash.git
@@ -584,7 +136,7 @@ footer {
   </div>
   <div id="tab-ubuntu" class="tab-panel" role="tabpanel">
 <pre class="code-block"><span class="c"># Install dependencies</span>
-<span class="s">sudo apt</span> install gcc make libsdl2-dev
+<span class="s">sudo apt</span> install gcc make libsdl2-dev libsqlite3-dev libcurl4-openssl-dev
 
 <span class="c"># Clone and build</span>
 <span class="s">git</span> clone https://github.com/kladhest-se/lineclash.git
@@ -624,23 +176,12 @@ footer {
     <div class="source-card">
       <h3>License</h3>
       <p>GPL-3.0 — free to use, modify, and distribute.</p>
-      <a class="source-link" href="<?= htmlspecialchars($github_url) ?>/blob/master/LICENSE.md">GPL-3.0 License</a>
+      <a class="source-link" href="<?= htmlspecialchars($github_url) ?>/blob/main/LICENSE.md">GPL-3.0 License</a>
     </div>
   </div>
 </div>
 
-<footer>
-  <div class="footer-inner">
-    <span class="footer-logo">Line<span class="clash">Clash</span> v<?= htmlspecialchars($version) ?></span>
-    <ul class="footer-links">
-      <li><a href="<?= htmlspecialchars($github_url) ?>">GitHub</a></li>
-      <li><a href="<?= htmlspecialchars($github_url) ?>/issues">Issues</a></li>
-      <li><a href="<?= htmlspecialchars($kofi_url) ?>">Ko-fi</a></li>
-      <li><a href="<?= htmlspecialchars($github_url) ?>/blob/master/LICENSE.md">GPL-3.0</a></li>
-    </ul>
-    <span class="footer-copy">&copy; <?= $year ?> Tommy Frössman</span>
-  </div>
-</footer>
+
 
 <script>
 /* ── Tab switching ─────────────────────────────────────── */
@@ -727,7 +268,7 @@ function showTab(btn, id) {
     /* Spawn new pieces so density stays constant */
     while (pieces.length < Math.floor(cols * 0.6)) pieces.push(spawn());
 
-    raf = requestAnimationFrame(draw);
+    if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches) raf = requestAnimationFrame(draw);
   }
 
   const ro = new ResizeObserver(() => {
@@ -746,5 +287,7 @@ function showTab(btn, id) {
   });
 })();
 </script>
-</body>
-</html>
+
+
+</main>
+<?php site_footer("./"); ?>

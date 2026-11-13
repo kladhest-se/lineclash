@@ -73,3 +73,7 @@ Run `python3 tests/test_directory.py` for retry, authentication boundary, and ou
 GitLab CI includes `test:web-directory` with a disposable MariaDB 10.11 service and PHP 8.3. It runs PHP lint, registrar regressions and the full real-server upload checks. Local integration was also verified with MariaDB 13.0.2 on macOS; the CI job must run on its configured Docker runner to verify the pinned Linux combination.
 
 A concrete setup for web002, dbs001 and mgt001 is in [the Kladhest deployment guide](DEPLOYMENT-KLADHEST.md), including remote MariaDB TLS, Apache configuration and the protected refresh script.
+
+## Main website integration
+
+The main homepage surfaces live servers, online population, match totals, ranked leaders and recent results. Top navigation and a shared responsive theme connect `/servers/`, `/leaderboards/`, `/matches/` and `/statistics/`, including player profiles and replay pages. `/directory/` remains a compatible combined view. Server search/open-slot filters, address copying, server-scoped leaderboards and paginated ranked/casual history are available without inspecting JSON. These pages use the existing database schema; no migration is added by the interface integration.
