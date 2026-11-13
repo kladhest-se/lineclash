@@ -29,4 +29,4 @@ For cross-compilation, set `PLATFORM=win32` and `WINDOWS_SDL_PREFIX` to the x64 
 
 Verification evidence: all three x64 executables were cross-compiled and linked with genuine Windows SDL2 and SQLite import libraries on macOS. The GUI PE subsystem and recursive DLL imports were inspected. Native macOS checks cover shared gameplay, reconnects and SDL initialization. Windows execution, audio, network discovery and interactive gameplay still need the Windows verification job or a Windows host; cross-linking cannot establish those results.
 
-The public Windows x64 workflow runs native verification and ZIP packaging on GitHub-hosted Windows runners after pushes and pull requests. It uploads build logs and the package as workflow artifacts; it does not publish a tagged release. This workflow has been added locally and must run after the code is pushed.
+Repository CI is disabled for now. Run verification and ZIP packaging manually on Windows before publishing a Windows build.

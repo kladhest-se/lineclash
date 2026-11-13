@@ -6,7 +6,7 @@ import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_ROOTS = ('version.mk', 'get-version.sh', 'Makefile', '.gitignore', '.gitlab-ci.yml',
+SOURCE_ROOTS = ('version.mk', 'get-version.sh', 'Makefile', '.gitignore',
                 'LICENSE.md', 'CREDITS.md', 'README.md', 'CHANGELOG.md', 'AUDIT.md', 'clients', 'server',
                 'shared', 'tests', 'docker', 'music', 'public-web', 'scripts', 'examples', 'docs', '.github')
 REQUIRED = ('version.mk', 'get-version.sh', 'Makefile', 'LICENSE.md', 'clients', 'server',
