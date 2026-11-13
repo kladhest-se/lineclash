@@ -93,3 +93,7 @@ The main navigation is **Home, Servers, Statistics, Documentation, Source**. Scr
 Home introduces the game in this order: hero, about, features, specials, screenshots, licensing, then Get the game. Server browsing and statistics remain on their dedicated pages; build instructions live on Source. Download buttons in the header and hero jump directly to the lower download section.
 
 The Home design uses a text introduction, numbered sections, and unboxed feature rows with subtle separators. Feature rows include compact native-renderer screenshot thumbnails, which open a keyboard-accessible dialog with fit-to-screen, actual-size and original-image options. The hero contains no screenshot. Screenshots and release links retain the shared colors and animated block background; mobile layouts stack into one column.
+
+Home uses aligned feature rows with small contextual previews, a compact section index, and a separate music/credits gallery. Screenshot boards use independent deterministic sequences of real dropped pieces and different piece counts; the renderer verifies that no two sample boards match. These are illustrative native UI previews, not recorded match results.
+
+To regenerate arena, AI, rules and room screenshots after building the GUI, compile `scripts/render_web_previews.c` with the same objects/libraries as the music UI test (excluding `render_sdl.o`), then run it. It writes `/tmp/lineclash-web-*.bmp`; convert these to PNG in `public-web/assets/screenshots/` and regenerate their 360px thumbnail variants.

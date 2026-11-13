@@ -17,15 +17,17 @@ site_header('Multiplayer falling blocks','home','./');
       <span class="line">Line</span><span class="clash">Clash</span>
     </h1>
     <p class="hero-sub">Fast, brutal multiplayer falling blocks. Up to 8 players, AI bots, 14 specials, full guideline gameplay. Self-hosted.</p>
+    <p class="hero-kicker">Your board. Your rivals. Your rules.</p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="#get">Get the game</a>
-      <a class="btn btn-outline" href="#screenshots">See the game</a>
+      <a class="btn btn-outline" href="#features">See the game</a>
     </div>
   </div>
 </section>
+<nav class="home-index" aria-label="On this page"><a href="#about">The game <span>01</span></a><a href="#features">Features <span>02</span></a><a href="#screenshots">Soundtrack <span>03</span></a><a href="#get">Downloads <span>04</span></a></nav>
 
 <section class="section" id="about" aria-labelledby="about-heading">
-  <p class="eyebrow">01 / About the game</p>
+  <p class="eyebrow">The game</p>
   <h2 class="section-title" id="about-heading">Stack together. Clash with friends.</h2>
   <p class="section-sub">LineClash is a native multiplayer falling-block game. Build clean stacks, clear lines, and send specials to shake up your rivals’ boards. Play in rooms with up to eight players, team up with friends, or practice against AI bots.</p>
   <p>Choose a community server or host your own. Room rules let you shape each session, while spectators, chat and an in-game music library keep the arena lively between rounds.</p>
@@ -35,9 +37,9 @@ site_header('Multiplayer falling blocks','home','./');
 
 <!-- Features -->
 <div class="section" id="features">
-  <p class="eyebrow">02 / Made for play</p>
+  <p class="eyebrow">Made for play</p>
   <h2 class="section-title">Built for your next rivalry.</h2>
-  <p class="section-sub">Real-time multiplayer with the depth of guideline play and the chaos of specials.</p>
+  <p class="section-sub">From a quick practice session to a room full of rivals. Click a preview to take a closer look.</p>
   <div class="features-grid">
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">01</span>
@@ -76,6 +78,7 @@ site_header('Multiplayer falling blocks','home','./');
       <div class="feature-previews"><?php home_preview('servers','Community servers'); ?><?php home_preview('rooms','Hosted rooms'); ?></div>
     </article>
   </div>
+  <p class="preview-note">Native client previews with example players and rooms. Each board uses its own piece sequence.</p>
   <div class="platform-row">
     <div class="platform-chip"><span class="dot"></span>macOS arm64</div>
     <div class="platform-chip"><span class="dot"></span>openSUSE Leap</div>
@@ -88,7 +91,7 @@ site_header('Multiplayer falling blocks','home','./');
 
 <!-- Specials -->
 <div class="section" id="specials">
-  <p class="eyebrow">03 / Change the round</p>
+  <p class="eyebrow">Change the round</p>
   <h2 class="section-title">14 specials. Pick your chaos.</h2>
   <p class="section-sub">Clear lines to earn specials. Fire them at opponents — or yourself when it helps.</p>
   <div class="specials-row">
@@ -107,19 +110,19 @@ site_header('Multiplayer falling blocks','home','./');
 <div class="section-divider"></div>
 
 <section class="section" id="screenshots" aria-labelledby="screenshots-heading">
-<p class="eyebrow">04 / Inside LineClash</p><h2 class="section-title" id="screenshots-heading">Your board. Your rivals. One more round.</h2>
-<p class="section-sub">A native desktop game with competitive rooms, a server browser, and a soundtrack for the next session. Previews rendered by the current development client with example room and player data. Click a thumbnail to enlarge it.</p>
+<p class="eyebrow">Between rounds</p><h2 class="section-title" id="screenshots-heading">Find your rhythm.</h2>
+<p class="section-sub">An in-game music library for long sessions, with track controls and credits close at hand. Explore the player and the people behind the soundtrack.</p>
 <div class="screenshot-grid compact-gallery">
-<?php home_preview('arena','The multiplayer arena'); home_preview('rooms','Rooms & rules'); home_preview('bots','AI players'); home_preview('servers','Discover servers'); ?>
+<?php home_preview('music','In-game music player'); home_preview('credits','Soundtrack credits'); ?>
 </div></section>
 
 <div class="section-divider"></div>
 
-<section class="section" id="license"><p class="eyebrow">05 / Open source</p><h2 class="section-title">Free software. Make it yours.</h2><p class="section-sub">GPL version 3 or later — free to use, modify, and redistribute under its terms. Music and fonts carry their own licenses.</p><div class="hero-actions"><a class="btn btn-outline" href="source/">Source, license &amp; credits →</a><a class="btn btn-outline" href="documentation/">Read the documentation →</a></div></section>
+<section class="section" id="license"><p class="eyebrow">Yours to explore</p><h2 class="section-title">Free software. Make it yours.</h2><p class="section-sub">GPL version 3 or later — free to use, modify, and redistribute under its terms. Music and fonts carry their own licenses.</p><div class="hero-actions"><a class="btn btn-outline" href="source/">Source, license &amp; credits →</a><a class="btn btn-outline" href="documentation/">Read the documentation →</a></div></section>
 
 <div class="section-divider"></div>
 
-<section class="section" id="get" aria-labelledby="get-heading"><p class="eyebrow">06 / Ready when you are</p><h2 class="section-title" id="get-heading">Get the game.</h2>
+<section class="section" id="get" aria-labelledby="get-heading"><p class="eyebrow">Join the next round</p><h2 class="section-title" id="get-heading">Get the game.</h2>
 <p class="section-sub">The latest published GitHub release, with downloads for the platforms available in that release. Drafts and prereleases are excluded.</p>
 <div class="download-panel"><p id="release-status" role="status">Checking the latest release…</p><div id="release-assets" class="release-assets"></div><div class="download-actions"><a class="btn btn-outline" href="https://github.com/kladhest-se/lineclash/releases">All GitHub releases ↗</a><a class="btn btn-outline" href="source/#build">Build from source</a><button type="button" class="copy-button" id="release-retry" hidden>Try again</button></div><noscript><p>Enable JavaScript to check downloads automatically, or visit GitHub releases. Build instructions are available on the Source page.</p></noscript></div>
 <p class="small muted">Native packages may require SDL2 and other runtime libraries. Check the release notes for platform and installation requirements.</p></section>
