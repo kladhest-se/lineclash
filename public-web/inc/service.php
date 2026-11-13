@@ -54,11 +54,55 @@ function directory_peer(array $server,array $config): string {
     return $peer;
 }
 
+function directory_external_ip(): string {
+    // Cache the website's own egress address, never a URL supplied by a caller.
+    $folder=sys_get_temp_dir().'/lineclash-ip-'.substr(hash('sha256',web_config_path()),0,20);
+    if(!is_dir($folder) && !@mkdir($folder,0700) && !is_dir($folder))throw new RuntimeException('Cannot create public-IP cache');
+    if(is_link($folder) || (fileperms($folder)&077)!==0)throw new RuntimeException('Unsafe public-IP cache');
+    $path=$folder.'/address.json';$cached=null;
+    if(is_file($path) && !is_link($path))$cached=json_decode((string)@file_get_contents($path),true);
+    $valid=fn($ip)=>is_string($ip) && filter_var($ip,FILTER_VALIDATE_IP,FILTER_FLAG_IPV4|FILTER_FLAG_NO_PRIV_RANGE|FILTER_FLAG_NO_RES_RANGE)!==false;
+    if(is_array($cached) && ($cached['expires']??0)>time() && $valid($cached['ip']??null))return $cached['ip'];
+    $context=stream_context_create(['http'=>['timeout'=>3,'follow_location'=>0,'ignore_errors'=>false],'ssl'=>['verify_peer'=>true,'verify_peer_name'=>true]]);
+    $ip=trim((string)@file_get_contents('https://api.ipify.org',false,$context,0,64));
+    if(!$valid($ip))throw new RuntimeException('Automatic public-IP lookup failed');
+    $temp=tempnam($folder,'ip-');if($temp===false)throw new RuntimeException('Cannot write public-IP cache');
+    try {chmod($temp,0600);file_put_contents($temp,json_encode(['ip'=>$ip,'expires'=>time()+600],JSON_THROW_ON_ERROR),LOCK_EX);rename($temp,$path);}
+    finally {if(is_file($temp))unlink($temp);}
+    return $ip;
+}
+function directory_public_ip(string $peer,array $config,?callable $lookup=null): string {
+    $mapping=$config['local_public']??[];
+    if(!is_array($mapping) || !in_array($peer,(array)($mapping['from']??[]),true))return $peer;
+    $ip=$mapping['address']??'auto';
+    if($ip==='auto')$ip=($lookup??'directory_external_ip')();
+    if(!is_string($ip) || !filter_var($ip,FILTER_VALIDATE_IP,FILTER_FLAG_NO_PRIV_RANGE|FILTER_FLAG_NO_RES_RANGE))throw new RuntimeException('Invalid public-IP mapping');
+    return $ip;
+}
+
+function directory_verify_endpoint(string $ip,int $port,string $token): bool {
+    $socket=@stream_socket_client('tcp://'.$ip.':'.$port,$errno,$error,1.5);
+    if(!$socket)return false;
+    try {
+        stream_set_timeout($socket,1);
+        $nonce=bin2hex(random_bytes(32));
+        if(fwrite($socket,"directory-proof ".$nonce."\n")===false)return false;
+        $expected='directory-proof '.hash_hmac('sha256','lineclash-directory-v1:'.$nonce,hex2bin($token));
+        $deadline=microtime(true)+2;
+        for($i=0;$i<40 && microtime(true)<$deadline;$i++){
+            $line=fgets($socket,1024);if($line===false)return false;
+            if(hash_equals($expected,trim($line)))return true;
+        }
+        return false;
+    } finally {fclose($socket);}
+}
+
 // Self-registration lists only the HTTP peer's own address. It never grants
 // the trusted operator credentials needed to upload game results.
 function public_register(PDO $db,array $a): array {
     $config=require web_config_path();
-    $ip=directory_peer($_SERVER,$config);
+    $peer=directory_peer($_SERVER,$config);
+    $ip=isset($a['public_ip'])?text_value($a,'public_ip',64):directory_public_ip($peer,$config);
     $flags=empty($config['allow_local_registration'])?FILTER_FLAG_NO_PRIV_RANGE|FILTER_FLAG_NO_RES_RANGE:0;
     if(!filter_var($ip,FILTER_VALIDATE_IP,$flags))throw new InvalidArgumentException('A public source address is required');
     $port=integer_value($a,'port',1,65535);$name=text_value($a,'name',128);
@@ -68,16 +112,24 @@ function public_register(PDO $db,array $a): array {
     $players=integer_value($a,'players',0,80);$capacity=integer_value($a,'capacity',1,80);
     if($players>$capacity)throw new InvalidArgumentException('Invalid player count');
     $id='auto-'.substr(hash('sha256',$ip.':'.$port),0,32);
-    $lock='lc-register-'.substr(hash('sha256',$ip),0,40);
+    $lock='lc-register-'.substr(hash('sha256',$peer),0,40);
     $q=$db->prepare('SELECT GET_LOCK(?,2)');$q->execute([$lock]);
     if((int)$q->fetchColumn()!==1){http_response_code(429);return ['error'=>'Try again later'];}
     try {
+        $source=hash('sha256',$peer);$now=time();
+        $q=$db->prepare('SELECT window_start,requests FROM directory_registration_limits WHERE source_hash=?');$q->execute([$source]);$limit=$q->fetch();
+        $requests=$limit && (int)$limit['window_start']>$now-60?(int)$limit['requests']+1:1;
+        if($requests>20){http_response_code(429);return ['error'=>'Registration rate limit exceeded'];}
+        $start=$requests===1?$now:(int)$limit['window_start'];
+        $q=$db->prepare('REPLACE INTO directory_registration_limits(source_hash,window_start,requests) VALUES (?,?,?)');$q->execute([$source,$start,$requests]);
+        $q=$db->prepare('DELETE FROM directory_registration_limits WHERE window_start<?');$q->execute([$now-86400]);
         $q=$db->prepare('SELECT token_hash FROM directory_servers WHERE id=?');$q->execute([$id]);$row=$q->fetch();
         if($row && !hash_equals($row['token_hash'],hash('sha256',$token))){http_response_code(403);return ['error'=>'Directory key does not match; retain the original key or contact the directory operator'];}
         if(!$row){
             $q=$db->prepare("SELECT COUNT(*) FROM directory_servers WHERE host=? AND id LIKE 'auto-%'");$q->execute([$ip]);
             if((int)$q->fetchColumn()>=8){http_response_code(429);return ['error'=>'Public registration limit reached'];}
         }
+        if(isset($a['public_ip']) && !directory_verify_endpoint($ip,$port,$token)){http_response_code(422);return ['error'=>'Public game endpoint could not be verified; check TCP port forwarding and NAT reflection'];}
         $status=json_encode(['players'=>$players,'capacity'=>$capacity],JSON_THROW_ON_ERROR);
         $q=$db->prepare('INSERT INTO directory_servers(id,name,host,port,token_hash,last_seen,status_json) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name),last_seen=VALUES(last_seen),status_json=VALUES(status_json)');
         $q->execute([$id,$name,$ip,$port,hash('sha256',$token),time(),$status]);

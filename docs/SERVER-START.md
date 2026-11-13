@@ -64,3 +64,13 @@ Servers announce themselves to `https://lineclash.kladhest.se/api/` by default. 
 For a private server, set `public_server = off` and restart. Clients can add it under **Saved servers**. The old public entry expires after the directory TTL, normally three minutes.
 
 A private registration key is stored beside the SQLite database as `DATABASE.directory-key`. Keep it with protected backups and do not publish it. Directory downtime does not stop the game server. Self-registration provides discovery; approved operator credentials are still required by the separate statistics uploader. Registration uses the HTTP peer's public address, ignores client-supplied hosts and forwarded-address headers, and limits each source address to eight registrations.
+
+For a game server on the directory website's own LAN, the website operator can configure automatic mapping from approved LAN addresses to the shared external IPv4. This avoids needing a public hostname. Internet clients use that public IP; internal clients can use the server's LAN IP in Saved servers, or use NAT reflection configured by the network administrator. Port forwarding is still required.
+
+## Automatic verified discovery
+
+Updated servers detect their own external IPv4 over HTTPS, cache it for ten minutes and announce it every minute. The directory connects to the advertised game TCP port with a fresh random challenge. Only a server holding the matching directory key can produce the required HMAC response. A failed check does not publish or refresh the listing. The registration key is never sent through the public game connection.
+
+This no longer needs `local_public` mapping or a shared website/game-server internet connection. `public_ip` can override automatic detection with a public IPv4 when routing requires it. The external game port must match the configured game port. Port forwarding remains necessary. If the directory and game server share a LAN, the directory must also be able to reach the public endpoint, usually using NAT reflection.
+
+Clients can choose **Local network** to discover servers directly over UDP 31459 and connect using their LAN address, without NAT reflection for the players. Discovery is limited to the local IPv4 broadcast network and is not routed across VLANs. Allow UDP 31459 for discovery and TCP on the game port for play. `lan_discovery = off` disables announcements independently of `public_server`.

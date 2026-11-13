@@ -36,6 +36,7 @@ integration: $(C_INTEGRATION)
 	$(PYTHON) test_http.py $(SERVER)
 	$(PYTHON) test_protocol.py $(SERVER)
 	$(PYTHON) test_authority.py $(SERVER)
+	$(PYTHON) test_directory_native.py
 
 test_field: test_field.c $(SHARED)
 	$(CC) $(CFLAGS) $^ -o $@ -lm $(LDFLAGS)
@@ -82,5 +83,5 @@ decoder-sanitize:
 .PHONY: discovery
 discovery:
 	$(MAKE) -C ../clients/gui
-	$(CC) $(CFLAGS) $$(sdl2-config --cflags) test_discovery.c ../clients/gui/src/directory.o -o test_discovery $(LDFLAGS) $(TEST_SDL_LIBS) $(WEB_LIBS)
+	$(CC) $(CFLAGS) $$(sdl2-config --cflags) test_discovery.c ../clients/gui/src/directory.o ../clients/gui/build/net.o -o test_discovery $(LDFLAGS) $(TEST_SDL_LIBS) $(WEB_LIBS)
 	$(PYTHON) test_discovery.py

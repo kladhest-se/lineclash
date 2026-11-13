@@ -1069,6 +1069,7 @@ void sdl_render_server_list(ClientCtx*c){
     dt(32,109,"Your next match starts here.",0xf0f5fcff,2);
     if(dbtn(32,146,166,30,"Public servers",c->server_tab==0?BS_ACTIVE:BS_NORMAL))action=BTN_PUBLIC_SERVERS;
     if(dbtn(208,146,166,30,"Saved servers",c->server_tab==1?BS_ACTIVE:BS_NORMAL))action=BTN_SAVED_SERVERS;
+    if(dbtn(384,146,166,30,"Local network",c->server_tab==2?BS_ACTIVE:BS_NORMAL))action=BTN_LAN_SERVERS;
     if(dbtn(WIN_W-96,22,64,28,"Quit",BS_NORMAL))        action=BTN_QUIT;
     if(dbtn(WIN_W-166,22,62,28,"About",BS_NORMAL))      action=BTN_SRV_ABOUT;
     if(dbtn(WIN_W-238,22,64,28,"Settings",BS_NORMAL))     action=BTN_KEYMAP_POPUP;
@@ -1109,7 +1110,7 @@ void sdl_render_server_list(ClientCtx*c){
          music_set_volume(nv); client_save_settings(c);}
     }
 
-    if(dbtn(LSX,188,144,32,c->server_tab?"+ Add server":"Refresh list",BS_ACTIVE)) action=c->server_tab?BTN_SRV_ADD:BTN_DISCOVER;
+    if(dbtn(LSX,188,144,32,c->server_tab==1?"+ Add server":"Refresh list",BS_ACTIVE)) action=c->server_tab==1?BTN_SRV_ADD:c->server_tab==2?BTN_LAN_SERVERS:BTN_DISCOVER;
     {const char *labels[]={"All servers","Favourites","Recent","Open slots","Ping <=100ms"};
      if(dbtn(LSX+154,188,148,32,labels[c->server_filter%5],BS_NORMAL)) action=BTN_SERVER_FILTER;}
     {const char *labels[]={"Default order","Low latency","Last played"};
@@ -1118,7 +1119,7 @@ void sdl_render_server_list(ClientCtx*c){
     const char *directory_url=SDL_getenv("LINECLASH_DIRECTORY_URL");
     if(directory_url && directory_url_valid(directory_url,0) && dbtn(WIN_W-498,22,104,28,"Browse web",BS_NORMAL)) music_link(directory_url);
 
-    {char count[48];int total=0;for(int n=0;n<c->server_count;n++)if(c->server_tab?(c->server_list[n].locally_saved||!c->server_list[n].discovered):c->server_list[n].discovered)total++;snprintf(count,sizeof(count),"%d %s SERVERS",total,c->server_tab?"SAVED":"PUBLIC");
+    {char count[48];int total=0;for(int n=0;n<c->server_count;n++)if(c->server_tab==2?c->server_list[n].lan:c->server_tab==1?(c->server_list[n].locally_saved||(!c->server_list[n].discovered&&!c->server_list[n].lan)):c->server_list[n].discovered)total++;snprintf(count,sizeof(count),"%d %s SERVERS",total,c->server_tab==2?"LOCAL":c->server_tab==1?"SAVED":"PUBLIC");
      dt(WIN_W-190,137,count,0xbba5f4ff,1);}
     /* Quiet table header lets server names carry the visual weight. */
     fr(LSX,HDR_Y,LSW,32,0x171f30ff);
@@ -1216,7 +1217,7 @@ void sdl_render_server_list(ClientCtx*c){
         }
 
         /* Per-row [Refresh] [Rename] [Remove] buttons */
-        if(c->server_tab) {int bx_rem = LSX+LSW-BTN_W-4;
+        if(c->server_tab==1) {int bx_rem = LSX+LSW-BTN_W-4;
          int bx_ren = bx_rem-BTN_W-6;
          int bx_ref = bx_ren-BTN_W_REF-6;
          int by     = ry+(ROW_H-1-BTN_H)/2;
@@ -1233,10 +1234,10 @@ void sdl_render_server_list(ClientCtx*c){
         surface(LSX,LIST_Y+6,LSW,ROW_H*6-10,0x111c2aff,0x25354aff);
         int icon_y=LIST_Y+65;
         brick_logo(CX-33,icon_y,30,6,loading);
-        dtc(CX,LIST_Y+160,loading?"Finding your next match…":c->server_tab?"Your private server collection.":"Find a community to play with.",0xe9f1fcff,2);
-        dtc(CX,LIST_Y+207,c->server_tab?"Add a host and port to keep your own server list.":"Refresh the public list, or try another filter.",0x97abc5ff,1);
-        if(c->server_tab && dbtn(CX-176,LIST_Y+250,168,38,"+ Add a server",BS_ACTIVE))action=BTN_SRV_ADD;
-        if(!c->server_tab && dbtn(CX-84,LIST_Y+250,168,38,"Refresh list",BS_ACTIVE))action=BTN_DISCOVER;
+        dtc(CX,LIST_Y+160,loading?"Finding your next match…":c->server_tab==2?"Find a game nearby.":c->server_tab==1?"Your private server collection.":"Find a community to play with.",0xe9f1fcff,2);
+        dtc(CX,LIST_Y+207,c->server_tab==2?"Search your local network for a LineClash server.":c->server_tab==1?"Add a host and port to keep your own server list.":"Refresh the public list, or try another filter.",0x97abc5ff,1);
+        if(c->server_tab==1 && dbtn(CX-176,LIST_Y+250,168,38,"+ Add a server",BS_ACTIVE))action=BTN_SRV_ADD;
+        if(c->server_tab!=1 && dbtn(CX-84,LIST_Y+250,168,38,"Refresh list",BS_ACTIVE))action=c->server_tab==2?BTN_LAN_SERVERS:BTN_DISCOVER;
     }
     /* Bottom actions are visible when there is a server to select. */
     if(visible_count>0) {int bot_y = LIST_Y + SRVS_PER_PAGE*ROW_H + 12;

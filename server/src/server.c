@@ -2136,10 +2136,10 @@ void server_run(int port, const char *cfg_path) {
     log_info("%d lobbies available", g_server.lobby_count);
     log_info("Press Ctrl+C to stop. Type 'help' for console commands.");
     server_api_init();
-    g_cfg.port=port;server_directory_start();
+    g_cfg.port=port;server_directory_start();server_lan_start();
 
     while (g_server.running) {
-        server_directory_tick();
+        server_directory_tick();server_lan_tick();
         for(int al=0;al<g_server.lobby_count;al++)for(int ap=0;ap<MAX_PLAYERS;ap++)authority_tick(&g_server.lobbies[al],&g_server.lobbies[al].players[ap]);
         net_flush_all();
         server_api_poll();
@@ -2460,6 +2460,11 @@ void server_run(int port, const char *cfg_path) {
                 char cmd[MAX_MSG_LEN], args[16][MAX_MSG_LEN];
                 int np = proto_parse(line, cmd, args, 16);
 
+                if(!strcmp(cmd,"directory-proof") && np==2){
+                    char proof[65],reply[96];server_directory_proof(args[0],proof);
+                    if(proof[0]){snprintf(reply,sizeof(reply),"directory-proof %s",proof);net_send(pend->sock,reply);}
+                    continue;
+                }
                 if (!strcmp(cmd,"ping") && np>=2) {
                     char pong[64]; snprintf(pong,sizeof(pong),"pong %.58s",args[0]);
                     net_send(pend->sock,pong); continue;
@@ -2808,7 +2813,7 @@ void server_run(int port, const char *cfg_path) {
                 sock_close(lb->players[j].sock);
     }
     sock_close(g_server.listen_sock);
-    server_directory_stop();
+    server_directory_stop();server_lan_stop();
     server_api_shutdown();
     auth_close();
     net_cleanup();

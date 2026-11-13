@@ -64,3 +64,9 @@ void lobby_handle_message(Lobby *lb,Player *p,const char *message);
 void server_directory_start(void);
 void server_directory_tick(void);
 void server_directory_stop(void);
+
+void server_directory_proof(const char *,char out[65]);
+
+void server_lan_start(void);
+void server_lan_tick(void);
+void server_lan_stop(void);

@@ -78,6 +78,7 @@ INC    = -I../shared/include -Isrc
 SERVER_OWN_SRCS = src/lineclashd.c \
                   src/authority.c \
                   src/directory.c \
+                  src/lan.c \
                   src/ai.c \
                   src/server.c      \
                   src/server_cmd.c  \

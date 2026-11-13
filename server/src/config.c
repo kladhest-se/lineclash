@@ -69,7 +69,7 @@ static void cfg_defaults(ServerConfig *c) {
     c->max_players_per_room= MAX_PLAYERS;
     c->num_lobbies         = 3;
     c->global_taunts       = 1;
-    c->public_server=1;
+    c->public_server=1;c->lan_discovery=1;
     c->status_port         = 31458;
     c->status_api          = 1;
     c->debug_auth          = 0;
@@ -145,6 +145,8 @@ int config_load(ServerConfig *cfg, const char *path) {
             strncpy(cfg->db_file, val, CFG_MAX_PATH-1);
         else if (!strcmp(key, "server_name"))
             strncpy(cfg->server_name, val, sizeof(cfg->server_name)-1);
+        else if(!strcmp(key,"public_ip"))snprintf(cfg->public_ip,sizeof(cfg->public_ip),"%s",val);
+        else if(!strcmp(key,"lan_discovery"))cfg->lan_discovery=(!strcmp(val,"1")||!strcasecmp(val,"on")||!strcasecmp(val,"yes"));
         else if (!strcmp(key,"public_server"))
             cfg->public_server=(!strcmp(val,"1")||!strcasecmp(val,"on")||!strcasecmp(val,"yes"));
         else if (!strcmp(key, "status_port"))

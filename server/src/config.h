@@ -33,6 +33,8 @@ typedef struct {
     int  num_lobbies;
     int  global_taunts;
     int  status_port;    /* HTTP JSON status API port */
+    char public_ip[64]; /* optional public IPv4 override */
+    int lan_discovery;
     int public_server; /* announce to the public directory by default */
     int  status_api;     /* 1=enabled, 0=disabled */
     int  debug_auth;     /* legacy diagnostic toggle; secrets are never logged */

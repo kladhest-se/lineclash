@@ -10,6 +10,8 @@ import socket
 import subprocess
 import tempfile
 import time
+import threading
+import hmac
 import urllib.request
 import urllib.error
 import uuid
@@ -45,6 +47,22 @@ with tempfile.TemporaryFile() as log:
         code,body=call(payload=public);assert code==200,(code,body)
         auto_id=json.loads(body)['server_id'];assert auto_id.startswith('auto-')
         assert call(payload=public)[0]==200
+        # Exercise registration's game-port challenge using a loopback fixture.
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1',0));listener.listen();listener.settimeout(4)
+            proof_port=listener.getsockname()[1];proof_key=uuid.uuid4().hex+uuid.uuid4().hex
+            def answer_proof():
+                connection,_=listener.accept()
+                with connection:
+                    connection.settimeout(3);line=b''
+                    while not line.endswith(b'\n'):line+=connection.recv(128)
+                    nonce=line.decode().strip().split()[1]
+                    proof=hmac.new(bytes.fromhex(proof_key),('lineclash-directory-v1:'+nonce).encode(),hashlib.sha256).hexdigest()
+                    connection.sendall(('directory-proof '+proof+'\n').encode())
+            thread=threading.Thread(target=answer_proof);thread.start()
+            code,body=call(payload=dict(public,token=proof_key,port=proof_port,public_ip='127.0.0.1'));assert code==200,(code,body)
+            thread.join(timeout=4);assert not thread.is_alive()
+        assert call(payload=dict(public,token=proof_key,port=proof_port,public_ip='127.0.0.1'))[0]==422
         assert call(payload=dict(public,token='f'*64))[0]==403
         assert call(payload=dict(public,players=9))[0]==400
         assert call(payload=dict(server_id=auto_id,token=public['token'],database_id=uuid.uuid4().hex,games=[]))[0]==403

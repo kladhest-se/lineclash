@@ -121,3 +121,15 @@ The native worker uses libcurl on macOS/Linux and WinHTTP on Windows. Linux serv
 When Apache is behind HAProxy, set `trusted_proxies` in the site's existing `config.inc.php` to the exact HAProxy source IP, for example `['172.16.1.1']` on the private deployment. Leave it empty for direct access. Enable HAProxy's X-Forwarded-For support (`option forwardfor`); it must append the real source address or replace an untrusted inbound header. Never configure it to preserve a caller-supplied header without appending the observed address. The API walks the chain right to left and accepts forwarded headers only from configured proxy peers.
 
 A forwarded RFC1918/LAN address remains private and is rejected for an internet listing. This is intentional: proxy trust does not make a private endpoint internet reachable. Internet clients need a publicly reachable game address and the appropriate port forwarding.
+
+### Automatically mapping local servers to the shared public IP
+
+In `config.inc.php`, `local_public => ['from' => ['172.16.1.100'], 'address' => 'auto']` maps only the listed observed client addresses to the website host's external IPv4. Configure trusted proxies first so a proxy's address does not stand in for unrelated clients. An HTTPS lookup to the fixed ipify endpoint is cached for ten minutes in a private temporary directory. Failures leave the server unlisted until retry; they never publish a private IP. A fixed public IP can replace `auto` if desired.
+
+Use this only when the web host and game server share the same public egress IP. Forward the game TCP port on that public address to the correct LAN game host. Internal players can use Saved servers with the LAN address, or NAT reflection can make the public-IP listing reachable inside the network. Public-IP detection does not create NAT/firewall rules. With multiple internal servers, each needs its own externally forwarded game port.
+
+## Server-owned public address and verified endpoints
+
+Current native servers send `public_ip`, detected on the game server itself, with each registration. The API accepts only a public IP, then checks a fresh `directory-proof NONCE` HMAC challenge over the announced TCP game endpoint. This supports a private registration source without trusting its claimed public endpoint blindly. Public game-result uploads still require separate operator approval. Peer-based `local_public` mapping remains only for older servers; remove that mapping when all servers use the new protocol. Trusted proxy settings can remain for accurate source-based rate limiting.
+
+Run `php bin/manage.php migrate` after refreshing this version: the additive `directory_registration_limits` table bounds registration requests to twenty per observed source per minute. Callback verification has a strict time/read budget and only targets numeric public addresses. The website must reach the advertised endpoint, including through NAT reflection when it shares the game server's LAN. Configure neither game-port TLS nor an HTTP reverse proxy for this callback; it uses the native TCP protocol.

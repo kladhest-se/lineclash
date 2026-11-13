@@ -17,6 +17,8 @@ One `key = value` per line. `#` starts a comment; values are unquoted. Missing k
 
 | Key | Default | Meaning / accepted range |
 | --- | --- | --- |
+| public_ip | automatic | Optional public IPv4 override; otherwise the game server detects its own address |
+| lan_discovery | on | Answer local UDP discovery on port 31459 |
 | public_server | on | Announce this server to the official public directory; off keeps it private |
 | server_name | LineClash | Name in discovery/status |
 | port | 31457 | Game TCP port, 1–65535 |

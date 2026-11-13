@@ -32,15 +32,15 @@ static size_t response_read(char *ptr,size_t size,size_t count,void *unused){
     return bytes;
 }
 #endif
-static void post(void){
+static void request(const char *host,const char *path,const char *body){
     response=0;response_used=0;response_body[0]=0;
 #ifdef PLATFORM_WINDOWS
     HINTERNET session=WinHttpOpen(L"LineClash/1.0",WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0);
     HINTERNET connection=NULL,request=NULL;
-    if(session){WinHttpSetTimeouts(session,3000,3000,3000,5000);connection=WinHttpConnect(session,L"lineclash.kladhest.se",443,0);}
-    if(connection)request=WinHttpOpenRequest(connection,L"POST",L"/api/",NULL,WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,WINHTTP_FLAG_SECURE);
+    if(session){WinHttpSetTimeouts(session,3000,3000,3000,5000);WCHAR wide_host[256];MultiByteToWideChar(CP_UTF8,0,host,-1,wide_host,256);connection=WinHttpConnect(session,wide_host,443,0);}
+    if(connection){WCHAR wide_path[256];MultiByteToWideChar(CP_UTF8,0,path,-1,wide_path,256);request=WinHttpOpenRequest(connection,body?L"POST":L"GET",wide_path,NULL,WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,WINHTTP_FLAG_SECURE);}
     if(request){DWORD redirects=WINHTTP_OPTION_REDIRECT_POLICY_NEVER;WinHttpSetOption(request,WINHTTP_OPTION_REDIRECT_POLICY,&redirects,sizeof(redirects));
-        if(WinHttpSendRequest(request,L"Content-Type: application/json\r\n",(DWORD)-1,payload,(DWORD)strlen(payload),(DWORD)strlen(payload),0)&&WinHttpReceiveResponse(request,NULL)){
+        if(WinHttpSendRequest(request,L"Content-Type: application/json\r\n",(DWORD)-1,(LPVOID)body,body?(DWORD)strlen(body):0,body?(DWORD)strlen(body):0,0)&&WinHttpReceiveResponse(request,NULL)){
             DWORD code=0,size=sizeof(code);if(WinHttpQueryHeaders(request,WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,NULL,&code,&size,NULL))response=code;
             DWORD got=0;
             if(WinHttpReadData(request,response_body,sizeof(response_body)-1,&got)){response_used=got;response_body[got]=0;}
@@ -49,24 +49,42 @@ static void post(void){
     if(request)WinHttpCloseHandle(request);
     if(connection)WinHttpCloseHandle(connection);
     if(session)WinHttpCloseHandle(session);
-    InterlockedExchange(&complete,1);
+
 #else
     CURL *curl=curl_easy_init();
     if(curl){struct curl_slist *headers=NULL;headers=curl_slist_append(headers,"Content-Type: application/json");
-        curl_easy_setopt(curl,CURLOPT_URL,"https://lineclash.kladhest.se/api/");curl_easy_setopt(curl,CURLOPT_HTTPHEADER,headers);
-        curl_easy_setopt(curl,CURLOPT_POSTFIELDS,payload);curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT,3L);curl_easy_setopt(curl,CURLOPT_TIMEOUT,8L);
+        char url[512];snprintf(url,sizeof(url),"https://%s%s",host,path);curl_easy_setopt(curl,CURLOPT_URL,url);curl_easy_setopt(curl,CURLOPT_HTTPHEADER,headers);
+        if(body)curl_easy_setopt(curl,CURLOPT_POSTFIELDS,body);curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT,3L);curl_easy_setopt(curl,CURLOPT_TIMEOUT,8L);
         curl_easy_setopt(curl,CURLOPT_NOSIGNAL,1L);curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,response_read);
         if(curl_easy_perform(curl)==CURLE_OK)curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&response);
         curl_slist_free_all(headers);curl_easy_cleanup(curl);
     }
-    atomic_store(&complete,1);
+
 #endif
 }
+static void announce_work(void){
+    static char external[64];static time_t refreshed;
+    if(g_cfg.public_ip[0])snprintf(external,sizeof(external),"%s",g_cfg.public_ip);
+    else if(!external[0] || time(NULL)-refreshed>=600){
+        request("api.ipify.org","/",NULL);
+        struct in_addr addr;
+        if(response!=200 || inet_pton(AF_INET,response_body,&addr)!=1){response=0;snprintf(response_body,sizeof(response_body),"Public IPv4 detection failed; retrying");return;}
+        snprintf(external,sizeof(external),"%.63s",response_body);refreshed=time(NULL);
+    }
+    char body[1200];size_t n=strlen(payload);
+    snprintf(body,sizeof(body),"%.*s,\"public_ip\":\"%s\"}",(int)n-1,payload,external);
+    request("lineclash.kladhest.se","/api/",body);
+}
 #ifdef PLATFORM_WINDOWS
-static DWORD WINAPI work(LPVOID unused){(void)unused;post();return 0;}
+static DWORD WINAPI work(LPVOID unused){(void)unused;announce_work();InterlockedExchange(&complete,1);return 0;}
 #else
-static void *work(void *unused){(void)unused;post();return NULL;}
+static void *work(void *unused){(void)unused;announce_work();atomic_store(&complete,1);return NULL;}
 #endif
+void server_directory_proof(const char *nonce,char out[65]){
+    out[0]=0;if(!g_cfg.public_server || strlen(token)!=64 || strlen(nonce)!=64 || strspn(nonce,"0123456789abcdef")!=64)return;
+    unsigned char key[32];for(int i=0;i<32;i++){unsigned int byte;if(sscanf(token+i*2,"%2x",&byte)!=1)return;key[i]=(unsigned char)byte;}
+    char message[96];snprintf(message,sizeof(message),"lineclash-directory-v1:%s",nonce);hmac_sha256_hex(key,message,out);
+}
 static void join_worker(void){
 #ifdef PLATFORM_WINDOWS
     WaitForSingleObject(worker,INFINITE);CloseHandle(worker);
@@ -76,7 +94,7 @@ static void join_worker(void){
     busy=0;
 }
 void server_directory_start(void){
-    if(!g_cfg.public_server || getenv("LINECLASH_DIRECTORY_DISABLE"))return;
+    if(!g_cfg.public_server)return;
     char path[CFG_MAX_PATH+32];snprintf(path,sizeof(path),"%s.directory-key",g_cfg.db_file);
     FILE *file=fopen(path,"r");if(file){if(!fgets(token,sizeof(token),file))token[0]=0;fclose(file);}
     if(strlen(token)!=64 || strspn(token,"0123456789abcdef")!=64){
@@ -94,6 +112,7 @@ void server_directory_start(void){
 #endif
         if(fputs(token,file)<0){fclose(file);return;}fclose(file);
     }
+    if(getenv("LINECLASH_DIRECTORY_DISABLE"))return;
 #ifndef PLATFORM_WINDOWS
     if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)return;
 #endif

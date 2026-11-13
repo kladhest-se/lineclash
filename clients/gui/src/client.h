@@ -35,7 +35,7 @@ typedef struct {
     char name[MAX_SERVER_NAME];
     char host[128];
     int  port;
-    int favourite, discovered, locally_saved, capacity, ping_ms;
+    int favourite, discovered, lan, locally_saved, capacity, ping_ms;
     long long last_used;
     char nick[MAX_NICK_LEN];
     char pw_hash[65];             /* sha256(password) — stored in servers file */
@@ -164,7 +164,7 @@ typedef enum {
     BTN_SRV_RENAME_OK,    /* confirm rename          */
     BTN_SRV_CONNECT,      /* connect to selected     */
     BTN_SRV_ABOUT,        /* show about popup        */
-    BTN_PUBLIC_SERVERS, BTN_SAVED_SERVERS,
+    BTN_PUBLIC_SERVERS, BTN_SAVED_SERVERS, BTN_LAN_SERVERS,
     BTN_KEYMAP_POPUP,     /* show keymap editor popup */
     BTN_SRV_REFRESH,      /* force-refresh one server status */
     BTN_DISCOVER, BTN_FAVOURITE, BTN_SERVER_FILTER, BTN_SERVER_SORT,
@@ -522,6 +522,8 @@ void music_set_res_prefix(const char *prefix); /* macOS bundle resource dir */
 
 int client_server_order(ClientCtx *c,int visible[MAX_SAVED_SERVERS]);
 int directory_busy(void);
+int directory_start_lan(char *,int);
+int directory_is_lan(void);
 int directory_start(const char *url,char *message,int length);
 int directory_poll(SavedServer *rows,int capacity,char *message,int length);
 int directory_parse(char *body,SavedServer *rows,int capacity);

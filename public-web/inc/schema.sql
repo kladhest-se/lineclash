@@ -35,3 +35,8 @@ CREATE TABLE IF NOT EXISTS directory_players (
 -- Legacy board reports cannot establish authoritative ranked results.
 ALTER TABLE directory_games ADD COLUMN IF NOT EXISTS input_protocol VARCHAR(16) NOT NULL DEFAULT 'legacy';
 UPDATE directory_games SET ranked=0 WHERE input_protocol<>'input-v1';
+
+CREATE TABLE IF NOT EXISTS directory_registration_limits (
+ source_hash CHAR(64) CHARACTER SET ascii PRIMARY KEY,
+ window_start BIGINT NOT NULL, requests INT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

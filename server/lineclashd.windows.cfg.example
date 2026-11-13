@@ -11,3 +11,7 @@ status_port = 31458
 
 # Announce to the public directory; set off for a private server.
 public_server = on
+
+# Automatic public IPv4 detection; optional override: public_ip = 203.0.113.10
+# Local discovery uses UDP 31459; disable on private/shared networks if desired.
+lan_discovery = on

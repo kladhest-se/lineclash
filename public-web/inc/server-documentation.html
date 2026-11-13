@@ -35,7 +35,12 @@ server shutdown cancel
 <h3 id="server-start-public-discovery-or-a-private-server">Public discovery or a private server</h3>
 <p>Servers announce themselves to <code>https://lineclash.example.org/api/</code> by default. Announcements run on a background worker and retry every 60 seconds. The website lists the connection's source IP and configured game port; allow inbound TCP on that port and forward it when hosting behind NAT. Registration does not configure your firewall or router. The separate HTTP status listener is not needed for registration.</p>
 <p>For a private server, set <code>public_server = off</code> and restart. Clients can add it under <strong>Saved servers</strong>. The old public entry expires after the directory TTL, normally three minutes.</p>
-<p>A private registration key is stored beside the SQLite database as <code>DATABASE.directory-key</code>. Keep it with protected backups and do not publish it. Directory downtime does not stop the game server. Self-registration provides discovery; approved operator credentials are still required by the separate statistics uploader. Registration uses the HTTP peer's public address, ignores client-supplied hosts and forwarded-address headers, and limits each source address to eight registrations.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>
+<p>A private registration key is stored beside the SQLite database as <code>DATABASE.directory-key</code>. Keep it with protected backups and do not publish it. Directory downtime does not stop the game server. Self-registration provides discovery; approved operator credentials are still required by the separate statistics uploader. Registration uses the HTTP peer's public address, ignores client-supplied hosts and forwarded-address headers, and limits each source address to eight registrations.</p>
+<p>For a game server on the directory website's own LAN, the website operator can configure automatic mapping from approved LAN addresses to the shared external IPv4. This avoids needing a public hostname. Internet clients use that public IP; internal clients can use the server's LAN IP in Saved servers, or use NAT reflection configured by the network administrator. Port forwarding is still required.</p>
+<h3 id="server-start-automatic-verified-discovery">Automatic verified discovery</h3>
+<p>Updated servers detect their own external IPv4 over HTTPS, cache it for ten minutes and announce it every minute. The directory connects to the advertised game TCP port with a fresh random challenge. Only a server holding the matching directory key can produce the required HMAC response. A failed check does not publish or refresh the listing. The registration key is never sent through the public game connection.</p>
+<p>This no longer needs <code>local_public</code> mapping or a shared website/game-server internet connection. <code>public_ip</code> can override automatic detection with a public IPv4 when routing requires it. The external game port must match the configured game port. Port forwarding remains necessary. If the directory and game server share a LAN, the directory must also be able to reach the public endpoint, usually using NAT reflection.</p>
+<p>Clients can choose <strong>Local network</strong> to discover servers directly over UDP 31459 and connect using their LAN address, without NAT reflection for the players. Discovery is limited to the local IPv4 broadcast network and is not routed across VLANs. Allow UDP 31459 for discovery and TCP on the game port for play. <code>lan_discovery = off</code> disables announcements independently of <code>public_server</code>.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>
 <section class="documentation-chapter" id="configuration"><h2 id="configuration-configure-a-game-server">Configure a game server</h2>
 <p>Settings are read at startup. Restart after editing the configuration. Room settings saved in SQLite can override initial defaults; use room controls to update an existing room.</p>
 <h3 id="configuration-file-format-and-options">File format and options</h3>
@@ -49,6 +54,16 @@ server shutdown cancel
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>public_ip</td>
+<td>automatic</td>
+<td>Optional public IPv4 override; otherwise the game server detects its own address</td>
+</tr>
+<tr>
+<td>lan_discovery</td>
+<td>on</td>
+<td>Answer local UDP discovery on port 31459</td>
+</tr>
 <tr>
 <td>public_server</td>
 <td>on</td>

@@ -264,7 +264,7 @@ int client_server_order(ClientCtx *c,int visible[MAX_SAVED_SERVERS]) {
     int count=0;
     for(int n=0;n<c->server_count;n++) {
         SavedServer *ss=&c->server_list[n];
-        if(c->server_tab==0?!ss->discovered:!(ss->locally_saved||!ss->discovered))continue;
+        if(c->server_tab==0?!ss->discovered:c->server_tab==2?!ss->lan:!(ss->locally_saved||(!ss->discovered&&!ss->lan)))continue;
         if(c->server_filter==1 && !ss->favourite)continue;
         if(c->server_filter==2 && !ss->last_used)continue;
         if(c->server_filter==4 && (ss->online!=1 || ss->ping_ms<=0 || ss->ping_ms>100))continue;
@@ -285,7 +285,7 @@ static void server_list_save(ClientCtx *c) {
     int i;
     for (i = 0; i < c->server_count; i++) {
         SavedServer *s = &c->server_list[i];
-        if(s->discovered && !s->locally_saved && !s->favourite && !s->last_used) continue;
+        if((s->discovered||s->lan) && !s->locally_saved && !s->favourite && !s->last_used) continue;
         fprintf(f, "[server]\nname=%s\nhost=%s\nport=%d\nnick=%s\nhash=%s\nfavourite=%d\nlast_used=%lld\n\n",
                 s->name, s->host, s->port, s->nick,
                 s->pw_hash[0] ? s->pw_hash : "",s->favourite,s->last_used);
@@ -1145,7 +1145,6 @@ void client_handle_msg(ClientCtx *c, const char *line) {
         ctx_chat(c,"=== GAME OVER ===",COL_LTGRAY);
         sound_play(c,SFX_ROUND_END);
         music_start_menu();
-    client_on_button(&c,BTN_DISCOVER);
         return;
     }
     if (!strcmp(cmd,"playerlost") && n>=2) {
@@ -1974,10 +1973,11 @@ void client_on_button(ClientCtx *c, BtnId btn) {
             }
         }
         break;
+    case BTN_LAN_SERVERS:c->server_tab=2;c->srv_page=0;directory_start_lan(c->directory_message,sizeof(c->directory_message));break;
     case BTN_PUBLIC_SERVERS:c->server_tab=0;c->srv_page=0;client_on_button(c,BTN_DISCOVER);break;
     case BTN_SAVED_SERVERS:c->server_tab=1;c->srv_page=0;break;
     case BTN_DISCOVER:
-        directory_start(getenv("LINECLASH_DIRECTORY_API")?getenv("LINECLASH_DIRECTORY_API"):"https://lineclash.kladhest.se/api/?action=servers&format=text",c->directory_message,sizeof(c->directory_message));
+        directory_start(getenv("LINECLASH_DIRECTORY_API")?getenv("LINECLASH_DIRECTORY_API"):"https://lineclash.kladhest.se/api/",c->directory_message,sizeof(c->directory_message));
         break;
     case BTN_FAVOURITE:
         if(c->server_cursor>=0 && c->server_cursor<c->server_count) {
@@ -2095,7 +2095,6 @@ void client_on_button(ClientCtx *c, BtnId btn) {
         c->state = CS_SERVER_LIST;
         c->lobby_list_count=0;
         music_start_menu();
-    client_on_button(&c,BTN_DISCOVER);
         break;
     case BTN_LOBBY_JOIN:
         if (c->lobby_list_count>0) ctx_join_lobby(c,c->lobby_list[c->lobby_cursor].id);
@@ -2125,7 +2124,6 @@ void client_on_button(ClientCtx *c, BtnId btn) {
         net_send(c->sock,"listlobbies"); /* explicit request in case server auto-send missed */
         net_send(c->sock,"reqleaderboard");
         music_start_menu();
-    client_on_button(&c,BTN_DISCOVER);
         break;
     case BTN_ADD_BOT_EASY:
     case BTN_ADD_BOT_MEDIUM:
@@ -2366,18 +2364,20 @@ void client_tick(ClientCtx *c) {
     else music_start_game();
     music_tick();
     SavedServer found[MAX_SAVED_SERVERS];
+    int lan_result=directory_is_lan();
     int discovered=directory_poll(found,MAX_SAVED_SERVERS,c->directory_message,sizeof(c->directory_message));
     if(discovered>=0) {
         if(c->srv_test_state==10 && c->srv_test_sock!=INVALID_SOCK) {sock_close(c->srv_test_sock);c->srv_test_sock=INVALID_SOCK;c->srv_test_state=0;}
         for(int n=0;n<c->server_count;) {
             SavedServer *old=&c->server_list[n];
-            if(old->discovered && !old->locally_saved && !old->favourite && !old->last_used) {memmove(old,old+1,(c->server_count-n-1)*sizeof(*old));c->server_count--;}
-            else {old->discovered=0;n++;}
+            if((lan_result?old->lan:old->discovered) && !(lan_result?old->discovered:old->lan) && !old->locally_saved && !old->favourite && !old->last_used) {memmove(old,old+1,(c->server_count-n-1)*sizeof(*old));c->server_count--;}
+            else {if(lan_result)old->lan=0;else old->discovered=0;n++;}
         }
         for(int n=0;n<discovered;n++) {
+            found[n].lan=lan_result;found[n].discovered=!lan_result;
             int match=-1;
             for(int j=0;j<c->server_count;j++) if(!strcasecmp(c->server_list[j].host,found[n].host) && c->server_list[j].port==found[n].port) {match=j;break;}
-            if(match>=0){c->server_list[match].capacity=found[n].capacity;c->server_list[match].discovered=1;}
+            if(match>=0){c->server_list[match].capacity=found[n].capacity;if(lan_result)c->server_list[match].lan=1;else c->server_list[match].discovered=1;}
             else if(c->server_count<MAX_SAVED_SERVERS) c->server_list[c->server_count++]=found[n];
         }
         c->server_cursor=c->server_count?0:-1;c->srv_page=0;c->srvlist_probe_idx=0;c->srvlist_probe_timer=1;
