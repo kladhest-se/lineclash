@@ -76,7 +76,7 @@ with tempfile.TemporaryFile() as log:
         for path in ['/', '/servers/', '/leaderboards/', '/matches/', '/statistics/', '/directory/']:
             code,body=call(path);assert code==200,(path,code,body[:300])
             text=body.decode();assert 'aria-label="Main"' in text and 'Statistics' in text and 'assets/site.css' in text,path
-        home=call('/')[1].decode();assert 'id="screenshots"' in home and 'id="get"' in home and 'GPL version 3 or later' in home
+        home=call('/')[1].decode();assert 'id="screenshots"' in home and 'id="get"' in home and 'GPL-3.0-or-later' in home
         stats=call('/statistics/')[1].decode();assert '&lt;Winner&gt;' in stats and '<Winner>' not in stats and 'Leaderboards' in stats and 'Match history' in stats
         servers=call('/servers/?q='+id)[1].decode()
         assert '0 live servers in this view' in servers

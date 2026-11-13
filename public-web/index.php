@@ -20,11 +20,11 @@ site_header('Multiplayer falling blocks','home','./');
     <p class="hero-kicker">Your board. Your rivals. Your rules.</p>
     <div class="hero-actions">
       <a class="btn btn-primary" href="#get">Get the game</a>
-      <a class="btn btn-outline" href="#features">See the game</a>
+      <a class="btn btn-outline" href="#screenshots">See the game</a>
     </div>
   </div>
 </section>
-<nav class="home-index" aria-label="On this page"><a href="#about">The game <span>01</span></a><a href="#features">Features <span>02</span></a><a href="#screenshots">Soundtrack <span>03</span></a><a href="#get">Downloads <span>04</span></a></nav>
+<nav class="home-index" aria-label="On this page"><a href="#about">The game <span>01</span></a><a href="#features">Features <span>02</span></a><a href="#screenshots">Screenshots <span>03</span></a><a href="#get">Downloads <span>04</span></a></nav>
 
 <section class="section" id="about" aria-labelledby="about-heading">
   <p class="eyebrow">The game</p>
@@ -39,46 +39,39 @@ site_header('Multiplayer falling blocks','home','./');
 <div class="section" id="features">
   <p class="eyebrow">Made for play</p>
   <h2 class="section-title">Built for your next rivalry.</h2>
-  <p class="section-sub">From a quick practice session to a room full of rivals. Click a preview to take a closer look.</p>
+  <p class="section-sub">From a quick practice session to a room full of rivals. Make each round your own.</p>
   <div class="features-grid">
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">01</span>
       <h3>Real-time multiplayer</h3>
       <p>Up to 8 players per room. Spectator mode. Team play. Reconnect window keeps your slot when you drop.</p>
-      <div class="feature-previews"><?php home_preview('arena','Multiplayer arena'); ?><?php home_preview('rooms','Choose a room'); ?></div>
     </article>
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">02</span>
       <h3>Guideline gameplay</h3>
       <p>SRS wall kicks, hold piece, lock delay, back-to-back bonus, combos, and perfect clear. All configurable per room.</p>
-      <div class="feature-previews"><?php home_preview('arena','Hold, next piece & boards'); ?><?php home_preview('rules','Room rules'); ?></div>
     </article>
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">03</span>
       <h3>AI bots</h3>
       <p>Configurable difficulty. Bots play with full game rules — garbage targeting, B2B, combos, and all 14 specials.</p>
-      <div class="feature-previews"><?php home_preview('bots','AI difficulty controls'); ?><?php home_preview('arena','Practice in the arena'); ?></div>
     </article>
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">04</span>
       <h3>Persistent rooms</h3>
       <p>Room settings saved to SQLite and restored on restart. Leaderboard and stats HTTP API included.</p>
-      <div class="feature-previews"><?php home_preview('rooms','Room browser'); ?><?php home_preview('rules','Configure a room'); ?></div>
     </article>
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">05</span>
       <h3>Open source. Multiple platforms.</h3>
       <p>Free software built for macOS and Linux. Explore the source, customize the game, and run it on your preferred platform.</p>
-      <div class="feature-previews"><?php home_preview('arena','Native desktop game'); ?><?php home_preview('servers','Desktop server browser'); ?></div>
     </article>
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">06</span>
       <h3>Self-hosted</h3>
       <p>Run your own server. Build for macOS and Linux. Lightweight native clients and a dedicated server.</p>
-      <div class="feature-previews"><?php home_preview('servers','Community servers'); ?><?php home_preview('rooms','Hosted rooms'); ?></div>
     </article>
   </div>
-  <p class="preview-note">Native client previews with example players and rooms. Each board uses its own piece sequence.</p>
   <div class="platform-row">
     <div class="platform-chip"><span class="dot"></span>macOS arm64</div>
     <div class="platform-chip"><span class="dot"></span>openSUSE Leap</div>
@@ -110,15 +103,20 @@ site_header('Multiplayer falling blocks','home','./');
 <div class="section-divider"></div>
 
 <section class="section" id="screenshots" aria-labelledby="screenshots-heading">
-<p class="eyebrow">Between rounds</p><h2 class="section-title" id="screenshots-heading">Find your rhythm.</h2>
-<p class="section-sub">An in-game music library for long sessions, with track controls and credits close at hand. Explore the player and the people behind the soundtrack.</p>
-<div class="screenshot-grid compact-gallery">
-<?php home_preview('music','In-game music player'); home_preview('credits','Soundtrack credits'); ?>
-</div></section>
-
-<div class="section-divider"></div>
-
-<section class="section" id="license"><p class="eyebrow">Yours to explore</p><h2 class="section-title">Free software. Make it yours.</h2><p class="section-sub">GPL version 3 or later — free to use, modify, and redistribute under its terms. Music and fonts carry their own licenses.</p><div class="hero-actions"><a class="btn btn-outline" href="source/">Source, license &amp; credits →</a><a class="btn btn-outline" href="documentation/">Read the documentation →</a></div></section>
+  <p class="eyebrow">Inside LineClash</p>
+  <h2 class="section-title" id="screenshots-heading">Take a closer look.</h2>
+  <p class="section-sub">From the arena to the room browser. Select a thumbnail to open the full screenshot.</p>
+  <div class="screenshot-gallery">
+    <?php home_preview('arena','The multiplayer arena'); home_preview('rooms','Rooms & rules'); ?>
+  </div>
+  <details class="more-screenshots">
+    <summary>More screenshots <span>5 more views</span></summary>
+    <div class="screenshot-gallery">
+      <?php home_preview('bots','AI difficulty controls'); home_preview('rules','Room settings'); home_preview('servers','Discover servers'); home_preview('music','In-game music player'); home_preview('credits','Soundtrack credits'); ?>
+    </div>
+  </details>
+  <p class="preview-note">Native client previews with example players and rooms. Each board uses its own piece sequence.</p>
+</section>
 
 <div class="section-divider"></div>
 
