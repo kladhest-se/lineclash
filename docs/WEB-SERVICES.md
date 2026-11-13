@@ -100,4 +100,10 @@ To regenerate arena, AI, rules and room screenshots after building the GUI, comp
 
 Home omits static platform labels; published GitHub release assets supply the available downloads in Get the game. The introduction is a single paragraph; screenshots include server discovery in the visible gallery. Platform build instructions remain on Source.
 
-The footer contains only Credits, Privacy, Documentation, API and GitHub. `/credits/` lists soundtrack attributions and component notices; `/privacy/` describes public community data and third-party requests; `/api/docs/` documents the community API. These pages share the animated background and work without MariaDB. Website music-credit metadata in `public-web/inc/music-credits.json` is derived from `music/tracks.json`; keep it in sync when updating the soundtrack.
+The footer contains only Credits, Privacy, API and GitHub. `/credits/` lists soundtrack attributions and component notices; `/privacy/` describes public community data and third-party requests; `/api/docs/` documents the community API. These pages share the animated background and work without MariaDB. Website music-credit metadata in `public-web/inc/music-credits.json` is derived from `music/tracks.json`; keep it in sync when updating the soundtrack.
+
+## Website documentation publishing
+
+`/documentation/` contains the full guides with a contents sidebar and local chapter links, including playing, builds, Windows, server configuration, web services, API, deployment, trust, verification and release workflow. It works without MariaDB or GitHub availability. Public deployment examples use example hostnames and reserved documentation IP addresses.
+
+Guide content is generated from the Markdown sources into `public-web/inc/documentation.html`. Install `scripts/requirements-docs.txt`, then run `python3 scripts/build_web_docs.py`; use `--check` to verify that the checked-in page matches its sources. Rebuild it whenever a published guide changes. No Markdown package is required on the web host.

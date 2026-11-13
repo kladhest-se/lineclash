@@ -57,7 +57,7 @@ Move the whole outputs/ directory aside when starting another build/release; pre
 
 ## Source repository and release publication
 
-The current project folder was supplied without Git metadata. Preparation can inspect an uncommitted source archive, but actual publication requires a clean committed Git checkout at the project root with every selected release source tracked. Prefer cloning existing repository history and applying these changes. Do not initialize a replacement history over a populated remote.
+Preparation can inspect an uncommitted source archive, but actual publication requires a clean committed Git checkout at the project root with every selected release source tracked. Prefer cloning existing repository history and applying these changes. Do not initialize a replacement history over a populated remote.
 
 Read-only source-push preflight (contacts the GitHub remote):
 

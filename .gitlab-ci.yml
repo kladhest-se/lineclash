@@ -334,12 +334,15 @@ test:web-directory:
     MYSQL_ROOT_HOST: "%"
     LINECLASH_WEB_CONFIG: /tmp/lineclash-web.php
   before_script:
-    - apt-get update && apt-get install -y python3 make gcc libsqlite3-dev nodejs
+    - apt-get update && apt-get install -y python3 python3-venv make gcc libsqlite3-dev nodejs
     - docker-php-ext-install pdo_mysql
     - cp tests/web-config.ci.php /tmp/lineclash-web.php
+    - python3 -m venv /tmp/lineclash-docs-venv
+    - /tmp/lineclash-docs-venv/bin/pip install -r scripts/requirements-docs.txt
   script:
     - |
       php -r 'require "public-web/inc/service.php"; for ($i=0;$i<60;$i++) { try { database()->query("SELECT 1"); exit(0); } catch(Throwable $e) { usleep(500000); } } exit(1);'
     - find public-web -name '*.php' -exec php -l {} \;
     - python3 tests/test_web_refresh.py
+    - /tmp/lineclash-docs-venv/bin/python scripts/build_web_docs.py --check
     - make directory-test web-test web-js-test

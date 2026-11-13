@@ -4,7 +4,7 @@ Start the server, then open `./clients/gui/lineclash` or run `./clients/cli/line
 
 The first player in a room becomes host. Ready players can start a round using the room's start control; the host can manage bots and room rules. Players on the same named team cooperate. Set or clear the team in the lobby. Room and server chat are separate; the GUI exposes both and room settings through its controls. Spectators watch without playing; use the GUI room controls to spectate and arrows to change the watched player. An eliminated player can also watch opponents.
 
-## Default controls
+## Default desktop controls
 
 | Action | GUI | Terminal |
 | --- | --- | --- |
@@ -25,6 +25,6 @@ If a connection drops during a round, the server reserves the player's slot for 
 
 A silent connection is treated as lost after five seconds without a reply. The grace countdown starts when the client detects the loss; the server reservation starts when it observes the old connection close. Expired slots, a changed round, account disappearance or server restart require a manual choice rather than silently starting a new game. See [trust review](TRUST-REVIEW.md) and [platform verification](PLATFORM-VERIFICATION.md).
 
-The GUI music player includes the title theme and an 18-track in-game library, including all ten cyberpunk-pack pieces. Open **Music Player** in a room or **Player** from the menu. It has track selection, seek, previous/next, pause, shuffle, volume and attribution links. About lists all music credits across pages. See [soundtrack details](../music/README.md) and [credits](../CREDITS.md).
+The GUI music player includes the title theme and an 18-track in-game library, including all ten cyberpunk-pack pieces. Open **Music Player** beside Hold/Next during an active round. The main menu plays only the title theme; leaving a round closes the player. It has track selection, seek, previous/next, pause, shuffle, volume and attribution links. About lists all music credits across pages. See [soundtrack details](../music/README.md) and [credits](../CREDITS.md).
 
 See [discovery, ranked history, health reports, replays and music shortcuts](ENHANCEMENTS.md) for the latest controls, deployment changes and verification limits.

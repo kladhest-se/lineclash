@@ -9,7 +9,7 @@ cp server/lineclashd.cfg.example ./lineclashd.cfg
 
 The example uses relative database/log paths, resolved from the process working directory. Use absolute paths for a service. The server accepts `--config PATH`, `--port PORT`, `--logfile PATH`, `--version` and `--help`; it does not accept `--db`. Command-line port/log overrides win over the file. Configuration is read at startup; restart after editing it.
 
-Without `--config`, macOS uses `~/.lineclashd/lineclashd.cfg`, `database.sqlite3` and `lineclashd.log` in that directory. Linux and Windows defaults are `/etc/lineclashd.cfg`, `/var/lib/lineclashd/database.sqlite3` and `/var/log/lineclashd.log`; use an explicit config with writable paths on Windows or for a Linux user instance. A missing config triggers an attempt to write a commented default file. A service account needs read permission on its config and write permission in its database and log directories. Do not run the game server as root merely to use the default paths.
+Without `--config`, macOS uses `~/.lineclashd/lineclashd.cfg`, `database.sqlite3` and `lineclashd.log` in that directory. Windows defaults are `lineclashd.cfg`, `database.sqlite3` and `lineclashd.log` under `%APPDATA%\LineClash\Server`. Linux defaults are `/etc/lineclashd.cfg`, `/var/lib/lineclashd/database.sqlite3` and `/var/log/lineclashd.log`; use an explicit config with writable paths for a Linux user instance. A missing config triggers an attempt to write a commented default file. A service account needs read permission on its config and write permission in its database and log directories. Do not run the game server as root merely to use the default paths.
 
 ## File format and options
 
