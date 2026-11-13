@@ -46,7 +46,15 @@ class SafeHTML(HTMLParser):
    if key not in ('id','class','href','src','alt','title'):continue
    if key in ('href','src'):value=link(value or '',self.source)
    kept.append(' '+key+'="'+html.escape(value or '',quote=True)+'"')
-  if tag=='img':kept.append(' loading="lazy"')
+  if tag=='img':
+   kept.append(' loading="lazy"')
+   # Reserve image space so lazy loading cannot shift a selected chapter.
+   source=ASSETS.get(Path(urlsplit(dict(attrs).get('src','')).path).name)
+   if source:
+    data=source.read_bytes()[:24]
+    if data[:8]==b'\x89PNG\r\n\x1a\n':
+     width=int.from_bytes(data[16:20],'big');height=int.from_bytes(data[20:24],'big')
+     kept.append(' width="'+str(width)+'" height="'+str(height)+'"')
   self.parts.append('<'+tag+''.join(kept)+'>')
  def handle_endtag(self,tag):
   if tag in self.allowed and tag not in ('hr','br','img'):self.parts.append('</'+tag+'>')

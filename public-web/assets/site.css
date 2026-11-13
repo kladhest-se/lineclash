@@ -1055,3 +1055,13 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 @media(max-width:900px) { .documentation-layout { grid-template-columns:180px minmax(0,1fr); gap:28px; } }
 @media(max-width:760px) { .documentation-shell { padding:35px 24px 60px; } .documentation-layout { display:block; } .documentation-toc { position:static; max-height:none; margin-bottom:38px; } .documentation-toc nav ul { columns:2; column-gap:20px; } .documentation-chapter h2 { font-size:23px; } }
 @media(max-width:480px) { .documentation-toc nav ul { columns:1; } }
+
+/* Anchor navigation keeps the selected chapter title visibly highlighted. */
+.documentation-chapter:target > h2,
+.documentation-chapter :is(h2,h3,h4,h5,h6):target {
+  color:var(--mauve);
+  text-decoration:underline;
+  text-decoration-color:rgba(202,158,230,.45);
+  text-decoration-thickness:2px;
+  text-underline-offset:8px;
+}
