@@ -39,3 +39,26 @@ help:
 	@echo "  make run-server  build and start the server"
 	@echo "  make run-client  build and launch the GUI client"
 	@echo "  make run-cli     build and launch the CLI client"
+
+# Local release preparation. These targets never publish or push tags.
+PYTHON ?= python3
+.PHONY: verify release-plan release-build release-check release-prepare release-tools-test
+verify:
+	bash scripts/verify-platform.sh
+release-plan:
+	$(PYTHON) scripts/release.py plan
+release-build:
+	$(PYTHON) scripts/release.py build
+release-check:
+	$(PYTHON) scripts/release.py check
+release-prepare:
+	$(PYTHON) scripts/release.py prepare
+release-tools-test:
+	$(PYTHON) -B -m unittest discover -s tests/release_tools -v
+
+.PHONY: directory-test web-test
+directory-test:
+	$(PYTHON) tests/test_directory.py
+web-test: server
+	$(PYTHON) tests/test_web_mariadb.py
+	$(PYTHON) tests/test_directory_e2e.py

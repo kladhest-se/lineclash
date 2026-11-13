@@ -6,7 +6,7 @@ source "$(dirname "$0")/common.sh"
 header "Building server  (lineclashd + lineclashd-tool)"
 
 cd "$ROOT"
-make server-clean > /dev/null 2>&1 || true
+make -C server clean > /dev/null 2>&1 || true
 make server
 
 [[ -f "$SERVER_DIR/lineclashd" ]]      || fail "lineclashd not produced"

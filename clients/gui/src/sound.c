@@ -1,6 +1,5 @@
-/* sound.c - Procedural sound effects via SDL audio + MOD music */
+/* Procedural sound effects mixed with the stereo streaming music player. */
 #include "client.h"
-#include "mod.h"
 #include <SDL.h>
 #include <math.h>
 #include <string.h>
@@ -8,7 +7,7 @@
 #include <stdio.h>
 
 #define SAMPLE_RATE     44100
-#define CHANNELS        1
+#define CHANNELS        2
 #define AUDIO_BUF       512
 /* Large enough for the longest sound (GAMEOVER at 0.5s = 22050 samples) */
 #define SFX_MAX_SAMPLES 24000
@@ -24,18 +23,7 @@ static SDL_AudioDeviceID g_dev   = 0;
 static SfxVoice          g_voice;
 static float             g_sfx[SFX_COUNT][SFX_MAX_SAMPLES];
 static int               g_sfx_len[SFX_COUNT];
-static int               g_music_enabled = 1;
-static float             g_sfx_volume    = 0.16f; /* 0.0 – 1.0  default 16% */
-static float             g_music_volume  = 1.0f;  /* 0.0 – 1.0  default 100% */
-static char              g_music_last_path[512] = "";
-static char              g_res_prefix[512] = ""; /* prepended to .mod paths on macOS bundle */
-
-/* Set a directory prefix for all music file lookups (used on macOS app bundle) */
-void music_set_res_prefix(const char *prefix) {
-    if (!prefix || !prefix[0]) { g_res_prefix[0] = '\0'; return; }
-    strncpy(g_res_prefix, prefix, sizeof(g_res_prefix)-1);
-    g_res_prefix[sizeof(g_res_prefix)-1] = '\0';
-}
+static float g_sfx_volume = 0.16f;
 
 /* Generate into buf[0..SFX_MAX_SAMPLES-1], returns number of samples written. */
 static int gen_tone(float *buf, int buf_max,
@@ -146,7 +134,7 @@ static void gen_sfx(SfxId id) {
 
 /* SDL audio callback — called from audio thread */
 static void sfx_callback(void *userdata, unsigned char *stream, int len) {
-    int i, n = len / (int)sizeof(Sint16);
+    int i, n = len / (CHANNELS * (int)sizeof(Sint16));
     Sint16 *out = (Sint16*)stream;
     (void)userdata;
     memset(stream, 0, len);
@@ -156,19 +144,20 @@ static void sfx_callback(void *userdata, unsigned char *stream, int len) {
             float v = g_voice.samples[g_voice.pos];
             if (v >  1.0f) v =  1.0f;
             if (v < -1.0f) v = -1.0f;
-            out[i] = (Sint16)(v * 28000.0f * g_sfx_volume);
+            out[i*2] = out[i*2+1] = (Sint16)(v * 28000.0f * g_sfx_volume);
         }
         if (g_voice.pos >= g_voice.len) g_voice.active = 0;
     }
-    /* MOD music mixed on top */
-    if (g_music_enabled && mod_playing())
-        mod_mix(out, n, 0.7f * g_music_volume);
+    music_mix(out,n);
 }
 
-void sound_set_sfx_volume(float v)   { if(v<0)v=0; if(v>1)v=1; g_sfx_volume=v; }
-float sound_get_sfx_volume(void)     { return g_sfx_volume; }
-void music_set_volume(float v)       { if(v<0)v=0; if(v>1)v=1; g_music_volume=v; }
-float music_get_volume(void)         { return g_music_volume; }
+void sound_set_sfx_volume(float v) {
+    if(!isfinite(v)) return; if(v<0)v=0; if(v>1)v=1;
+    if(g_dev) SDL_LockAudioDevice(g_dev);
+    g_sfx_volume=v;
+    if(g_dev) SDL_UnlockAudioDevice(g_dev);
+}
+float sound_get_sfx_volume(void) { return g_sfx_volume; }
 
 int sound_init(void) {
     SDL_AudioSpec want, got;
@@ -183,71 +172,26 @@ int sound_init(void) {
     g_dev = SDL_OpenAudioDevice(NULL, 0, &want, &got, 0);
     if (!g_dev) return 0;
 
-    mod_init();
+    memset(&g_voice,0,sizeof(g_voice));
+    music_engine_init();
     for (i = 0; i < SFX_COUNT; i++) gen_sfx((SfxId)i);
     SDL_PauseAudioDevice(g_dev, 0);
     return 1;
 }
 
 void sound_shutdown(void) {
-    if (g_dev) {
-        SDL_LockAudioDevice(g_dev);
-        mod_stop();
-        SDL_UnlockAudioDevice(g_dev);
-        SDL_CloseAudioDevice(g_dev);
-        g_dev = 0;
+    if(g_dev) {
+        SDL_PauseAudioDevice(g_dev,1);
+        music_engine_shutdown();
+        SDL_CloseAudioDevice(g_dev); g_dev=0;
     }
 }
-
-/* Load and start a MOD file if it exists; silently skips if not found */
-void music_load(const char *path) {
-    if (!g_dev) return;
-    /* Prepend resource prefix if set (macOS bundle: Contents/Resources/) */
-    char full[1024];
-    if (g_res_prefix[0] && path && path[0] && path[0] != '/') {
-        snprintf(full, sizeof(full), "%s%s", g_res_prefix, path);
-        path = full;
-    }
-    /* Remember path so we can reload on re-enable */
-    if (path && path[0]) {
-        strncpy(g_music_last_path, path, sizeof(g_music_last_path)-1);
-        g_music_last_path[sizeof(g_music_last_path)-1] = '\0';
-    }
-    SDL_LockAudioDevice(g_dev);
-    mod_stop();
-    if (g_music_enabled) mod_load(path);
-    SDL_UnlockAudioDevice(g_dev);
-}
-
-void music_stop(void) {
-    if (!g_dev) return;
-    SDL_LockAudioDevice(g_dev);
-    mod_stop();
-    SDL_UnlockAudioDevice(g_dev);
-}
-
-void music_set_enabled(int enabled) {
-    g_music_enabled = enabled;
-    if (!g_dev) return;
-    SDL_LockAudioDevice(g_dev);
-    if (!enabled) {
-        mod_stop();
-    } else if (g_music_last_path[0]) {
-        /* Reload the last track when re-enabling */
-        mod_load(g_music_last_path);
-    }
-    SDL_UnlockAudioDevice(g_dev);
-}
-
-int music_get_enabled(void) { return g_music_enabled; }
-
-/* No-op on POSIX/SDL — MOD is streamed from the audio callback thread */
-void music_tick(void) {}
 
 void sound_play(ClientCtx *c, SfxId id) {
     int len;
     if (!c->sound_enabled || !g_dev) return;
     if (id < 0 || id >= SFX_COUNT) return;
+    if(id==SFX_SPECIAL_RECV || id==SFX_GAMEOVER || id==SFX_WIN || id==SFX_ROUND_START || id==SFX_ROUND_END) music_duck();
     len = g_sfx_len[id];
     if (len <= 0 || len > SFX_MAX_SAMPLES) return;  /* safety guard */
     SDL_LockAudioDevice(g_dev);

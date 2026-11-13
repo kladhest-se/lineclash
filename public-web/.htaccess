@@ -1,0 +1,7 @@
+Options -Indexes
+RewriteEngine On
+RewriteRule ^(?:inc|bin)(?:/|$) - [F,L]
+RewriteRule ^\.?config.*\.php.*$ - [F,L,NC]
+<FilesMatch "(?i)^(\.?config.*\.php.*|\.env(?:\..*)?|.*\.local\.php.*)$">
+    Require all denied
+</FilesMatch>

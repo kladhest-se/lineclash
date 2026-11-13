@@ -10,11 +10,11 @@ if [[ "$OS" == "Darwin" ]]; then
     command -v brew &>/dev/null || fail "Homebrew not found"
     brew list sdl2 &>/dev/null || brew install sdl2
 elif command -v zypper &>/dev/null; then
-    sudo zypper install -y libSDL2-devel 2>/dev/null || true
+    sudo zypper install -y libSDL2-devel libcurl-devel 2>/dev/null || true
 elif command -v apt-get &>/dev/null; then
-    sudo apt-get install -y libsdl2-dev 2>/dev/null || true
+    sudo apt-get install -y libsdl2-dev libcurl4-openssl-dev 2>/dev/null || true
 elif command -v dnf &>/dev/null; then
-    sudo dnf install -y SDL2-devel 2>/dev/null || true
+    sudo dnf install -y SDL2-devel libcurl-devel 2>/dev/null || true
 fi
 
 cd "$ROOT"

@@ -21,7 +21,7 @@
 #define ATTACK_BAR_Y     (OWN_FIELD_Y + FIELD_HEIGHT * BLOCK_SIZE + 6)
 
 
-#define MAX_SAVED_SERVERS  16
+#define MAX_SAVED_SERVERS  64
 #define MAX_ONLINE_PLAYERS 64
 
 typedef struct {
@@ -35,6 +35,8 @@ typedef struct {
     char name[MAX_SERVER_NAME];
     char host[128];
     int  port;
+    int favourite, discovered, capacity, ping_ms;
+    long long last_used;
     char nick[MAX_NICK_LEN];
     char pw_hash[65];             /* sha256(password) — stored in servers file */
     char password[64];            /* plaintext only in memory, not saved */
@@ -124,6 +126,7 @@ typedef enum {
     BTN_QUIT,
     BTN_TOGGLE_SOUND,
     BTN_TOGGLE_MUSIC,
+    BTN_MUSIC_PLAYER,
     /* Lobby select */
     BTN_LOBBY_JOIN,
     BTN_LOBBY_ROW_0, BTN_LOBBY_ROW_1, BTN_LOBBY_ROW_2, BTN_LOBBY_ROW_3,
@@ -163,6 +166,7 @@ typedef enum {
     BTN_SRV_ABOUT,        /* show about popup        */
     BTN_KEYMAP_POPUP,     /* show keymap editor popup */
     BTN_SRV_REFRESH,      /* force-refresh one server status */
+    BTN_DISCOVER, BTN_FAVOURITE, BTN_SERVER_FILTER, BTN_SERVER_SORT,
     BTN_SRV_ROW_0,        /* click on server row 0   */
     /* In-game attack bar: select target player */
     BTN_TARGET_1, BTN_TARGET_2, BTN_TARGET_3,
@@ -223,6 +227,11 @@ typedef struct {
 typedef struct {
     /* Network */
     sock_t sock;
+    uint64_t last_received, last_probe;
+    NetReconnect reconnect;
+    int reconnect_window, reconnect_room, reconnect_round, reconnect_blocked;
+    char reconnect_host[256];
+
     char   recv_buf[RECV_BUF_SIZE];
     int    recv_len;
     int    running;
@@ -365,9 +374,14 @@ typedef struct {
     SavedServer server_list[MAX_SAVED_SERVERS];
     int         server_count;
     int         server_cursor;     /* selected entry in the list */
+    int server_filter, server_sort;
+    uint64_t probe_started;
+    char directory_message[128];
     int         srv_page;          /* current page of server list (6 per page) */
     int         server_popup_open; /* 0=none 1=add 2=unused 3=rename */
     int         server_edit_idx;
+    int         music_scroll, music_last_index, about_music_page;
+    int         music_player_open;
     int         about_popup_open;
     TextField   tf_srv_rename;     /* popup 3: new alias only */
     /* Add-server test-connect state */
@@ -439,6 +453,7 @@ void client_run_gui(void);            /* entry: shows connect screen, no cmdline
 void client_on_key(ClientCtx *c, int scancode, int sym, int is_text, const char *txt);
 void client_on_button(ClientCtx *c, BtnId btn);
 void client_tick(ClientCtx *c);
+void client_network_tick(ClientCtx *c);
 void client_handle_msg(ClientCtx *c, const char *line);
 void client_sha256_hex(const char *input, char out[65]); /* sha256 hex digest */
 void client_hmac_sha256_hex(const char pw_hash_hex[65], const char *nonce, char out[65]);
@@ -460,6 +475,29 @@ int  sdl_poll_events(ClientCtx *c);
 int  sound_init(void);
 void sound_shutdown(void);
 void sound_play(ClientCtx *c, SfxId id);
+typedef struct {
+    const char *title, *artist, *license, *license_url, *source_url, *file, *attribution, *intro_file;
+} MusicTrack;
+typedef struct {
+    int index, enabled, paused, shuffle, loading, failed, available;
+    double position, duration;
+} MusicPlayback;
+int music_track_count(void);
+const MusicTrack *music_track(int index);
+void music_snapshot(MusicPlayback *out);
+void music_select(int index);
+void music_previous(void);
+void music_next(void);
+void music_toggle_pause(void);
+void music_duck(void);
+void music_set_shuffle(int enabled);
+int music_get_shuffle(void);
+void music_seek(double seconds);
+void music_start_menu(void);
+void music_start_game(void);
+int music_engine_init(void);
+void music_engine_shutdown(void);
+void music_mix(short *samples,int frames);
 void music_load(const char *path);
 void music_stop(void);
 void music_set_enabled(int enabled);
@@ -472,4 +510,10 @@ float music_get_volume(void);
 void music_tick(void);
 void music_set_res_prefix(const char *prefix); /* macOS bundle resource dir */
 
+int client_server_order(ClientCtx *c,int visible[MAX_SAVED_SERVERS]);
+int directory_start(const char *url,char *message,int length);
+int directory_poll(SavedServer *rows,int capacity,char *message,int length);
+int directory_parse(char *body,SavedServer *rows,int capacity);
+int directory_url_valid(const char *url,int local);
+void directory_shutdown(void);
 #endif /* CLIENT_H */

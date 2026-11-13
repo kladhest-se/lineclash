@@ -43,6 +43,7 @@ const char *cfg_default_log(void) {
 
 
 ServerConfig g_cfg;
+static char active_config_path[CFG_MAX_PATH];
 
 static void cfg_defaults(ServerConfig *c) {
     c->port                = DEFAULT_PORT;
@@ -95,14 +96,10 @@ static char *trim(char *s) {
 }
 
 int config_load(ServerConfig *cfg, const char *path) {
-#if defined(__APPLE__)
-    { const char *home=getenv("HOME"); if(home){
-        char dpath[512]; snprintf(dpath,sizeof(dpath),"%s/.lineclashd",home);
-        mkdir(dpath,0755); } }
-#endif
     FILE *f;
     char line[1024];
     if (!path) path = CFG_FILE;
+    snprintf(active_config_path, sizeof(active_config_path), "%s", path);
     cfg_defaults(cfg);
 
     f = fopen(path, "r");
@@ -197,6 +194,7 @@ int config_load(ServerConfig *cfg, const char *path) {
     fclose(f);
 
     /* Clamp values */
+    if (cfg->status_port < 0 || cfg->status_port > 65535) cfg->status_port = 0;
     if (cfg->port <= 0 || cfg->port > 65535)  cfg->port = DEFAULT_PORT;
     if (cfg->max_players_per_room < 2)         cfg->max_players_per_room = 2;
     if (cfg->max_players_per_room > MAX_PLAYERS) cfg->max_players_per_room = MAX_PLAYERS;
@@ -378,7 +376,7 @@ int config_write_default(const char *path) {
 /* Update motd= line in config file in-place (or append if missing) */
 void config_save_key(const char *key, const char *val) {
     /* Generic in-place save: update "key = ..." line in CFG_FILE, or append. */
-    const char *path = CFG_FILE;
+    const char *path = active_config_path[0] ? active_config_path : CFG_FILE;
     FILE *f = fopen(path, "r");
     if (!f) return;
     char lines[512][512]; int n=0;

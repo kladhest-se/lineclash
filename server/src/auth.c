@@ -2,9 +2,7 @@
 #include "auth.h"
 #include "config.h"
 #include "../../shared/include/lineclash.h"
-#include "../sqlite3/sqlite3.h"
-/* sqlite3_changes() may not be in the bundled minimal header */
-extern int sqlite3_changes(sqlite3*);
+#include <sqlite3.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -221,10 +219,22 @@ int auth_open(const char *path){
         "  winner_team  TEXT NOT NULL DEFAULT '',"
         "  player_count INTEGER NOT NULL DEFAULT 0"
         ");",NULL,NULL,NULL);
+    /* Additive match-history migration: legacy dates/ranking remain explicitly unknown. */
+    sqlite3_exec(g_db,"CREATE TABLE IF NOT EXISTS service_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);"
+        "INSERT OR IGNORE INTO service_metadata VALUES('database_id',lower(hex(randomblob(16))));"
+        "CREATE TABLE IF NOT EXISTS replay_events(game_id INTEGER,seq INTEGER,elapsed_ms INTEGER,line TEXT,PRIMARY KEY(game_id,seq));",NULL,NULL,NULL);
+    sqlite3_exec(g_db,"ALTER TABLE games ADD COLUMN started_epoch INTEGER NOT NULL DEFAULT 0;",NULL,NULL,NULL);
+    sqlite3_exec(g_db,"ALTER TABLE games ADD COLUMN ended_epoch INTEGER NOT NULL DEFAULT 0;",NULL,NULL,NULL);
+    sqlite3_exec(g_db,"ALTER TABLE games ADD COLUMN ranked INTEGER NOT NULL DEFAULT 0;",NULL,NULL,NULL);
+    sqlite3_exec(g_db,"ALTER TABLE games ADD COLUMN end_reason TEXT NOT NULL DEFAULT 'legacy';",NULL,NULL,NULL);
+    sqlite3_exec(g_db,"ALTER TABLE games ADD COLUMN replay_truncated INTEGER NOT NULL DEFAULT 0;",NULL,NULL,NULL);
+    sqlite3_exec(g_db,"ALTER TABLE game_stats ADD COLUMN game_id INTEGER NOT NULL DEFAULT 0;",NULL,NULL,NULL);
+    sqlite3_exec(g_db,"ALTER TABLE game_stats ADD COLUMN placement INTEGER NOT NULL DEFAULT 0;",NULL,NULL,NULL);
+    sqlite3_exec(g_db,"CREATE INDEX IF NOT EXISTS game_stats_game ON game_stats(game_id);",NULL,NULL,NULL);
     log_info("Auth: opened '%s'",path);
     return 1;}
 
-void auth_close(void){if(g_db){sqlite3_close(g_db);g_db=NULL;}}
+void auth_close(void){if(g_db){for(int room=1;room<=MAX_LOBBIES;room++)auth_replay_finish(room);sqlite3_close(g_db);g_db=NULL;}}
 
 /* ---- Timestamp helper ---- */
 static void now_str(char *buf, int sz){
@@ -250,13 +260,14 @@ void auth_game_stat_start(const char *nick, int room_id){
     sqlite3_stmt *s=NULL; char ts[32]; now_str(ts,sizeof(ts));
     if(!g_db||!nick||!nick[0]) return;
     if(sqlite3_prepare_v2(g_db,
-        "INSERT INTO game_stats(user_id,nick,room_id,game_started)"
-        " VALUES((SELECT user_id FROM users WHERE nick=? COLLATE NOCASE),?,?,?);",
+        "INSERT INTO game_stats(user_id,nick,room_id,game_started,game_id)"
+        " VALUES((SELECT user_id FROM users WHERE nick=? COLLATE NOCASE),?,?,?,(SELECT MAX(game_id) FROM games WHERE room_id=?));",
         -1,&s,NULL)!=SQLITE_OK) return;
     sqlite3_bind_text(s,1,nick,-1,SQLITE_STATIC);
     sqlite3_bind_text(s,2,nick,-1,SQLITE_STATIC);
     sqlite3_bind_int (s,3,room_id);
     sqlite3_bind_text(s,4,ts,-1,SQLITE_STATIC);
+    sqlite3_bind_int(s,5,room_id);
     sqlite3_step(s); sqlite3_finalize(s);
 }
 
@@ -266,15 +277,17 @@ void auth_game_stat_end(const char *nick, int room_id, int won){
     if(!g_db||!nick||!nick[0]) return;
     if(sqlite3_prepare_v2(g_db,
         "UPDATE game_stats SET game_ended=?, result=?, won=?"
+        " WHERE stat_id=(SELECT stat_id FROM game_stats"
         " WHERE nick=? COLLATE NOCASE AND room_id=? AND game_ended=''"
-        " ORDER BY stat_id DESC LIMIT 1;",
-        -1,&s,NULL)!=SQLITE_OK) return;
+        " ORDER BY stat_id DESC LIMIT 1);",
+        -1,&s,NULL)!=SQLITE_OK) { log_error("Auth: auth_game_stat_end: %s",sqlite3_errmsg(g_db)); return; }
     sqlite3_bind_text(s,1,ts,-1,SQLITE_STATIC);
     sqlite3_bind_text(s,2,won?"win":"loss",-1,SQLITE_STATIC);
     sqlite3_bind_int (s,3,won);
     sqlite3_bind_text(s,4,nick,-1,SQLITE_STATIC);
     sqlite3_bind_int (s,5,room_id);
-    sqlite3_step(s); sqlite3_finalize(s);
+    if(sqlite3_step(s)!=SQLITE_DONE) log_error("Auth: auth_game_stat_end: %s",sqlite3_errmsg(g_db));
+    sqlite3_finalize(s);
 }
 
 /* ---- Game record: log a full game start ---- */
@@ -288,22 +301,38 @@ int auth_game_start(int room_id, int player_count){
     sqlite3_bind_text(s,2,ts,-1,SQLITE_STATIC);
     sqlite3_bind_int (s,3,player_count);
     if(sqlite3_step(s)==SQLITE_DONE) game_id=(int)sqlite3_last_insert_rowid(g_db);
-    sqlite3_finalize(s); return game_id;
+    sqlite3_finalize(s);
+    if(game_id>0) {
+        sqlite3_prepare_v2(g_db,"UPDATE games SET started_epoch=? WHERE game_id=?",-1,&s,NULL);
+        if(s) { sqlite3_bind_int64(s,1,(sqlite3_int64)time(NULL)); sqlite3_bind_int(s,2,game_id); sqlite3_step(s); sqlite3_finalize(s); }
+        auth_replay_start(room_id,game_id);
+    }
+    return game_id;
 }
 
 /* ---- Game record: log game end with winner ---- */
 void auth_game_end(int room_id, const char *winner_nick, const char *winner_team){
     sqlite3_stmt *s=NULL; char ts[32]; now_str(ts,sizeof(ts));
     if(!g_db) return;
+    if(sqlite3_exec(g_db,"BEGIN IMMEDIATE",NULL,NULL,NULL)!=SQLITE_OK) return;
     if(sqlite3_prepare_v2(g_db,
-        "UPDATE games SET ended_at=?, winner_nick=?, winner_team=?"
-        " WHERE room_id=? AND ended_at='' ORDER BY game_id DESC LIMIT 1;",
-        -1,&s,NULL)!=SQLITE_OK) return;
+        "UPDATE games SET ended_at=?, winner_nick=?, winner_team=?, ended_epoch=strftime('%s','now'), end_reason=CASE WHEN end_reason='stopped' THEN end_reason ELSE 'completed' END"
+        " WHERE game_id=(SELECT game_id FROM games"
+        " WHERE room_id=? AND ended_at='' ORDER BY game_id DESC LIMIT 1);",
+        -1,&s,NULL)!=SQLITE_OK) { log_error("Auth: auth_game_end: %s",sqlite3_errmsg(g_db)); sqlite3_exec(g_db,"ROLLBACK",NULL,NULL,NULL); return; }
     sqlite3_bind_text(s,1,ts,-1,SQLITE_STATIC);
     sqlite3_bind_text(s,2,winner_nick?winner_nick:"",-1,SQLITE_STATIC);
     sqlite3_bind_text(s,3,winner_team?winner_team:"",-1,SQLITE_STATIC);
     sqlite3_bind_int (s,4,room_id);
-    sqlite3_step(s); sqlite3_finalize(s);
+    if(sqlite3_step(s)!=SQLITE_DONE) log_error("Auth: auth_game_end: %s",sqlite3_errmsg(g_db));
+    sqlite3_finalize(s);
+    if(sqlite3_prepare_v2(g_db,"UPDATE game_stats SET game_ended=?,won=(nick=? COLLATE NOCASE),result=CASE WHEN ?='' THEN 'draw' WHEN nick=? COLLATE NOCASE THEN 'win' ELSE 'loss' END,placement=CASE WHEN nick=? COLLATE NOCASE THEN 1 ELSE placement END WHERE game_id=(SELECT MAX(game_id) FROM games WHERE room_id=?)",-1,&s,NULL)==SQLITE_OK) {
+        sqlite3_bind_text(s,1,ts,-1,SQLITE_STATIC);
+        for(int j=2;j<=5;j++) sqlite3_bind_text(s,j,winner_nick?winner_nick:"",-1,SQLITE_STATIC);
+        sqlite3_bind_int(s,6,room_id); sqlite3_step(s); sqlite3_finalize(s);
+    }
+    auth_replay_finish(room_id);
+    sqlite3_exec(g_db,"COMMIT",NULL,NULL,NULL);
 }
 
 int auth_count_users(void){
@@ -353,15 +382,8 @@ AuthResult auth_verify_login(const char*nick,const char*nonce_hex,const char*hma
         if(sh&&hex2bytes(sh,key)){hmac_sha256_hex(key,nonce_hex,exp);ok=(strcmp(exp,hmac_hex)==0);}
         sqlite3_finalize(s);
         if(ok){log_info("Auth: '%s' logged in",nick);return AUTH_OK;}
-        if(g_cfg.debug_auth)
-            log_info("Auth: wrong password for '%s' db_hash=[%s](%zu) nonce=[%s](%zu) exp=[%s] got=[%s]",
-                     nick,
-                     sh?sh:"NULL", sh?strlen(sh):0,
-                     nonce_hex, strlen(nonce_hex),
-                     exp, hmac_hex);
-        else
-            log_info("Auth: wrong password for '%s' (db_hash_len=%zu)",
-                     nick, sh?strlen(sh):0);
+        /* SQLite column storage is invalid after finalize; never log keys. */
+        log_info("Auth: wrong password for '%s'", nick);
         return AUTH_WRONG_PASSWORD;}
     sqlite3_finalize(s);return AUTH_ERROR;}
 
@@ -409,11 +431,17 @@ void auth_set_team(const char*nick,const char*team){
 /* ---- Gameplay stats ---- */
 static void _inc(const char*nick,const char*col,int n){
     sqlite3_stmt*st=NULL;
-    char q[128]; snprintf(q,sizeof(q),"UPDATE users SET %s=%s+? WHERE nick=? COLLATE NOCASE;",col,col);
+    char q[512]; snprintf(q,sizeof(q),"UPDATE users SET %s=%s+? WHERE nick=? COLLATE NOCASE;",col,col);
     if(!g_db||!nick||!nick[0]||n<=0)return;
     if(sqlite3_prepare_v2(g_db,q,-1,&st,NULL)!=SQLITE_OK)return;
     sqlite3_bind_int(st,1,n); sqlite3_bind_text(st,2,nick,-1,SQLITE_STATIC);
     sqlite3_step(st); sqlite3_finalize(st);
+    if(!strcmp(col,"lines_cleared") || !strcmp(col,"specials_sent") || !strcmp(col,"blocks_placed") || !strcmp(col,"taunts_sent") || !strcmp(col,"messages_sent")) {
+        snprintf(q,sizeof(q),"UPDATE game_stats SET %s=%s+? WHERE stat_id=(SELECT stat_id FROM game_stats WHERE nick=? COLLATE NOCASE AND game_ended='' AND game_id IN (SELECT game_id FROM games WHERE ended_at='') AND EXISTS(SELECT 1 FROM users WHERE nick=game_stats.nick COLLATE NOCASE AND status='playing') ORDER BY stat_id DESC LIMIT 1)",col,col);
+        if(sqlite3_prepare_v2(g_db,q,-1,&st,NULL)==SQLITE_OK) {
+            sqlite3_bind_int(st,1,n);sqlite3_bind_text(st,2,nick,-1,SQLITE_STATIC);sqlite3_step(st);sqlite3_finalize(st);
+        }
+    }
 }
 void auth_add_taunts(const char*nick,int n)    {_inc(nick,"taunts_sent",n);}
 void auth_add_specials(const char*nick,int n)  {_inc(nick,"specials_sent",n);}
@@ -1013,3 +1041,60 @@ void auth_set_room_bots(int room_id, int bot_count, int bot_difficulty) {
     sqlite3_finalize(st);
 }
 
+
+/* Bounded, in-memory public gameplay trace. No per-frame SQLite writes or chat/auth data. */
+#define REPLAY_LIMIT 2048
+typedef struct { uint64_t ms; char line[MAX_MSG_LEN]; } ReplayEvent;
+static struct { ReplayEvent *events; int count,game_id,truncated; uint64_t start; } replays[MAX_LOBBIES];
+void auth_replay_start(int room,int game_id) {
+    if(room<1 || room>MAX_LOBBIES) return;
+    int i=room-1; free(replays[i].events); memset(&replays[i],0,sizeof(replays[i]));
+    replays[i].events=calloc(REPLAY_LIMIT,sizeof(ReplayEvent)); replays[i].game_id=game_id; replays[i].start=net_now_ms();
+}
+void auth_replay_record(int room,const char *line) {
+    if(room<1 || room>MAX_LOBBIES || !line) return;
+    int i=room-1; if(!replays[i].events) return;
+    const char *prefixes[]={"newgame ","roundid ","f ","sb ","playerlost ","playerwon ","pause ","endgame","playerjoin ","lockdelay "};
+    int allowed=0; for(unsigned j=0;j<sizeof(prefixes)/sizeof(prefixes[0]);j++) if(!strncmp(line,prefixes[j],strlen(prefixes[j]))) allowed=1;
+    if(!allowed) return;
+    if(replays[i].count>=REPLAY_LIMIT) { replays[i].truncated=1; return; }
+    ReplayEvent *e=&replays[i].events[replays[i].count++]; e->ms=net_now_ms()-replays[i].start; strncpy(e->line,line,sizeof(e->line)-1);
+}
+void auth_replay_finish(int room) {
+    if(!g_db || room<1 || room>MAX_LOBBIES) return;
+    int i=room-1; if(!replays[i].events) return;
+    sqlite3_stmt *s=NULL;
+    int own=sqlite3_get_autocommit(g_db);
+    if(!own || sqlite3_exec(g_db,"BEGIN",NULL,NULL,NULL)==SQLITE_OK) {
+        int ok=sqlite3_prepare_v2(g_db,"INSERT INTO replay_events VALUES(?,?,?,?)",-1,&s,NULL)==SQLITE_OK;
+        for(int j=0;ok && j<replays[i].count;j++) {
+            sqlite3_bind_int(s,1,replays[i].game_id); sqlite3_bind_int(s,2,j); sqlite3_bind_int64(s,3,replays[i].events[j].ms);
+            sqlite3_bind_text(s,4,replays[i].events[j].line,-1,SQLITE_STATIC); ok=sqlite3_step(s)==SQLITE_DONE; sqlite3_reset(s);
+        }
+        sqlite3_finalize(s); s=NULL;
+        if(sqlite3_prepare_v2(g_db,"UPDATE games SET replay_truncated=? WHERE game_id=?",-1,&s,NULL)==SQLITE_OK) {
+            sqlite3_bind_int(s,1,replays[i].truncated || !ok); sqlite3_bind_int(s,2,replays[i].game_id); sqlite3_step(s); sqlite3_finalize(s);
+        }
+        if(own) sqlite3_exec(g_db,ok?"COMMIT":"ROLLBACK",NULL,NULL,NULL);
+    }
+    free(replays[i].events); replays[i].events=NULL;
+}
+void auth_game_ranked(int room,int ranked) {
+    sqlite3_stmt *s=NULL;
+    if(!g_db) return;
+    if(sqlite3_prepare_v2(g_db,"UPDATE games SET ranked=? WHERE game_id=(SELECT MAX(game_id) FROM games WHERE room_id=?)",-1,&s,NULL)==SQLITE_OK) {
+        sqlite3_bind_int(s,1,ranked); sqlite3_bind_int(s,2,room); sqlite3_step(s); sqlite3_finalize(s);
+    }
+}
+void auth_game_stopped(int room) {
+    sqlite3_stmt *s=NULL; if(!g_db) return;
+    if(sqlite3_prepare_v2(g_db,"UPDATE games SET ranked=0,end_reason='stopped' WHERE game_id=(SELECT MAX(game_id) FROM games WHERE room_id=?)",-1,&s,NULL)==SQLITE_OK) {
+        sqlite3_bind_int(s,1,room); sqlite3_step(s); sqlite3_finalize(s);
+    }
+}
+void auth_game_place(int room,const char *nick,int place) {
+    sqlite3_stmt *s=NULL; if(!g_db) return;
+    if(sqlite3_prepare_v2(g_db,"UPDATE game_stats SET placement=? WHERE nick=? COLLATE NOCASE AND placement=0 AND game_id=(SELECT MAX(game_id) FROM games WHERE room_id=?)",-1,&s,NULL)==SQLITE_OK) {
+        sqlite3_bind_int(s,1,place); sqlite3_bind_text(s,2,nick,-1,SQLITE_STATIC); sqlite3_bind_int(s,3,room); sqlite3_step(s); sqlite3_finalize(s);
+    }
+}

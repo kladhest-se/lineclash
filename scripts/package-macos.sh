@@ -26,11 +26,9 @@ cp "$CLIENT_DIR/lineclash" "$BUNDLE/Contents/MacOS/lineclash"
 chmod +x "$BUNDLE/Contents/MacOS/lineclash"
 ok "Binary copied"
 
-for mod in lineclash_menu.mod lineclash_game.mod; do
-    for dir in "$ROOT/music" "$ROOT" "$CLIENT_DIR"; do
-        [[ -f "$dir/$mod" ]] && { cp "$dir/$mod" "$BUNDLE/Contents/Resources/$mod"; ok "$mod bundled"; break; } || true
-    done
-done
+cp -R "$ROOT/music" "$BUNDLE/Contents/Resources/music"
+cp "$ROOT/CREDITS.md" "$BUNDLE/Contents/Resources/CREDITS.md"
+cp "$ROOT/docs/licenses/Roboto-OFL.txt" "$BUNDLE/Contents/Resources/Roboto-OFL.txt"
 
 header "Bundling SDL2"
 BIN="$BUNDLE/Contents/MacOS/lineclash"
@@ -181,6 +179,11 @@ cp -r "$SRV_BUNDLE" "$ST/LineClash/lineclashd.app"
     ok "lineclashd-tool added (standalone)"
 }
 
+cp "$ROOT/LICENSE.md" "$ST/LineClash/LICENSE.md"
+cp "$ROOT/CREDITS.md" "$ST/LineClash/CREDITS.md"
+cp -R "$ROOT/docs" "$ST/LineClash/docs"
+cp "$ROOT/server/lineclashd.cfg.example" "$ST/LineClash/lineclashd.cfg.example"
+
 cat > "$ST/LineClash/README.txt" << EOF
 LineClash v$VERSION — Multiplayer Falling Blocks (macOS $MAC_ARCH)
 
@@ -189,7 +192,7 @@ CLIENT:  Double-click LineClash.app — or drag to Applications.
 
 SERVER:  Double-click lineclashd.app to start the server (port 31457).
          Or run from Terminal: ./lineclashd.app/Contents/MacOS/lineclashd
-         Admin tool: ./lineclashd-tool localhost status
+         Admin tool: ./lineclashd-tool --help
 
 CLI:     ./lineclash-cli <server>
 EOF

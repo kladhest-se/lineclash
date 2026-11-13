@@ -170,6 +170,10 @@ Lobby *server_create_lobby(Server *srv, const char *name) {
 
 /* ---- Send settings to one socket ---- */
 static void lobby_send_settings(Lobby *lb, sock_t sock) {
+    char reconnect_msg[48];
+    snprintf(reconnect_msg,sizeof(reconnect_msg),"reconnectwindow %d",g_cfg.reconnect_window);
+    net_send(sock,reconnect_msg);
+
     char buf[MAX_MSG_LEN];
     snprintf(buf, sizeof(buf), "lobbysettings %d %d %d %d %d %d %d %d",
              lb->id, lb->no_attacks, lb->last_player_wins, lb->no_taunts,
@@ -282,6 +286,12 @@ static void broadcast_lobby_list_update(void) {
 
 /* ---- Broadcast ---- */
 void lobby_broadcast(Lobby *lb, const char *msg, int exclude_slot) {
+    auth_replay_record(lb->id,msg);
+    if(!strncmp(msg,"playerlost ",11)) {
+        int slot=atoi(msg+11),alive=0;
+        for(int j=0;j<MAX_PLAYERS;j++) if(lb->players[j].connected && !lb->players[j].spectator && lb->players[j].alive) alive++;
+        if(slot>=1 && slot<=MAX_PLAYERS) auth_game_place(lb->id,lb->players[slot-1].nick,alive+1);
+    }
     int i;
     for (i = 0; i < MAX_PLAYERS; i++) {
         Player *p = &lb->players[i];
@@ -348,8 +358,41 @@ void lobby_start_game(Lobby *lb) {
     if (active < 1) return;
 
     lb->game_state = STATE_PLAYING;
+    lb->session_round++;
+    char round_msg[48]; snprintf(round_msg,sizeof(round_msg),"roundid %d",lb->session_round);
+    lobby_broadcast(lb,round_msg,-1);
     lb->game_start_time  = time(NULL);
     lb->speedup_last_add = time(NULL);
+    /* Record game start in DB — only when 2+ human players */
+    {int pc=0,humans=0,i2;
+     for(i2=0;i2<MAX_PLAYERS;i2++)
+         if(lb->players[i2].connected&&!lb->players[i2].spectator&&!lb->players[i2].is_bot)
+             humans++;
+     for(i2=0;i2<MAX_PLAYERS;i2++) if(lb->players[i2].connected&&!lb->players[i2].spectator) pc++;
+     lb->track_stats = (humans >= 2 && humans == pc); /* store flag for end-of-game */
+     auth_game_start(lb->id, pc);
+     auth_game_ranked(lb->id,lb->track_stats);
+     {
+         for(i2=0;i2<MAX_PLAYERS;i2++){
+             if(lb->players[i2].connected&&!lb->players[i2].spectator&&!lb->players[i2].is_bot){
+                 auth_set_status(lb->players[i2].nick,"playing");
+                 auth_game_stat_start(lb->players[i2].nick,lb->id);
+             }
+         }
+
+     }}
+    if (g_cfg.debug_ingame) {
+        /* List all active players at game start */
+        char plist[256]=""; int pi;
+        for(pi=0;pi<MAX_PLAYERS;pi++){
+            if(lb->players[pi].connected&&lb->players[pi].nick[0]&&!lb->players[pi].spectator){
+                if(plist[0]) strncat(plist,", ",sizeof(plist)-strlen(plist)-1);
+                strncat(plist,lb->players[pi].nick,sizeof(plist)-strlen(plist)-1);
+            }
+        }
+        log_info("[INGAME R%d] game start: players=[%s] no_attacks=%d last_wins=%d",
+                 lb->id, plist, lb->no_attacks, lb->last_player_wins);
+    }
 
     /* Clear ready flags — they must re-ready for the next round */
     for (i = 0; i < MAX_PLAYERS; i++)
@@ -425,38 +468,7 @@ void lobby_start_game(Lobby *lb) {
     { char ldmsg[32]; snprintf(ldmsg,sizeof(ldmsg),"lockdelay %d",lb->lock_delay_ms);
       lobby_broadcast(lb, ldmsg, -1); }
     broadcast_lobby_list_update();
-    /* Record game start in DB — only when 2+ human players */
-    {int pc=0,humans=0,i2;
-     for(i2=0;i2<MAX_PLAYERS;i2++)
-         if(lb->players[i2].connected&&!lb->players[i2].spectator&&!lb->players[i2].is_bot)
-             humans++;
-     for(i2=0;i2<MAX_PLAYERS;i2++) if(lb->players[i2].connected&&!lb->players[i2].spectator) pc++;
-     lb->track_stats = (humans >= 2); /* store flag for end-of-game */
-     auth_game_start(lb->id, pc);
-     if(lb->track_stats) {
-         for(i2=0;i2<MAX_PLAYERS;i2++){
-             if(lb->players[i2].connected&&!lb->players[i2].spectator&&!lb->players[i2].is_bot){
-                 auth_set_status(lb->players[i2].nick,"playing");
-                 auth_game_stat_start(lb->players[i2].nick,lb->id);
-             }
-         }
-     } else {
-         for(i2=0;i2<MAX_PLAYERS;i2++)
-             if(lb->players[i2].connected&&!lb->players[i2].spectator&&!lb->players[i2].is_bot)
-                 auth_set_status(lb->players[i2].nick,"playing");
-     }}
-    if (g_cfg.debug_ingame) {
-        /* List all active players at game start */
-        char plist[256]=""; int pi;
-        for(pi=0;pi<MAX_PLAYERS;pi++){
-            if(lb->players[pi].connected&&lb->players[pi].nick[0]&&!lb->players[pi].spectator){
-                if(plist[0]) strncat(plist,", ",sizeof(plist)-strlen(plist)-1);
-                strncat(plist,lb->players[pi].nick,sizeof(plist)-strlen(plist)-1);
-            }
-        }
-        log_info("[INGAME R%d] game start: players=[%s] no_attacks=%d last_wins=%d",
-                 lb->id, plist, lb->no_attacks, lb->last_player_wins);
-    } else {
+    {
         g_stat_games_started++;
     log_info("Lobby %d: Game started (no_attacks=%d last_player_wins=%d)",
                  lb->id, lb->no_attacks, lb->last_player_wins);
@@ -520,6 +532,22 @@ void lobby_end_game(Lobby *lb, const char *winner) {
         log_info("Lobby %d: %s ready=%d after game end", lb->id, pp->nick, pp->ready);
     }
 
+    /* Every round gets a completed match record, including draws and unranked games. */
+    {
+        char winner_team[MAX_NICK_LEN]="";
+        for (i=0;i<MAX_PLAYERS;i++) {
+            Player *pp=&lb->players[i];
+            if (!pp->connected) continue;
+            if (winner && !strcasecmp(pp->nick,winner))
+                strncpy(winner_team,pp->team,MAX_NICK_LEN-1);
+            if (pp->is_bot || !pp->nick[0]) continue;
+            if (lb->track_stats && !pp->spectator)
+                auth_game_stat_end(pp->nick,lb->id,winner && !strcmp(pp->nick,winner));
+            auth_set_status(pp->nick,"idle");
+        }
+        auth_game_end(lb->id,winner?winner:"",winner_team);
+    }
+
     /* Skip DB stats if bot-only or solo vs bots game */
     if (!lb->track_stats) {
         goto skip_stats;
@@ -542,20 +570,6 @@ void lobby_end_game(Lobby *lb, const char *winner) {
         int found = 0, i;
         /* Persist to DB first */
         if(lb->track_stats) auth_add_win(winner);
-        /* Find winner's team for DB record */
-        {char wteam_db[MAX_NICK_LEN]=""; int wi;
-         for(wi=0;wi<MAX_PLAYERS;wi++)
-             if(lb->players[wi].connected&&!strcasecmp(lb->players[wi].nick,winner))
-                 {strncpy(wteam_db,lb->players[wi].team,MAX_NICK_LEN-1);break;}
-         auth_game_end(lb->id, winner, wteam_db);}
-        /* Record game end stats for all players */
-        for(i=0;i<MAX_PLAYERS;i++){
-            if(lb->players[i].connected&&lb->players[i].nick[0]&&!lb->players[i].is_bot){
-                int won=winner&&strcmp(lb->players[i].nick,winner)==0;
-                if(lb->track_stats) auth_game_stat_end(lb->players[i].nick,lb->id,won);
-                auth_set_status(lb->players[i].nick,"idle");
-            }
-        }
         /* Update in-memory lobby leaderboard */
         for (i = 0; i < lb->lb_count; i++) {
             if (strcmp(lb->lb_nicks[i], winner) == 0) {
@@ -765,6 +779,14 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
     n = proto_parse(msg, cmd, args, 16);
     if (n == 0) return;
 
+    /* Never dispatch gameplay before enforcing round and pause state. */
+    {
+        int gameplay = !strcmp(cmd,"f") || !strcmp(cmd,"lineclear") ||
+            !strcmp(cmd,"sb") || !strcmp(cmd,"lvl") ||
+            !strcmp(cmd,"holdpiece") || !strcmp(cmd,"holdclear");
+        if (gameplay && (lb->game_state != STATE_PLAYING || !p->alive ||
+                        p->spectator || lb->paused)) return;
+    }
     /* Spectators may only chat or leave */
     if (p->spectator) {
         if (strcmp(cmd, "pline") == 0 && n >= 2) {
@@ -845,6 +867,10 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
 
     /* ---- FIELD UPDATE ---- */
     if (strcmp(cmd, "f") == 0 && n >= 3) {
+        if (atoi(args[0]) != p->slot || strlen(args[1]) != FIELD_WIDTH * FIELD_HEIGHT) return;
+        for (int ci=0; args[1][ci]; ci++)
+            if (!((args[1][ci]>='0' && args[1][ci]<='9') ||
+                  (args[1][ci]>='a' && args[1][ci]<='m'))) return;
         p->sv_last_field = time(NULL);
         int old_lines = p->field.lines;
         int old_score = p->field.score;
@@ -1097,8 +1123,7 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
             lobby_remove_player(lb, p);
             return;
         }
-        /* Accept display level; level-ups are driven from lineclear */
-        if (new_level > p->field.level) p->field.level = new_level;
+        /* Display levels are server-owned; client claims cannot raise them. */
         snprintf(buf, sizeof(buf), "lvl %d %d", p->slot, p->field.level);
         lobby_broadcast(lb, buf, p->slot);
         return;
@@ -1108,7 +1133,7 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
     if (strcmp(cmd, "sb") == 0 && n >= 4) {
         int to_slot   = atoi(args[0]);
         char sp_char  = args[1][0];
-        int from_slot = atoi(args[2]);
+        int from_slot = p->slot; /* identity comes from the authenticated socket */
         Player *target = NULL;
         int i;
 
@@ -1121,20 +1146,12 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
             for (si2=0; SPECIAL_CHARS[si2]; si2++)
                 if (SPECIAL_CHARS[si2]==sp_char){sp_req=(uint8)(si2+1);break;}
             if (sp_req == 0) return; /* unknown special char */
-            /* Check server queue */
-            if (p->sv_specials_head == p->sv_specials_tail) {
-                /* Queue empty — client fired faster than server awarded (lag).
-                 * For self-targeted specials trust the client; for attacks drop. */
-                if (to_slot != p->slot) {
-                    if (g_cfg.debug_ingame)
-                        log_info("[DEBUG R%d] %s fired special with empty queue (ignored)",
-                                 lb->id, p->nick);
-                    return;
-                }
-                /* Self-target with empty queue: synthesise so we can consume below */
-                p->sv_specials[p->sv_specials_tail % 64] = sp_req;
-                p->sv_specials_tail = (p->sv_specials_tail + 1) % 64;
-            }
+            /* Validate the target and exact inventory item before consuming. */
+            if (strlen(args[1]) != 1 || to_slot < 1 || to_slot > MAX_PLAYERS ||
+                !lb->players[to_slot-1].connected || !lb->players[to_slot-1].alive ||
+                lb->players[to_slot-1].spectator) return;
+            if (p->sv_specials_head == p->sv_specials_tail ||
+                p->sv_specials[p->sv_specials_head % 64] != sp_req) return;
             /* Consume from server queue */
             p->sv_specials_head = (p->sv_specials_head + 1) % 64;
         }
@@ -1230,6 +1247,7 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
     /* ---- ANTI-CHEAT: heartbeat check (called with cmd="__tick__") ---- */
     if (strcmp(cmd, "__hb__") == 0) {
         time_t now = time(NULL);
+        if (lb->paused) { p->sv_last_field=now; return; }
         if (p->is_bot) return; /* bots managed by AI tick, not heartbeat */
         if (p->alive && !p->spectator &&
             lb->game_state == STATE_PLAYING &&
@@ -1272,7 +1290,7 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
 
         if (lb->last_player_wins) {
             for (i = 0; i < MAX_PLAYERS; i++) {
-                if (lb->players[i].connected && lb->players[i].alive
+                if ((lb->players[i].connected || lb->players[i].reconnect_expires>time(NULL)) && lb->players[i].alive
                         && !lb->players[i].spectator) {
                     alive_count++;
                     last_alive = &lb->players[i];
@@ -1281,7 +1299,7 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
             /* End if ≤1 alive, OR if all remaining alive are bots */
             int human_alive = 0;
             for (i = 0; i < MAX_PLAYERS; i++) {
-                if (lb->players[i].connected && lb->players[i].alive
+                if ((lb->players[i].connected || lb->players[i].reconnect_expires>time(NULL)) && lb->players[i].alive
                         && !lb->players[i].spectator && !lb->players[i].is_bot)
                     human_alive++;
             }
@@ -1292,7 +1310,7 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
         else {
             int human_alive2 = 0;
             for (i = 0; i < MAX_PLAYERS; i++) {
-                if (lb->players[i].connected && lb->players[i].alive
+                if ((lb->players[i].connected || lb->players[i].reconnect_expires>time(NULL)) && lb->players[i].alive
                         && !lb->players[i].spectator) {
                     alive_count++;
                     last_alive = &lb->players[i];
@@ -1456,33 +1474,6 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
         return;
     }
 
-    /* ---- PAUSE ENFORCEMENT — reject gameplay while paused ---- */
-    if (lb->paused && lb->game_state == STATE_PLAYING && !p->is_bot) {
-        int is_gameplay = (!strcmp(cmd,"f") || !strcmp(cmd,"lineclear") ||
-                           !strcmp(cmd,"sb") || !strcmp(cmd,"lvl"));
-        if (is_gameplay) {
-            p->sv_cheat_strikes++;
-            if (g_cfg.debug_ingame)
-                log_info("[DEBUG R%d] %s sent '%s' while paused (strike %d)",
-                         lb->id, p->nick, cmd, p->sv_cheat_strikes);
-            if (p->sv_cheat_strikes >= 10) {
-                log_info("[ANTICHEAT R%d] Kicking %s: ignored pause (%d violations)",
-                         lb->id, p->nick, p->sv_cheat_strikes);
-                net_send(p->sock, "kicked You were kicked: ignoring server pause");
-                net_send(p->sock, "noconnecting Kicked for ignoring pause");
-                { char kb[MAX_MSG_LEN];
-                  snprintf(kb,sizeof(kb),"gmsg *** %s was kicked (ignored pause)",p->nick);
-                  lobby_broadcast(lb,kb,-1); }
-                p->alive = 0;
-                snprintf(buf,sizeof(buf),"playerlost %d",p->slot);
-                lobby_broadcast(lb,buf,p->slot);
-                sock_close(p->sock); p->sock=INVALID_SOCK;
-                lobby_remove_player(lb,p);
-            }
-            return;
-        }
-    }
-
     /* ---- END GAME — host, admin, or priv level ≤ 2 can force-end a round ---- */
     if (strcmp(cmd, "endgame") == 0) {
         int can=(p->slot==lb->host_slot||p->is_admin||p->priv_level<=2);
@@ -1492,6 +1483,7 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
         snprintf(ebuf,sizeof(ebuf),"gmsg *** Game ended by %s",p->nick);
         lobby_broadcast(lb,ebuf,-1);
         log_info("Lobby %d: game ended by %s",lb->id,p->nick);
+        auth_game_stopped(lb->id);
         lobby_end_game(lb,NULL);
         return;
     }
@@ -1728,8 +1720,8 @@ static Player *lobby_add_player(Lobby *lb, sock_t sock,
     int is_first;
     int joining_mid_game = (lb->game_state == STATE_PLAYING);
 
-    if (lb->player_count >= lb->max_players) {
-        /* Check if this nick has a reserved reconnect slot */
+    {
+        /* Restore a reservation regardless of whether the room is full. */
         int rslot = -1;
         for (i = 0; i < MAX_PLAYERS; i++) {
             if (!lb->players[i].connected && lb->players[i].reconnect_nick[0] &&
@@ -1738,19 +1730,21 @@ static Player *lobby_add_player(Lobby *lb, sock_t sock,
                 rslot = i; break;
             }
         }
-        if (rslot < 0) return NULL;
+        if (rslot >= 0) {
         /* Reconnect: restore this slot */
         Player *rp = &lb->players[rslot];
         rp->sock = sock;
         rp->connected = 1;
         rp->reconnect_nick[0] = '\0';
         rp->reconnect_expires = 0;
+        rp->recv_len = 0; rp->recv_buf[0] = 0;
+        rp->sv_last_field = time(NULL);
         /* Restore recv buffer */
         if (recv_buf && recv_len > 0) {
             memcpy(rp->recv_buf, recv_buf, recv_len);
             rp->recv_len = recv_len;
         }
-        lb->player_count++;
+        /* Reserved slots already count toward player_count. */
         char rbuf[MAX_MSG_LEN];
         snprintf(rbuf, sizeof(rbuf), "gmsg *** %s reconnected!", nick);
         lobby_broadcast(lb, rbuf, -1);
@@ -1761,16 +1755,35 @@ static Player *lobby_add_player(Lobby *lb, sock_t sock,
           net_send(sock, hbuf); }
         lobby_send_settings(lb, sock);
         /* Re-send game state to reconnecting client */
+        snprintf(rbuf,sizeof(rbuf),"resume_ok %d %d",lb->session_round,rp->alive);
+        net_send(sock,rbuf);
+        snprintf(rbuf,sizeof(rbuf),"spectator %d",rp->spectator); net_send(sock,rbuf);
+        snprintf(rbuf,sizeof(rbuf),"pause %d",lb->paused); net_send(sock,rbuf);
+        for (int oi=0; oi<MAX_PLAYERS; oi++) {
+            Player *other=&lb->players[oi];
+            if (!other->connected || other==rp) continue;
+            snprintf(rbuf,sizeof(rbuf),"playerjoin %d %s",other->slot,other->nick); net_send(sock,rbuf);
+            char enc[FIELD_WIDTH*FIELD_HEIGHT+8]; field_encode(&other->field,enc,sizeof(enc));
+            snprintf(rbuf,sizeof(rbuf),"f %d %s",other->slot,enc); net_send(sock,rbuf);
+            if(!other->alive) { snprintf(rbuf,sizeof(rbuf),"playerlost %d",other->slot); net_send(sock,rbuf); }
+        }
+        char inventory[65]; int ic=0;
+        for(int ii=rp->sv_specials_head;ii!=rp->sv_specials_tail;ii=(ii+1)%64)
+            inventory[ic++]=SPECIAL_CHARS[rp->sv_specials[ii%64]-1];
+        inventory[ic]=0;
+        snprintf(rbuf,sizeof(rbuf),"resume_inventory %s",ic?inventory:"-"); net_send(sock,rbuf);
         net_send(sock, "ingame");
         { char ldbuf[32]; snprintf(ldbuf,sizeof(ldbuf),"lockdelay %d",lb->lock_delay_ms);
           net_send(sock, ldbuf); }
         { char enc[FIELD_WIDTH*FIELD_HEIGHT+8]; char fm[MAX_MSG_LEN];
           field_encode(&rp->field, enc, sizeof(enc));
-          snprintf(fm, sizeof(fm), "f %d %s", rp->slot, enc);
+          snprintf(fm, sizeof(fm), "resume_field %s", enc);
           net_send(sock, fm); }
         log_info("Lobby %d: %s reconnected to slot %d", lb->id, nick, rp->slot);
         return rp;
+        }
     }
+    if (lb->player_count >= lb->max_players) return NULL;
 
     for (i = 0; i < MAX_PLAYERS; i++) {
         if (!lb->players[i].connected && !lb->players[i].reconnect_nick[0]) { slot = i + 1; break; }
@@ -1963,17 +1976,6 @@ void lobby_remove_player(Lobby *lb, Player *p) {
         /* Mark as disconnected but slot reserved */
         p->connected = 0;
         /* Don't decrement player_count — slot is held */
-        /* End game immediately if no humans remain alive */
-        if (!was_spectator && lb->game_state == STATE_PLAYING) {
-            int human_alive = 0;
-            for (i = 0; i < MAX_PLAYERS; i++) {
-                if (lb->players[i].connected && lb->players[i].alive
-                        && !lb->players[i].spectator && !lb->players[i].is_bot)
-                    human_alive++;
-            }
-            if (human_alive == 0)
-                lobby_end_game(lb, NULL);
-        }
         return;
     }
 
@@ -2115,6 +2117,52 @@ void server_run(int port, const char *cfg_path) {
     server_api_init();
 
     while (g_server.running) {
+        net_flush_all();
+        server_api_poll();
+        {
+            time_t now_expiry=time(NULL);
+            for (int eli=0; eli<g_server.lobby_count; eli++) {
+                Lobby *expiry_lb=&g_server.lobbies[eli];
+                        /* Expire stale reconnect slots */
+                        { int ri;
+                          for (ri = 0; ri < MAX_PLAYERS; ri++) {
+                              Player *rp = &expiry_lb->players[ri];
+                              if (!rp->connected && rp->reconnect_nick[0] &&
+                                  rp->reconnect_expires > 0 && now_expiry >= rp->reconnect_expires) {
+                                  char rbuf[MAX_MSG_LEN];
+                                  snprintf(rbuf, sizeof(rbuf), "gmsg *** %s reconnect window expired",
+                                           rp->reconnect_nick);
+                                  lobby_broadcast(expiry_lb, rbuf, -1);
+                                  snprintf(rbuf, sizeof(rbuf), "playerleave %d", rp->slot);
+                                  lobby_broadcast(expiry_lb, rbuf, rp->slot);
+                                  auth_set_status(rp->reconnect_nick, "offline");
+                                  int expired_host=(rp->slot==expiry_lb->host_slot);
+                                  memset(rp, 0, sizeof(*rp));
+                                  expiry_lb->player_count--;
+                                  if(expired_host) {
+                                      expiry_lb->host_slot=0;
+                                      for(int hi=0;hi<MAX_PLAYERS;hi++)
+                                          if(expiry_lb->players[hi].connected && !expiry_lb->players[hi].is_bot) {
+                                              expiry_lb->host_slot=expiry_lb->players[hi].slot; break;
+                                          }
+                                      snprintf(rbuf,sizeof(rbuf),"host %d",expiry_lb->host_slot);
+                                      lobby_broadcast(expiry_lb,rbuf,-1);
+                                  }
+                              }
+                          }
+                        }
+
+                int active=0, reserved=0;
+                for (int ri=0; ri<MAX_PLAYERS; ri++) {
+                    Player *rp=&expiry_lb->players[ri];
+                    if (rp->connected && rp->alive && !rp->is_bot && !rp->spectator) active++;
+                    if (rp->reconnect_nick[0] && rp->reconnect_expires>now_expiry) reserved++;
+                }
+                if (!active && !reserved && expiry_lb->game_state==STATE_PLAYING)
+                    lobby_end_game(expiry_lb,NULL);
+            }
+        }
+
         sock_t max_fd = g_server.listen_sock;
 
         FD_ZERO(&read_fds);
@@ -2185,24 +2233,6 @@ void server_run(int port, const char *cfg_path) {
                     /* ---- Speed-up: add lines after delay, every interval ---- */
                     if (lb2->speedup_enabled && lb2->game_start_time > 0) {
                         time_t now2 = time(NULL);
-                        /* Expire stale reconnect slots */
-                        { int ri;
-                          for (ri = 0; ri < MAX_PLAYERS; ri++) {
-                              Player *rp = &lb2->players[ri];
-                              if (!rp->connected && rp->reconnect_nick[0] &&
-                                  rp->reconnect_expires > 0 && now2 >= rp->reconnect_expires) {
-                                  char rbuf[MAX_MSG_LEN];
-                                  snprintf(rbuf, sizeof(rbuf), "gmsg *** %s reconnect window expired",
-                                           rp->reconnect_nick);
-                                  lobby_broadcast(lb2, rbuf, -1);
-                                  snprintf(rbuf, sizeof(rbuf), "playerleave %d", rp->slot);
-                                  lobby_broadcast(lb2, rbuf, rp->slot);
-                                  auth_set_status(rp->reconnect_nick, "offline");
-                                  memset(rp, 0, sizeof(*rp));
-                                  lb2->player_count--;
-                              }
-                          }
-                        }
                         int elapsed = (int)(now2 - lb2->game_start_time);
                         int delay_s = lb2->speedup_delay * 60;
                         if (elapsed >= delay_s) {
@@ -2406,6 +2436,10 @@ void server_run(int port, const char *cfg_path) {
                 char cmd[MAX_MSG_LEN], args[16][MAX_MSG_LEN];
                 int np = proto_parse(line, cmd, args, 16);
 
+                if (!strcmp(cmd,"ping") && np>=2) {
+                    char pong[64]; snprintf(pong,sizeof(pong),"pong %.58s",args[0]);
+                    net_send(pend->sock,pong); continue;
+                }
                 /* ---- CLIENTINFO — client type/platform/version ---- */
                 if (strcmp(cmd, "clientinfo") == 0 && np >= 4 && pend->auth_ok) {
                     /* Store temporarily in pending; copied to Player on lineclash_join */
@@ -2625,12 +2659,28 @@ void server_run(int port, const char *cfg_path) {
                         int room_id = 1;
                         Lobby *lb;
                         Player *player;
-                        snprintf(nick,   MAX_NICK_LEN, "%s", args[0]); nick[MAX_NICK_LEN-1]='\0';
+                        if (strcasecmp(args[0], pend->pending_nick)) {
+                            net_send(pend->sock, "joinerr Nickname must match authenticated account");
+                            continue;
+                        }
+                        snprintf(nick, MAX_NICK_LEN, "%s", pend->pending_nick);
                         snprintf(team_s, MAX_NICK_LEN, "%s", args[1]); team_s[MAX_NICK_LEN-1]='\0';
                         if (np >= 4) room_id = atoi(args[2]);
                         if (room_id < 1 || room_id > g_server.lobby_count) room_id = 1;
                         lb = server_find_lobby(&g_server, room_id);
                         if (!lb) lb = &g_server.lobbies[0];
+                        if (np >= 6 && !strcmp(args[3], "resume")) {
+                            int reserved = 0;
+                            for (int ri=0; ri<MAX_PLAYERS; ri++) {
+                                Player *rp=&lb->players[ri];
+                                if (!rp->connected && !strcasecmp(rp->reconnect_nick,nick) &&
+                                    rp->reconnect_expires>time(NULL)) reserved=1;
+                            }
+                            if (!reserved || atoi(args[4]) != lb->session_round || lb->game_state != STATE_PLAYING) {
+                                net_send(pend->sock, "reconnect_failed Round ended or reconnect window expired");
+                                continue;
+                            }
+                        }
                         player = lobby_add_player(lb, pend->sock, nick, team_s,
                                                   pend->recv_buf, pend->recv_len);
                         if (!player) {

@@ -1,0 +1,19 @@
+# Ordinary-user example. Paths are relative to the startup working directory.
+server_name = LineClash
+port = 31457
+db_file = ./lineclashd.sqlite3
+log_file = ./lineclashd.log
+motd = Welcome to LineClash!
+require_registered = 0
+num_lobbies = 3
+max_players_per_room = 8
+status_api = on
+status_port = 31458
+allow_bots = on
+debug_auth = off
+debug_ingame = off
+reconnect_window = 15
+garbage_system = 0
+garbage_targeting = 0
+hold_enabled = 1
+# See docs/CONFIGURATION.md for all options and deployment guidance.

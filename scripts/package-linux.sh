@@ -33,17 +33,19 @@ _build_staging() {
              "$rr/usr/share/applications" "$rr/usr/share/man/man6" \
              "$rr/usr/sbin" "$rr/usr/bin"
 
+    mkdir -p "$rr/usr/share/doc/lineclash"
+    cp "$ROOT/LICENSE.md" "$ROOT/README.md" "$rr/usr/share/doc/lineclash/"
+    cp -R "$ROOT/docs" "$rr/usr/share/doc/lineclash/docs"
+    cp "$ROOT/server/lineclashd.cfg.example" "$rr/usr/share/doc/lineclash/"
     cp "$CLIENT_DIR/lineclash"    "$rr/usr/games/lineclash";        chmod 755 "$rr/usr/games/lineclash"
     cp "$SERVER_DIR/lineclashd"   "$rr/usr/sbin/lineclashd";        chmod 755 "$rr/usr/sbin/lineclashd"
     [[ -f "$SERVER_DIR/lineclashd-tool" ]] && {
         cp "$SERVER_DIR/lineclashd-tool" "$rr/usr/bin/lineclashd-tool"; chmod 755 "$rr/usr/bin/lineclashd-tool"; }
     cp "$CLI_DIR/lineclash-cli"   "$rr/usr/bin/lineclash-cli";      chmod 755 "$rr/usr/bin/lineclash-cli"
 
-    for mod in lineclash_menu.mod lineclash_game.mod; do
-        for dir in "$ROOT/music" "$ROOT" "$CLIENT_DIR"; do
-            [[ -f "$dir/$mod" ]] && { cp "$dir/$mod" "$rr/usr/share/lineclash/"; break; } || true
-        done
-    done
+    cp -R "$ROOT/music" "$rr/usr/share/lineclash/music"
+    cp "$ROOT/CREDITS.md" "$rr/usr/share/doc/lineclash/CREDITS.md"
+    cp "$ROOT/docs/licenses/Roboto-OFL.txt" "$rr/usr/share/doc/lineclash/Roboto-OFL.txt"
 
     cat > "$rr/usr/share/applications/lineclash.desktop" << DESK
 [Desktop Entry]
@@ -73,7 +75,7 @@ if [[ $DO_RPM -eq 1 ]]; then
     mkdir -p "$TOP"/{BUILD,RPMS,SOURCES,SPECS,SRPMS} "$RR"
     _build_staging "$RR"
 
-    MOD_FILES="$(find "$RR/usr/share/lineclash" -maxdepth 1 -type f 2>/dev/null | sed "s|$RR||" || true)"
+    MOD_FILES="/usr/share/lineclash/music"
     EXTRA=""
     [[ -f "$RR/usr/sbin/lineclashd" ]]      && EXTRA="$EXTRA\n/usr/sbin/lineclashd"
     [[ -f "$RR/usr/bin/lineclashd-tool" ]]  && EXTRA="$EXTRA\n/usr/bin/lineclashd-tool"
@@ -89,11 +91,12 @@ URL:         https://github.com/frossmant/lineclash
 %description
 LineClash — a cross-platform multiplayer falling blocks clone in the LineClash
 tradition. Play with friends, bots, or spectate in real time.
-SDL2 is statically linked in this build.
+Requires the SDL2 and libcurl runtimes used for this build.
 %install
 cp -a ${RR}/. %{buildroot}/
 %files
 %defattr(-,root,root,-)
+/usr/share/doc/lineclash
 /usr/games/lineclash
 %dir /usr/share/lineclash
 ${MOD_FILES}
@@ -136,7 +139,7 @@ if [[ $DO_OPENSUSE -eq 1 ]]; then
     mkdir -p "$TOP"/{BUILD,RPMS,SOURCES,SPECS,SRPMS} "$RR"
     _build_staging "$RR"
 
-    MOD_FILES="$(find "$RR/usr/share/lineclash" -maxdepth 1 -type f 2>/dev/null | sed "s|$RR||" || true)"
+    MOD_FILES="/usr/share/lineclash/music"
     EXTRA=""
     [[ -f "$RR/usr/sbin/lineclashd" ]]      && EXTRA="$EXTRA\n/usr/sbin/lineclashd"
     [[ -f "$RR/usr/bin/lineclashd-tool" ]]  && EXTRA="$EXTRA\n/usr/bin/lineclashd-tool"
@@ -149,17 +152,18 @@ Name:           lineclash
 Version:        ${RV}
 Release:        1.${dist_tag}
 Summary:        Multiplayer Falling Blocks (LineClash protocol) - openSUSE Leap ${leap_ver}
-License:        GPL-3.0-only
+License:        GPL-3.0-or-later
 URL:            https://github.com/frossmant/lineclash
 %description
 LineClash - a cross-platform multiplayer falling blocks clone in the LineClash
 tradition. Play with friends, bots, or spectate in real time.
-SDL2 is statically linked in this build.
+Requires the SDL2 and libcurl runtimes used for this build.
 Target: openSUSE Leap ${leap_ver}
 %install
 cp -a ${RR}/. %{buildroot}/
 %files
 %defattr(-,root,root,-)
+/usr/share/doc/lineclash
 /usr/games/lineclash
 %dir /usr/share/lineclash
 ${MOD_FILES}
@@ -225,10 +229,11 @@ Section: games
 Priority: optional
 Architecture: ${DA}
 Maintainer: frossmant <https://github.com/frossmant>
-Homepage: https://github.com/frossmant/lineclash
+Homepage: https://github.com/kladhest-se/lineclash
+Depends: libsdl2-2.0-0, libcurl4t64 | libcurl4
 Description: Multiplayer Falling Blocks (LineClash protocol)
  LineClash is a cross-platform multiplayer falling blocks clone in the
- LineClash tradition. SDL2 is statically linked.
+ LineClash tradition. Requires SDL2, libcurl and SQLite runtimes.
 CTRL
 
     (cd "$PKG" && find usr -type f | sort | xargs md5sum > DEBIAN/md5sums 2>/dev/null || true)

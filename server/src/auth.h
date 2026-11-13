@@ -78,7 +78,7 @@ int  auth_get_room_team_wins(int room_id, TeamLbRow *rows, int max_rows);
 int  auth_get_recent_games(int limit, RecentGame *out, int max_out);
 int auth_get_team_leaderboard(TeamLbRow *rows, int max_rows);
 
-#endif /* AUTH_H */
+
 
 /* ---- Admin & ban management ---- */
 int  auth_is_admin(const char *nick);
@@ -112,3 +112,11 @@ int  auth_list_all_nicks(char *out, int outsz, const char *filter);
 int  auth_delete_corrupt_dupes(const char *nick);
 int  auth_fix_hash(const char *nick, const char *pw_hash_hex);
 int  auth_list_banned_ips(char *buf, int bufsz);
+
+void auth_replay_start(int room,int game_id);
+void auth_replay_record(int room,const char *line);
+void auth_replay_finish(int room);
+void auth_game_ranked(int room,int ranked);
+void auth_game_stopped(int room);
+void auth_game_place(int room,const char *nick,int place);
+#endif /* AUTH_H */

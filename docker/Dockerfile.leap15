@@ -8,7 +8,9 @@ RUN zypper refresh && zypper install -y --no-recommends \
     gcc \
     make \
     sqlite3-devel \
+    python3 \
     libSDL2-devel \
+    libcurl-devel \
     rpm-build \
     gzip \
     ca-certificates \

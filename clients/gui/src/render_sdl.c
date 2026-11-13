@@ -10,6 +10,8 @@
 
 static SDL_Window   *g_win  = NULL;
 static SDL_Renderer *g_rend = NULL;
+static SDL_Texture *g_ui_font = NULL;
+#include "ui_font.h"
 static int g_popup_blocked = 0; /* when 1: dbtn suppresses hover+click */
 static MouseState    g_mouse = {0,0,0,0};
 static uint32_t      g_rtick = 0; /* increments every render frame */
@@ -78,35 +80,89 @@ static const unsigned char FONT[NCHARS][FH]={
 };
 
 /* ============================== DRAW PRIMITIVES ============================== */
+/* Shared slate / mint interface palette; saturated gameplay colours stay distinct. */
+static uint32_t theme_color(uint32_t c) {
+    switch(c) {
+    case 0x0d0d1aff:case 0x0d0d18ff:case 0x0d0d1eff:case 0x0a0a14ff:return 0x0b111bff;
+    case 0x12122aff:case 0x10102aff:case 0x10101eff:case 0x14142cff:case 0x141420ff:case 0x16182aff:return 0x121c2aff;
+    case 0x1a1a2eff:case 0x1a1a40ff:case 0x20203aff:case 0x181828ff:return 0x182435ff;
+    case 0x2a2a5aff:case 0x1e1e46ff:case 0x1e1e3aff:return 0x203449ff;
+    case 0x3a3a6aff:case 0x4a4a80ff:case 0x282840ff:case 0x1a1a34ff:return 0x2b3c51ff;
+    case 0x4040aaff:case 0x404060ff:case 0x4040a0ff:case 0x5050a0ff:case 0x6060a0ff:case 0x5050c0ff:case 0x383858ff:case 0x5050aaff:case 0x404040ff:return 0x8da0baff;
+    case 0x22cc44ff:case 0x00cc44ff:return 0x72dfbbff;
+    case 0xcc2222ff:return 0xf38b96ff;
+    case 0x808080ff:return 0x9aacc3ff;
+    case 0xc0c0c0ff:return 0xd4deecff;
+    case 0xffffffff:return 0xf0f5fcff;
+    default:return c;
+    }
+}
 static void setc(uint32_t rgba) {
-    SDL_SetRenderDrawColor(g_rend,(rgba>>24)&0xff,(rgba>>16)&0xff,(rgba>>8)&0xff,rgba&0xff);
+    rgba=theme_color(rgba);
+    SDL_SetRenderDrawColor(g_rend,(rgba>>24)&255,(rgba>>16)&255,(rgba>>8)&255,rgba&255);
 }
 static void fr(int x,int y,int w,int h,uint32_t c){SDL_Rect r={x,y,w,h};setc(c);SDL_RenderFillRect(g_rend,&r);}
 static void dr(int x,int y,int w,int h,uint32_t c){SDL_Rect r={x,y,w,h};setc(c);SDL_RenderDrawRect(g_rend,&r);}
-static void dc(int x,int y,char ch,uint32_t col,int sc) {
-    int r,b,idx=(unsigned char)ch; if(idx>=NCHARS) idx='?';
-    for(r=0;r<FH;r++){unsigned char bits=FONT[idx][r];
-        for(b=0;b<FW;b++) if(bits&(0x40>>b)) fr(x+b*sc,y+r*sc,sc,sc,col);}
-}
-static void dt(int x,int y,const char*s,uint32_t col,int sc){
-    while(*s){
-        unsigned char c=(unsigned char)*s;
-        /* Decode UTF-8 two-byte sequences into Latin-1 codepoints */
-        if(c>=0xC2&&c<=0xC3&&(unsigned char)s[1]>=0x80){
-            unsigned char ch=(unsigned char)((c==0xC3)?s[1]+0x40:s[1]);
-            dc(x,y,(char)ch,col,sc); s+=2;
-        } else { dc(x,y,(char)c,col,sc); s++; }
-        x+=FW*sc+sc;
+static void round_fill(int x,int y,int w,int h,int radius,uint32_t color) {
+    if(w<=0 || h<=0)return;
+    if(radius>w/2)radius=w/2;if(radius>h/2)radius=h/2;
+    setc(color);
+    for(int row=0;row<h;row++) {
+        int edge=0;
+        if(row<radius){float dy=radius-row-.5f;edge=(int)ceilf(radius-sqrtf(radius*radius-dy*dy));}
+        else if(row>=h-radius){float dy=row-(h-radius)+.5f;edge=(int)ceilf(radius-sqrtf(radius*radius-dy*dy));}
+        SDL_RenderDrawLine(g_rend,x+edge,y+row,x+w-edge-1,y+row);
     }
 }
-static void dtc(int cx,int y,const char*s,uint32_t col,int sc){
-    int w=(int)strlen(s)*(FW*sc+sc); dt(cx-w/2,y,s,col,sc);}
-static void dts(int x,int y,const char*s,uint32_t col,int sc){
-    dt(x+sc,y+sc,s,0x000000a0,sc); dt(x,y,s,col,sc);}
-static int tw(const char*s,int sc){
-    int n=0; const unsigned char*u=(const unsigned char*)s;
-    while(*u){if(*u>=0xC2&&*u<=0xC3&&u[1]>=0x80){n++;u+=2;}else{n++;u++;}}
-    return n*(FW*sc+sc);
+static void surface(int x,int y,int w,int h,uint32_t fill,uint32_t border) {
+    round_fill(x,y,w,h,8,border);round_fill(x+1,y+1,w-2,h-2,7,fill);
+}
+static unsigned int text_next(const char **text) {
+    const unsigned char *s=(const unsigned char*)*text;unsigned int c=*s++;
+    if(c>=0xc2 && c<=0xdf && (*s&0xc0)==0x80){c=((c&31)<<6)|(*s++&63);}
+    else if(c>=0xe0 && c<=0xef && s[0] && s[1] && (s[0]&0xc0)==0x80 && (s[1]&0xc0)==0x80){c=((c&15)<<12)|((s[0]&63)<<6)|(s[1]&63);s+=2;}
+    else if(c>=0xf0 && c<=0xf4 && s[0] && s[1] && s[2] && (s[0]&0xc0)==0x80 && (s[1]&0xc0)==0x80 && (s[2]&0xc0)==0x80){c=((c&7)<<18)|((s[0]&63)<<12)|((s[1]&63)<<6)|(s[2]&63);s+=3;}
+    *text=(const char*)s;return c;
+}
+static int glyph_index(unsigned int cp) {
+    if(cp<256)return (int)cp;
+    for(unsigned int i=0;i<sizeof(UI_EXTRA)/sizeof(UI_EXTRA[0]);i++)if(UI_EXTRA[i]==cp)return 256+(int)i;
+    return '?';
+}
+static void draw_glyph(float x,int y,unsigned int cp,uint32_t color,int sc) {
+    int index=glyph_index(cp);const int *m=UI_GLYPHS[index];
+    if(g_ui_font && m[2]>0 && m[3]>0) {
+        color=theme_color(color);
+        SDL_SetTextureColorMod(g_ui_font,color>>24,(color>>16)&255,(color>>8)&255);SDL_SetTextureAlphaMod(g_ui_font,color&255);
+        SDL_Rect from={m[0],m[1],m[2],m[3]},to={(int)lroundf(x+m[4]*sc/4.0f),y+12*sc+(int)lroundf(m[5]*sc/4.0f),(m[2]*sc+3)/4,(m[3]*sc+3)/4};
+        SDL_RenderCopy(g_rend,g_ui_font,&from,&to);
+    } else if(!g_ui_font) {
+        int ch=cp<256?(int)cp:'?';
+        for(int row=0;row<FH;row++)for(int bit=0;bit<FW;bit++)if(FONT[ch][row]&(0x40>>bit))fr((int)x+bit*sc,y+row*sc,sc,sc,color);
+    }
+}
+static int tw(const char *text,int sc) {
+    float width=0;
+    while(*text){unsigned int cp=text_next(&text);width+=UI_GLYPHS[glyph_index(cp)][6]*sc/256.0f;}
+    return (int)lroundf(width);
+}
+static void dt(int x,int y,const char *text,uint32_t color,int sc) {
+    float at=(float)x;
+    while(*text){unsigned int cp=text_next(&text);draw_glyph(at,y,cp,color,sc);at+=UI_GLYPHS[glyph_index(cp)][6]*sc/256.0f;}
+}
+static void dtc(int cx,int y,const char *text,uint32_t color,int sc){dt(cx-tw(text,sc)/2,y,text,color,sc);}
+static void dts(int x,int y,const char *text,uint32_t color,int sc){dt(x,y,text,color,sc);}
+static int ui_font_init(void) {
+    SDL_Surface *image=SDL_CreateRGBSurfaceWithFormat(0,UI_ATLAS_W,UI_ATLAS_H,32,SDL_PIXELFORMAT_RGBA32);
+    if(!image)return 0;
+    Uint32 *pixels=image->pixels;size_t at=0;
+    for(size_t i=0;i<sizeof(UI_FONT_RLE);i+=2) {
+        Uint32 pixel=SDL_MapRGBA(image->format,255,255,255,UI_FONT_RLE[i+1]);
+        for(int n=0;n<UI_FONT_RLE[i] && at<UI_ATLAS_W*UI_ATLAS_H;n++)pixels[at++]=pixel;
+    }
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"1");g_ui_font=SDL_CreateTextureFromSurface(g_rend,image);SDL_FreeSurface(image);
+    if(g_ui_font)SDL_SetTextureBlendMode(g_ui_font,SDL_BLENDMODE_BLEND);
+    return g_ui_font!=NULL;
 }
 
 /* ============================== BUTTON SYSTEM ============================== */
@@ -121,23 +177,21 @@ static int dbtn(int x,int y,int w,int h,const char*lbl,BtnStyle sty){
     int clk=hov&&g_mouse.clicked&&(sty!=BS_DISABLED);
     if(clk) g_mouse.clicked=0; /* consume click so no other button fires */
     uint32_t bg,bo,tc;
-    switch(sty){
-    case BS_DISABLED: bg=0x181828ff;bo=0x282840ff;tc=0x404060ff;break;
-    case BS_TOGON:    bg=hov?0x1a5a1aff:0x144014ff;bo=0x22cc44ff;tc=0x22cc44ff;break;
-    case BS_ACTIVE:   bg=hov?0x5a3000ff:0x402200ff;bo=0xff8c00ff;tc=0xff8c00ff;break;
-    default:          bg=hov?0x38386aff:0x20203aff;bo=hov?0x8080c0ff:0x3a3a6aff;tc=hov?0xffffffff:0xc0c0c0ff;
+    switch(sty) {
+    case BS_DISABLED:bg=0x121d2bff;bo=0x243247ff;tc=0x6e8099ff;break;
+    case BS_TOGON:bg=hov?0x24544aff:0x193d38ff;bo=0x327f6eff;tc=0x9af0d2ff;break;
+    case BS_ACTIVE:bg=hov?0xa5f2d8ff:0x72dfbbff;bo=bg;tc=0x102c27ff;break;
+    default:bg=hov?0x293d53ff:0x1a293cff;bo=hov?0x526b87ff:0x31445dff;tc=0xdce6f3ff;
     }
-    fr(x,y,w,h,bg);
-    if(hov&&sty!=BS_DISABLED){fr(x,y,w,1,0x5050a0ff);fr(x,y,1,h,0x5050a0ff);fr(x,y+h-1,w,1,0x10101aff);fr(x+w-1,y,1,h,0x10101aff);}
-    dr(x,y,w,h,bo);
-    {int tx2=x+(w-tw(lbl,1))/2,ty2=y+(h-FH)/2; dts(tx2,ty2,lbl,tc,1);}
+    surface(x,y,w,h,bg,bo);
+    dtc(x+w/2,y+(h-FH)/2,lbl,tc,1);
     return clk;
 }
 static int dtog(int x,int y,int w,int h,const char*loff,const char*lon,int on){
     return dbtn(x,y,w,h,on?lon:loff,on?BS_TOGON:BS_NORMAL);}
 
 /* ============================== BLOCK RENDERING ============================== */
-static const uint32_t PC[8]={0x0d0d1aff,0x00c8ffff,0xffe800ff,0xb400ffff,0x00e800ff,0xff2020ff,0x0038ffff,0xff8c00ff};
+static const uint32_t PC[8]={0x0d0d1aff,0x67d8f0ff,0xe8ce70ff,0xc396eeff,0x77d8a1ff,0xf4838bff,0x829ef5ff,0xe9ab75ff};
 /* Special type: 1=attack(red) 2=neutral(orange) 3=friendly(green)
  * Order matches SP_ defines: a c b r o q g s n i v m d f */
 static const int SP_TYPE[NUM_SPECIALS+1]={
@@ -224,7 +278,7 @@ static void dfield(int ox,int oy,int sz,Field*f,Piece*cur,int show_ghost){
 }
 
 static void dnext(int ox,int oy,int bw,int bh,Piece*p){
-    const PieceShape*sh=&PIECES[p->type][0];int sz=20,i,cx=ox+bw/2-sz,cy=oy+bh/2-sz;
+    const PieceShape*sh=&PIECES[p->type][0];int sz=bh<80?16:20,i,cx=ox+bw/2-sz,cy=oy+bh/2-sz;
     fr(ox,oy,bw,bh,0x0d0d1aff);dr(ox,oy,bw,bh,COL_BORDER);dt(ox+4,oy+3,"NEXT",COL_GRAY,1);
     for(i=0;i<4;i++) dblk(cx+sh->c[i].dx*sz,cy+sh->c[i].dy*sz,sz,(uint8_t)(p->type+1),0);}
 
@@ -233,7 +287,7 @@ static void dhold(int ox,int oy,int bw,int bh,int ptype,int used,const char*keyh
     dt(ox+4,oy+3,"HOLD",used?0x404040ff:COL_GRAY,1);
     dt(ox+4+tw("HOLD",1)+4,oy+3,keyhint,used?0x303030ff:0x505070ff,1);
     if(ptype>=0&&ptype<NUM_PIECES){
-        const PieceShape*sh=&PIECES[ptype][0];int sz=20,i,cx=ox+bw/2-sz,cy=oy+bh/2-sz;
+        const PieceShape*sh=&PIECES[ptype][0];int sz=bh<80?16:20,i,cx=ox+bw/2-sz,cy=oy+bh/2-sz;
         uint32_t col=used?0x303030ff:0xffffffff;
         (void)col;
         for(i=0;i<4;i++) dblk(cx+sh->c[i].dx*sz,cy+sh->c[i].dy*sz,sz,(uint8_t)(used?8:(ptype+1)),0);
@@ -243,8 +297,8 @@ static void dhold(int ox,int oy,int bw,int bh,int ptype,int used,const char*keyh
 }
 
 static void dpanel(int x,int y,int w,int h,const char*title){
-    fr(x,y,w,h,COL_HIGHLIGHT);dr(x,y,w,h,COL_BORDER);
-    if(title&&*title){fr(x,y,w,FH+6,COL_BORDER);dt(x+4,y+3,title,COL_LTGRAY,1);}
+    surface(x,y,w,h,0x131f2eff,0x2b3c51ff);
+    if(title&&*title){dt(x+9,y+4,title,0x9caec6ff,1);}
 }
 
 /* ============================== SPECIALS BAR ==============================
@@ -651,9 +705,111 @@ static void render_keymap_popup(ClientCtx *c, int saved_click) {
     g_mouse.clicked = 0;
 }
 
+/* Music controls are client-local and never send gameplay commands. */
+static void music_link(const char *url) {
+#if SDL_VERSION_ATLEAST(2,0,14)
+    SDL_OpenURL(url);
+#elif defined(PLATFORM_WINDOWS)
+    ShellExecuteA(NULL,"open",url,NULL,NULL,SW_SHOWNORMAL);
+#else
+    SDL_SetClipboardText(url); /* Older SDL: make the attribution URL available. */
+#endif
+}
+static void music_time(double seconds,char out[24]) {
+    int total=(int)(seconds>0?seconds:0);
+    snprintf(out,24,"%d:%02d",total/60,total%60);
+}
+static void render_music_popup(ClientCtx *c,int saved_click) {
+    int pw=780,ph=654,px=(WIN_W-pw)/2,py=(WIN_H-ph)/2;
+    MusicPlayback p; music_snapshot(&p);
+    const MusicTrack *track=music_track(p.index);
+    SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND); fr(0,0,WIN_W,WIN_H,0x000000b0);
+    SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_NONE);
+    if(saved_click && !pt_in(g_mouse.x,g_mouse.y,px,py,pw,ph)) {
+        c->music_player_open=0; g_mouse.clicked=0; return;
+    }
+    g_popup_blocked=0; g_mouse.clicked=saved_click;
+    fr(px,py,pw,ph,0x10102aff); dr(px,py,pw,ph,COL_PIECE_I);
+    fr(px+1,py+1,pw-2,32,0x1a1a40ff); dt(px+20,py+10,"MUSIC PLAYER",COL_PIECE_I,1);
+    dt(px+pw-268,py+10,"Local audio / Esc to close",COL_GRAY,1);
+    dt(px+22,py+48,p.index?"NOW PLAYING / GAME LIBRARY":"NOW PLAYING / TITLE THEME",COL_GRAY,1);
+    dt(px+22,py+68,track->title,COL_LTGRAY,2);
+    {char line[160]; snprintf(line,sizeof(line),"%s  /  %s",track->artist,track->license);
+     dt(px+22,py+100,line,COL_OPEN_GREEN,1);}
+    int sx=px+22,sy=py+124,sw=pw-44;
+    fr(sx,sy,sw,8,0x252540ff);
+    if(p.duration>0) {
+        int fill=(int)(sw*p.position/p.duration); if(fill>sw)fill=sw;
+        fr(sx,sy,fill,8,COL_PIECE_I);
+        if(g_mouse.clicked && pt_in(g_mouse.x,g_mouse.y,sx,sy-5,sw,18)) {
+            music_seek(p.duration*(g_mouse.x-sx)/sw); g_mouse.clicked=0;
+        }
+    }
+    {char pos[24],length[24],label[64]; music_time(p.position,pos); music_time(p.duration,length);
+     snprintf(label,sizeof(label),"%s / %s",pos,length); dt(sx,py+140,label,COL_GRAY,1);}
+    const char *status=!p.available?"No audio device":p.failed?"Track unavailable":!p.enabled?"Music disabled":p.loading?"Loading...":p.paused?"Paused":"Playing";
+    dt(px+pw-22-tw(status,1),py+140,status,p.failed?COL_INGAME_RED:COL_GRAY,1);
+    int y=py+166;
+    if(dbtn(px+22,y,96,30,"Previous",BS_NORMAL)) music_previous();
+    const char *play=(!p.enabled||p.paused)?"Play":"Pause";
+    if(dbtn(px+126,y,96,30,play,BS_ACTIVE)) {
+        if(!p.enabled) { music_set_enabled(1); if(p.paused) music_toggle_pause(); }
+        else music_toggle_pause();
+        client_save_settings(c);
+    }
+    if(dbtn(px+230,y,96,30,"Next",BS_NORMAL)) music_next();
+    if(dbtn(px+338,y,110,30,p.shuffle?"Shuffle ON":"Shuffle OFF",p.shuffle?BS_TOGON:BS_NORMAL)) {
+        music_set_shuffle(!p.shuffle); client_save_settings(c);
+    }
+    if(dbtn(px+474,y,36,30,"-",BS_NORMAL)) { music_set_volume(music_get_volume()-0.05f); client_save_settings(c); }
+    {char label[32]; snprintf(label,sizeof(label),"Volume %d%%",(int)(music_get_volume()*100+0.5f)); dtc(px+578,y+9,label,COL_LTGRAY,1);}
+    if(dbtn(px+650,y,36,30,"+",BS_NORMAL)) { music_set_volume(music_get_volume()+0.05f); client_save_settings(c); }
+    int count=music_track_count()-1, visible=5, max_scroll=count>visible?count-visible:0;
+    if(c->music_last_index!=p.index) {
+        if(p.index>0 && (p.index-1<c->music_scroll || p.index-1>=c->music_scroll+visible)) c->music_scroll=p.index-1;
+        c->music_last_index=p.index;
+    }
+    if(c->music_scroll<0)c->music_scroll=0; if(c->music_scroll>max_scroll)c->music_scroll=max_scroll;
+    dt(px+22,py+216,"GAME SOUNDTRACK / select a track to play",COL_GRAY,1);
+    {char range[32]; snprintf(range,sizeof(range),"%d-%d / %d",c->music_scroll+1,
+        c->music_scroll+visible<count?c->music_scroll+visible:count,count); dt(px+pw-266,py+216,range,COL_GRAY,1);}
+    if(dbtn(px+pw-182,py+208,66,24,"Up",c->music_scroll?BS_NORMAL:BS_DISABLED)) c->music_scroll-=visible;
+    if(dbtn(px+pw-108,py+208,86,24,"Down",c->music_scroll<max_scroll?BS_NORMAL:BS_DISABLED)) c->music_scroll+=visible;
+    if(c->music_scroll<0)c->music_scroll=0; if(c->music_scroll>max_scroll)c->music_scroll=max_scroll;
+    for(int row_index=0;row_index<visible && row_index+c->music_scroll<count;row_index++) {
+        int i=1+c->music_scroll+row_index;
+        const MusicTrack *item=music_track(i); int row=py+238+row_index*46;
+        int selected=p.index==i;
+        fr(px+22,row,pw-44,42,selected?0x203952ff:0x16182cff);
+        dr(px+22,row,pw-44,42,selected?COL_PIECE_I:COL_BORDER);
+        if(g_mouse.clicked && pt_in(g_mouse.x,g_mouse.y,px+22,row,pw-44,42)) {
+            music_select(i); client_save_settings(c); g_mouse.clicked=0;
+        }
+        dt(px+32,row+7,selected?">":" ",selected?COL_PIECE_I:COL_GRAY,1);
+        dt(px+52,row+6,item->title,selected?COL_PIECE_I:COL_LTGRAY,1);
+        dt(px+52,row+24,item->artist,COL_GRAY,1);
+        dt(px+pw-40-tw(item->license,1),row+15,item->license,COL_OPEN_GREEN,1);
+    }
+    if(max_scroll) {
+        int h=230*visible/count, y=py+238+(230-h)*c->music_scroll/max_scroll;
+        fr(px+pw-30,py+238,5,230,COL_BORDER); fr(px+pw-30,y,5,h,COL_PIECE_I);
+    }
+    int cy=py+478;
+    dt(px+22,cy,"CURRENT TRACK CREDITS",COL_GRAY,1); cy+=19;
+    dt(px+22,cy,track->source_url,COL_OPEN_GREEN,1);
+    if(g_mouse.clicked && pt_in(g_mouse.x,g_mouse.y,px+22,cy,pw-44,16)) { music_link(track->source_url); g_mouse.clicked=0; }
+    cy+=18; dt(px+22,cy,track->license_url,COL_OPEN_GREEN,1);
+    if(g_mouse.clicked && pt_in(g_mouse.x,g_mouse.y,px+22,cy,pw-44,16)) { music_link(track->license_url); g_mouse.clicked=0; }
+    cy+=18; dt(px+22,cy,track->attribution,COL_GRAY,1);
+    dt(px+22,py+560,"Title theme: Sci-fi Theme / MAOU (maou) / CC-BY 4.0",COL_LTGRAY,1);
+    dt(px+22,py+579,"Audio files unmodified. Complete attributions: CREDITS.md",COL_GRAY,1);
+    if(dbtn(px+pw-138,py+ph-43,116,28,"Close",BS_NORMAL)) c->music_player_open=0;
+    g_mouse.clicked=0;
+}
+
 /* ── Shared about popup render ── */
 static void render_about_popup(ClientCtx *c, int saved_click) {
-    int pw=640, ph=346, px=(WIN_W-pw)/2, py=(WIN_H-ph)/2;
+    int pw=640, ph=540, px=(WIN_W-pw)/2, py=(WIN_H-ph)/2;
 
     SDL_SetRenderDrawBlendMode(g_rend,SDL_BLENDMODE_BLEND);
     fr(0,0,WIN_W,WIN_H,0x000000b0);
@@ -683,7 +839,7 @@ static void render_about_popup(ClientCtx *c, int saved_click) {
 
     int ty=py+42;
     dt(px+22,ty,"A multiplayer falling blocks clone in the style of LineClash.",COL_LTGRAY,1); ty+=16;
-    dt(px+22,ty,"Stack blocks, clear lines, and use special blocks to make opponents top out.",0x7070a0ff,1); ty+=24;
+    dt(px+22,ty,"Stack blocks, clear lines, and send specials to your opponents.",0x7070a0ff,1); ty+=24;
     dt(px+22,ty,"Developer  :",0x5050a0ff,1);
     dt(px+130,ty,"Tommy Frössman  (frossmant / styrbjorn)",COL_LTGRAY,1); ty+=16;
     dt(px+22,ty,"License    :",0x5050a0ff,1);
@@ -697,7 +853,7 @@ static void render_about_popup(ClientCtx *c, int saved_click) {
      if(lhov&&g_mouse.clicked){ c->license_popup_open=1; g_mouse.clicked=0; }
     } ty+=24;
     /* Source code link */
-    {const char *url="https://github.com/frossmant/lineclash";
+    {const char *url="https://github.com/kladhest-se/lineclash";
      int uw=tw(url,1);
      int uhov=pt_in(g_mouse.x,g_mouse.y,px+130,ty-2,uw,FH+4);
      uint32_t ucol=uhov?0xffffffff:COL_OPEN_GREEN;
@@ -718,7 +874,7 @@ static void render_about_popup(ClientCtx *c, int saved_click) {
      }
      ty+=16;}
     /* Issues link */
-    {const char *iurl="https://github.com/frossmant/lineclash/issues";
+    {const char *iurl="https://github.com/kladhest-se/lineclash/issues";
      int iw=tw(iurl,1);
      int ihov=pt_in(g_mouse.x,g_mouse.y,px+130,ty-2,iw,FH+4);
      uint32_t icol=ihov?0xffffffff:COL_OPEN_GREEN;
@@ -743,6 +899,24 @@ static void render_about_popup(ClientCtx *c, int saved_click) {
     dt(px+32,ty,"C / Shift = hold piece           Z = rotate CCW",0x6060a0ff,1); ty+=13;
     dt(px+32,ty,"1 = send special to self         2-8 = send to opponents",0x6060a0ff,1); ty+=13;
     dt(px+32,ty,"Tab = open chat                  R = ready   Esc = leave room",0x6060a0ff,1);
+    ty+=26; dt(px+22,ty,"SOUNDTRACK CREDITS / OpenGameArt.org",COL_PIECE_I,1);
+    int pages=(music_track_count()+5)/6;
+    if(c->about_music_page<0)c->about_music_page=0; if(c->about_music_page>=pages)c->about_music_page=pages-1;
+    {char page[24]; snprintf(page,sizeof(page),"%d/%d",c->about_music_page+1,pages); dt(px+420,ty,page,COL_GRAY,1);}
+    if(dbtn(px+466,ty-5,52,22,"Prev",c->about_music_page?BS_NORMAL:BS_DISABLED)) c->about_music_page--;
+    if(dbtn(px+526,ty-5,64,22,"Next",c->about_music_page+1<pages?BS_NORMAL:BS_DISABLED)) c->about_music_page++;
+    ty+=21;
+    for(int row=0;row<6;row++) {
+        int mi=c->about_music_page*6+row;
+        if(mi>=music_track_count()) { ty+=18; continue; }
+        const MusicTrack *track=music_track(mi); char credit[180];
+        snprintf(credit,sizeof(credit),"%s / %s / %s",track->title,track->artist,track->license);
+        dt(px+22,ty,credit,COL_LTGRAY,1);
+        if(g_mouse.clicked && pt_in(g_mouse.x,g_mouse.y,px+22,ty,pw-44,16)) { music_link(track->source_url); g_mouse.clicked=0; }
+        ty+=18;
+    }
+    dt(px+22,ty+3,"Alexandr Zhelanov: https://soundcloud.com/alexandr-zhelanov",COL_GRAY,1);
+    dt(px+22,ty+20,"Music licenses are separate from code. See CREDITS.md.",COL_GRAY,1);
     if(dbtn(px+pw/2-54,py+ph-46,108,34,"Close",BS_ACTIVE)){
         c->about_popup_open=0; c->license_popup_open=0;
     }
@@ -755,7 +929,7 @@ static void render_about_popup(ClientCtx *c, int saved_click) {
             "Version 3, 29 June 2007",
             "",
             "Copyright (C) 2024  frossmant",
-            "https://github.com/frossmant/lineclash",
+            "https://github.com/kladhest-se/lineclash",
             "",
             "This program is free software: you can redistribute it",
             "and/or modify it under the terms of the GNU General",
@@ -845,15 +1019,15 @@ static void render_about_popup(ClientCtx *c, int saved_click) {
 void sdl_render_server_list(ClientCtx*c){
     BtnId action=BTN_NONE;
     const int CX    = WIN_W/2;
-    const int LSX   = CX-440;
-    const int LSW   = 880;
-    const int ROW_H = 52;
-    const int HDR_Y = 96;
-    const int LIST_Y= HDR_Y+20;
+    const int LSX   = 32;
+    const int LSW   = WIN_W-64;
+    const int ROW_H = 62;
+    const int HDR_Y = 236;
+    const int LIST_Y= HDR_Y+32;
 
     /* If any popup is open, swallow background clicks entirely so
      * underlying buttons cannot fire while a popup is visible. */
-    int any_popup = (c->server_popup_open || c->about_popup_open || c->keymap_popup_open);
+    int any_popup = (c->server_popup_open || c->about_popup_open || c->keymap_popup_open || c->music_player_open);
     int saved_click = g_mouse.clicked;
     g_popup_blocked = any_popup; /* suppress hover+click on background */
     if (any_popup) g_mouse.clicked = 0;
@@ -863,33 +1037,34 @@ void sdl_render_server_list(ClientCtx*c){
     const int BTN_H     = 26;
     const int BUTTONS_W = BTN_W_REF + BTN_W*2 + 16;
     /* Content columns */
-    const int COL_NAME = LSX+10;
-    const int COL_STAT = COL_NAME+200;
-    const int COL_REG  = COL_STAT+120;  /* registered users */
+    const int COL_NAME = LSX+18;
+    const int COL_STAT = COL_NAME+260;
+    const int COL_REG  = COL_STAT+150;  /* registered users */
     const int COL_PLAY = COL_REG+110;   /* playing — wider gap */
-    const int COL_IDLE = COL_PLAY+100;  /* idle — wider gap */
+    const int COL_IDLE = COL_PLAY+90;  /* idle — wider gap */
 
     SDL_SetRenderDrawColor(g_rend,0x0d,0x0d,0x1a,0xff);
     SDL_RenderClear(g_rend);
 
-    /* Title */
-    fr(0,0,WIN_W,86,0x12122aff); dr(0,0,WIN_W,86,COL_BORDER);
-    {int tx=20; /* left-aligned title */
-     dts(tx,10,"LineClash",COL_PIECE_I,3);
-     {char ver[96]; snprintf(ver,sizeof(ver),"v%s  (%s)",TETRINETZ_VERSION,BUILD_DATE);
-      int tw3=tw("LineClash",3);
-      dtc(tx+tw3/2,56,ver,0x4040aaff,1);}}
-    if(dbtn(WIN_W-72,6,64,24,"Quit",BS_NORMAL))        action=BTN_QUIT;
-    if(dbtn(WIN_W-142,6,62,24,"About",BS_NORMAL))      action=BTN_SRV_ABOUT;
-    if(dbtn(WIN_W-214,6,64,24,"Keymap",BS_NORMAL))     action=BTN_KEYMAP_POPUP;
+    /* Brand and compact audio/settings controls. */
+    fr(0,0,WIN_W,88,0x111b28ff);fr(32,87,WIN_W-64,1,0x25354aff);
+    round_fill(32,26,13,13,3,0x72dfbbff);round_fill(48,26,13,13,3,0x72dfbbff);round_fill(48,42,13,13,3,0x46a98bff);
+    dt(75,22,"LineClash",0xf0f5fcff,2);
+    dt(76,56,"MULTIPLAYER FALLING BLOCKS",0x91a4bfff,1);
+    dt(32,112,"Find your next match.",0xf0f5fcff,2);
+    dt(33,153,"Discover a community server, or make yourself at home on a favourite.",0x97abc5ff,1);
+    if(dbtn(WIN_W-96,22,64,28,"Quit",BS_NORMAL))        action=BTN_QUIT;
+    if(dbtn(WIN_W-166,22,62,28,"About",BS_NORMAL))      action=BTN_SRV_ABOUT;
+    if(dbtn(WIN_W-238,22,64,28,"Keymap",BS_NORMAL))     action=BTN_KEYMAP_POPUP;
     {BtnStyle ss=c->sound_enabled?BS_TOGON:BS_NORMAL;
-     if(dbtn(WIN_W-286,6,64,24,"SFX",ss))              action=BTN_TOGGLE_SOUND;}
+     if(dbtn(WIN_W-310,22,64,28,"SFX",ss))              action=BTN_TOGGLE_SOUND;}
     {BtnStyle ms=music_get_enabled()?BS_TOGON:BS_NORMAL;
-     if(dbtn(WIN_W-358,6,64,24,"Music",ms))            action=BTN_TOGGLE_MUSIC;}
+     if(dbtn(WIN_W-382,22,64,28,"Music",ms))            action=BTN_TOGGLE_MUSIC;}
+
 
 
     /* SFX + Music volume sliders — beneath the toggle buttons, inside the title bar */
-    {int sx=WIN_W-286,sy=32,sw=64,sh=22;
+    {int sx=WIN_W-310,sy=57,sw=64,sh=7;
      float _v=sound_get_sfx_volume();
      int track=sw-2; int filled=(int)(_v*track);
      fr(sx,sy,sw,sh,0x16182aff);        /* background */
@@ -903,7 +1078,7 @@ void sdl_render_server_list(ClientCtx*c){
          if(nv<0.0f)nv=0.0f; else if(nv>1.0f)nv=1.0f;
          sound_set_sfx_volume(nv); client_save_settings(c);}
     }
-    {int sx=WIN_W-358,sy=32,sw=64,sh=22;
+    {int sx=WIN_W-382,sy=57,sw=64,sh=7;
      float _v=music_get_volume();
      int track=sw-2; int filled=(int)(_v*track);
      fr(sx,sy,sw,sh,0x16182aff);        /* background */
@@ -918,62 +1093,77 @@ void sdl_render_server_list(ClientCtx*c){
          music_set_volume(nv); client_save_settings(c);}
     }
 
+    if(dbtn(LSX,188,144,32,"Find servers",BS_ACTIVE)) action=BTN_DISCOVER;
+    {const char *labels[]={"All servers","Favourites","Recent","Open slots","Ping <=100ms"};
+     if(dbtn(LSX+154,188,148,32,labels[c->server_filter%5],BS_NORMAL)) action=BTN_SERVER_FILTER;}
+    {const char *labels[]={"Default order","Low latency","Last played"};
+     if(dbtn(LSX+312,188,148,32,labels[c->server_sort%3],BS_NORMAL)) action=BTN_SERVER_SORT;}
+
+    const char *directory_url=SDL_getenv("LINECLASH_DIRECTORY_URL");
+    if(directory_url && directory_url_valid(directory_url,0) && dbtn(WIN_W-498,22,104,28,"Browse web",BS_NORMAL)) music_link(directory_url);
+
     /* Column headers */
-    fr(LSX,HDR_Y,LSW,20,0x14142cff); dr(LSX,HDR_Y,LSW,20,COL_BORDER);
-    dt(COL_NAME,HDR_Y+4,"Game server",   0x5050a0ff,1);
-    dt(COL_STAT,HDR_Y+4,"Status",         0x5050a0ff,1);
-    dt(COL_REG, HDR_Y+4,"Registered",     0x5050a0ff,1);
-    dt(COL_PLAY,HDR_Y+4,"Playing",        0x5050a0ff,1);
-    dt(COL_IDLE,HDR_Y+4,"Idle",           0x5050a0ff,1);
+    surface(LSX,HDR_Y,LSW,32,0x182638ff,0x2b3c51ff);
+    dt(COL_NAME,HDR_Y+8,"Game server",   0x5050a0ff,1);
+    dt(COL_STAT,HDR_Y+8,"Status",         0x5050a0ff,1);
+    dt(COL_REG, HDR_Y+8,"Registered",     0x5050a0ff,1);
+    dt(COL_PLAY,HDR_Y+8,"Playing",        0x5050a0ff,1);
+    dt(COL_IDLE,HDR_Y+8,"Idle",           0x5050a0ff,1);
 
     /* Pagination */
+    int visible[MAX_SAVED_SERVERS],visible_count=client_server_order(c,visible);
+    int selected_visible=0;
+    for(int n=0;n<visible_count;n++)if(visible[n]==c->server_cursor)selected_visible=1;
+    if(!selected_visible)c->server_cursor=visible_count?visible[0]:-1;
     const int SRVS_PER_PAGE = 6;
-    {int tp=(c->server_count>0?(c->server_count+SRVS_PER_PAGE-1)/SRVS_PER_PAGE:1);
+    {int tp=(visible_count>0?(visible_count+SRVS_PER_PAGE-1)/SRVS_PER_PAGE:1);
      if(c->srv_page>=tp) c->srv_page=tp-1;
      if(c->srv_page<0)  c->srv_page=0;}
     int srv_start = c->srv_page * SRVS_PER_PAGE;
     int srv_end   = srv_start + SRVS_PER_PAGE;
-    if(srv_end > c->server_count) srv_end = c->server_count;
-    int srv_total_pages = c->server_count>0?(c->server_count+SRVS_PER_PAGE-1)/SRVS_PER_PAGE:1;
+    if(srv_end > visible_count) srv_end = visible_count;
+    int srv_total_pages = visible_count>0?(visible_count+SRVS_PER_PAGE-1)/SRVS_PER_PAGE:1;
 
     /* Pagination arrows + indicator */
     if(srv_total_pages > 1){
         int ay = LIST_Y + (SRVS_PER_PAGE * ROW_H)/2 - 9;
         {BtnStyle bs=c->srv_page>0?BS_NORMAL:BS_DISABLED;
          if(dbtn(LSX-28,ay,22,18,"<",bs)){
-             if(c->srv_page>0){c->srv_page--;c->server_cursor=c->srv_page*SRVS_PER_PAGE;}}}
+             if(c->srv_page>0){c->srv_page--;c->server_cursor=visible[c->srv_page*SRVS_PER_PAGE];}}}
         {BtnStyle bs=c->srv_page<srv_total_pages-1?BS_NORMAL:BS_DISABLED;
          if(dbtn(LSX+LSW+6,ay,22,18,">",bs)){
-             if(c->srv_page<srv_total_pages-1){c->srv_page++;c->server_cursor=c->srv_page*SRVS_PER_PAGE;}}}
+             if(c->srv_page<srv_total_pages-1){c->srv_page++;c->server_cursor=visible[c->srv_page*SRVS_PER_PAGE];}}}
     }
 
     /* Server rows */
     int i;
-    for(i=srv_start;i<srv_end;i++){
+    for(int vi=srv_start;vi<srv_end;vi++){
+        i=visible[vi];
         SavedServer *ss=&c->server_list[i];
-        int row_idx = i - srv_start;
+        int row_idx = vi - srv_start;
         int ry     = LIST_Y + row_idx*ROW_H;
         int is_cur = (i==c->server_cursor);
 
         /* Determine if connection is allowed — only block if explicitly failed */
         int blocked = (ss->auth_status==-1||ss->auth_status==-2||ss->auth_status==-3);
 
-        uint32_t bg = is_cur ? 0x1e1e46ff : (i%2 ? 0x10101eff : 0x0d0d18ff);
-        uint32_t bo = is_cur ? (blocked?0xa03030ff:0x5050c0ff) : 0x1a1a34ff;
-        fr(LSX,ry,LSW,ROW_H-1,bg); dr(LSX,ry,LSW,ROW_H-1,bo);
+        uint32_t bg = is_cur ? 0x203a43ff : (i%2 ? 0x152131ff : 0x121e2dff);
+        uint32_t bo = is_cur ? (blocked?0xa03030ff:0x4d9f8bff) : 0x25354aff;
+        surface(LSX,ry+3,LSW,ROW_H-6,bg,bo);
+        if(is_cur)round_fill(LSX+1,ry+13,3,ROW_H-26,1,0x72dfbbff);
 
         /* Click left area = select; selected + click = connect (if allowed) */
         int cw = LSW - BUTTONS_W - 6;
         if(pt_in(g_mouse.x,g_mouse.y,LSX,ry,cw,ROW_H-1)&&g_mouse.clicked){
             if(is_cur && !blocked) action=BTN_SRV_CONNECT;
-            else { c->server_cursor=i; c->srv_page=i/SRVS_PER_PAGE; }
+            else { c->server_cursor=i; c->srv_page=vi/SRVS_PER_PAGE; }
         }
 
         /* Name (top) + host:port (sub-line) */
         uint32_t name_col = blocked ? 0x606060ff : (is_cur?COL_WHITE:COL_LTGRAY);
-        dt(COL_NAME, ry+6, ss->name[0]?ss->name:ss->host, name_col, 1);
-        {char sub[100]; snprintf(sub,sizeof(sub),"%s:%d",ss->host,ss->port);
-         dt(COL_NAME, ry+6+FH+2, sub, 0x383858ff, 1);}
+        {char label[31];snprintf(label,sizeof(label),"%.30s",ss->name[0]?ss->name:ss->host);dt(COL_NAME,ry+11,label,name_col,1);}
+        {char sub[100]; snprintf(sub,sizeof(sub),"%s%.21s:%d",ss->favourite?"* ":"",ss->host,ss->port);
+         dt(COL_NAME, ry+11+FH+2, sub, 0x383858ff, 1);}
 
         /* Status dot + label */
         {int dy=ry+(ROW_H-1)/2-5;
@@ -990,7 +1180,9 @@ void sdl_render_server_list(ClientCtx*c){
              slabel="--"; dot_in=0x1a1a00ff; dot_out=0x555522ff; txt_col=0x444433ff;
          }
          fr(COL_STAT,dy,10,10,dot_in); dr(COL_STAT,dy,10,10,dot_out);
-         dt(COL_STAT+14,dy,slabel,txt_col,1);}
+         dt(COL_STAT+14,dy,slabel,txt_col,1);
+         char detail[40];if(ss->ping_ms>0)snprintf(detail,sizeof(detail),"%dms  %d/%d",ss->ping_ms,ss->users_playing+ss->users_idle,ss->capacity);else snprintf(detail,sizeof(detail),"Latency unknown");
+         dt(COL_STAT,ry+37,detail,COL_GRAY,1);}
 
         /* User counts (only when online) */
         if(ss->online==1&&ss->auth_status>=0){
@@ -1017,17 +1209,32 @@ void sdl_render_server_list(ClientCtx*c){
         }
     }
 
-    /* Bottom buttons — fixed position below 6 rows */
-    {int bot_y = LIST_Y + SRVS_PER_PAGE*ROW_H + 12;
+    if(visible_count==0) {
+        surface(LSX,LIST_Y+6,LSW,ROW_H*6-10,0x111c2aff,0x25354aff);
+        int icon_y=LIST_Y+65;
+        round_fill(CX-35,icon_y,30,30,7,0x225849ff);round_fill(CX+1,icon_y,30,30,7,0x72dfbbff);round_fill(CX+1,icon_y+36,30,30,7,0x2b7360ff);
+        dtc(CX,LIST_Y+160,c->server_count?"No servers match this view":"A new rivalry starts here.",0xe9f1fcff,2);
+        dtc(CX,LIST_Y+207,c->server_count?"Try a different filter to see more servers.":"Add your server or discover somewhere new to play.",0x97abc5ff,1);
+        if(dbtn(CX-176,LIST_Y+250,168,38,"+ Add a server",BS_ACTIVE))action=BTN_SRV_ADD;
+        if(dbtn(CX+8,LIST_Y+250,168,38,"Discover servers",BS_NORMAL))action=BTN_DISCOVER;
+    }
+    /* Bottom actions are visible when there is a server to select. */
+    if(visible_count>0) {int bot_y = LIST_Y + SRVS_PER_PAGE*ROW_H + 12;
      if(bot_y>WIN_H-56) bot_y=WIN_H-56;
-     int half=(LSW-4)/2;
-     if(dbtn(LSX,      bot_y,half,34,"+ Add game server",BS_NORMAL)) action=BTN_SRV_ADD;
+     int half=(LSW-8)/3;
+     if(dbtn(LSX,      bot_y,half,38,"+ Add a server",BS_NORMAL)) action=BTN_SRV_ADD;
+     if(dbtn(LSX+half+4,bot_y,half,38,"Toggle favourite",BS_NORMAL)) action=BTN_FAVOURITE;
      int can_join=(c->server_cursor>=0&&c->server_cursor<c->server_count&&
-                   c->server_list[c->server_cursor].online==1&&
+                   c->server_list[c->server_cursor].online>=0&&
                    c->server_list[c->server_cursor].auth_status>=0);
-     if(dbtn(LSX+half+4,bot_y,LSW-half-4,34,"Join game server",
+     if(dbtn(LSX+half*2+8,bot_y,LSW-half*2-8,38,"Join server",
              can_join?BS_ACTIVE:BS_DISABLED)&&can_join) action=BTN_SRV_CONNECT;
     }
+
+    dt(LSX,LIST_Y+SRVS_PER_PAGE*ROW_H+62,c->directory_message,0x97abc5ff,1);
+    fr(32,754,WIN_W-64,1,0x25354aff);
+    {char footer[120];snprintf(footer,sizeof(footer),"LINECLASH  /  v%s  /  COMMUNITY MULTIPLAYER",TETRINETZ_VERSION);dt(32,768,footer,0x8096b2ff,1);}
+    dt(WIN_W-260,768,"Build connections. Break lines.",0x8096b2ff,1);
 
     /* ================================================================
      * ADD popup — 4 fields: host, port, nick, password
@@ -1141,6 +1348,8 @@ void sdl_render_server_list(ClientCtx*c){
 
     /* ── ABOUT POPUP (server list) ── */
     if(c->about_popup_open) { render_about_popup(c, saved_click); }
+
+    if((c->state==CS_PLAYING || c->state==CS_GAMEOVER) && c->music_player_open) render_music_popup(c,saved_click);
 
     /* ── KEYMAP POPUP (server list) ── */
     if(c->keymap_popup_open) { render_keymap_popup(c, saved_click); }
@@ -1328,7 +1537,7 @@ void sdl_render_lobby_select(ClientCtx*c){
     SDL_RenderClear(g_rend);
 
     /* Block all background interaction when any popup is open */
-    int any_popup_early = (c->motd_popup_open||c->keymap_popup_open||c->about_popup_open);
+    int any_popup_early = (c->motd_popup_open||c->keymap_popup_open||c->about_popup_open||c->music_player_open);
     if(any_popup_early) g_popup_blocked=1;
 
     /* Title bar */
@@ -1748,7 +1957,7 @@ void sdl_render_lobby_select(ClientCtx*c){
         (void)hdr_rows;
     }
 
-    g_popup_blocked = c->motd_popup_open || c->keymap_popup_open || c->about_popup_open;
+    g_popup_blocked = c->motd_popup_open || c->keymap_popup_open || c->about_popup_open || c->music_player_open;
     int saved_click_ls = g_mouse.clicked; /* capture before popup blocks it */
     if(g_popup_blocked) g_mouse.clicked = 0;
     /* MOTD edit popup */
@@ -1784,6 +1993,8 @@ void sdl_render_lobby_select(ClientCtx*c){
     /* ── ABOUT POPUP (lobby-select) ── */
     if(c->about_popup_open) { render_about_popup(c, saved_click_ls); }
 
+    if((c->state==CS_PLAYING || c->state==CS_GAMEOVER) && c->music_player_open) render_music_popup(c,saved_click_ls);
+
     /* ── KEYMAP POPUP (lobby-select) ── */
     if(c->keymap_popup_open) { render_keymap_popup(c, saved_click_ls); }
 
@@ -1795,7 +2006,7 @@ void sdl_render_lobby_select(ClientCtx*c){
 void sdl_render_game(ClientCtx*c){
     int any_popup_g = (c->kick_popup_open||c->team_popup_open||
                        c->game_options_popup_open||c->ai_players_popup_open||
-                       c->keymap_popup_open);
+                       c->keymap_popup_open||c->about_popup_open||c->music_player_open);
     int saved_click_g = g_mouse.clicked;
     g_popup_blocked = any_popup_g;
     if(any_popup_g) g_mouse.clicked=0;
@@ -1808,7 +2019,7 @@ void sdl_render_game(ClientCtx*c){
     char buf[80];
     BtnId action=BTN_NONE;
 
-    SDL_SetRenderDrawColor(g_rend,0x1a,0x1a,0x2e,0xff);
+    SDL_SetRenderDrawColor(g_rend,0x0b,0x11,0x1b,0xff);
     SDL_RenderClear(g_rend);
 
     /* Header */
@@ -2022,9 +2233,11 @@ void sdl_render_game(ClientCtx*c){
      else if(_hsc==225||_hsc==229) snprintf(_hk,sizeof(_hk),"[Sft]");
      else if(_hsc>=4&&_hsc<=29) snprintf(_hk,sizeof(_hk),"[%c]",(char)('A'+_hsc-4));
      else snprintf(_hk,sizeof(_hk),"[%d]",_hsc);
-     dhold(sbx, 36, sbw, 86, c->hold.type, c->hold_used, _hk);}
+     dhold(sbx, 36, sbw, 70, c->hold.type, c->hold_used, _hk);}
     /* Next piece */
-    dnext(sbx,130,sbw,86,&c->next);
+    dnext(sbx,114,sbw,70,&c->next);
+    if((c->state==CS_PLAYING || c->state==CS_GAMEOVER) && dbtn(sbx,190,116,26,"Music Player",BS_NORMAL)) action=BTN_MUSIC_PLAYER;
+    if(dbtn(sbx+122,190,sbw-122,26,"About",BS_NORMAL)) action=BTN_SRV_ABOUT;
 
     /* PLAYER WINS — per-room session leaderboard */
     {int py=224, ph=c->lb_count>0?(c->lb_count*16+22):36;
@@ -2140,6 +2353,20 @@ void sdl_render_game(ClientCtx*c){
             }
         }
     }
+
+    /* A quiet arena panel replaces the unstructured blank space in solo rooms. */
+    {int opponents=0;
+     for(int n=0;n<MAX_PLAYERS;n++)if(n+1!=c->slot && c->opp_nicks[n][0])opponents++;
+     if(!opponents) {
+         int ax=OPP_START_X,aw=WIN_W-ax-18;
+         surface(ax,48,aw,260,0x131f2eff,0x2b3c51ff);
+         dt(ax+24,72,"THE ARENA",0x72dfbbff,1);
+         dt(ax+24,111,c->state==CS_IN_LOBBY?"Make room for a rivalry.":"Your board. Your rhythm.",0xe9f1fcff,2);
+         dt(ax+24,163,"Opponent boards appear here when players join.",0x97abc5ff,1);
+         dt(ax+24,190,"Practise solo, or invite someone into the room.",0x97abc5ff,1);
+         fr(ax+24,223,aw-48,1,0x2b3c51ff);
+         dt(ax+24,247,"F8  Previous track    F9  Pause music    F10  Next",0x97abc5ff,1);
+     }}
 
     /* ---- Opponents with per-player TAUNT button below each board ---- */
     /* OPP_FIELD_H+18 = board panel height; +16 taunt btn gap; row pitch = OPP_FIELD_H+34+taunt */
@@ -2392,6 +2619,9 @@ void sdl_render_game(ClientCtx*c){
         }
     }
 
+    if(c->about_popup_open) render_about_popup(c,saved_click_g);
+    if((c->state==CS_PLAYING || c->state==CS_GAMEOVER) && c->music_player_open) render_music_popup(c,saved_click_g);
+
     /* ── KEYMAP POPUP (game room) ── */
     if(c->keymap_popup_open) { render_keymap_popup(c, saved_click_g); }
 
@@ -2413,6 +2643,19 @@ int sdl_poll_events(ClientCtx *c) {
         case SDL_TEXTINPUT:
             client_on_key(c, 0, 0, 1, ev.text.text);
             break;
+        case SDL_MOUSEWHEEL: {
+            float amount=(float)ev.wheel.y;
+#if SDL_VERSION_ATLEAST(2,0,18)
+            if(ev.wheel.preciseY!=0) amount=ev.wheel.preciseY;
+#endif
+            if(ev.wheel.direction==SDL_MOUSEWHEEL_FLIPPED) amount=-amount;
+            if(amount!=0) {
+                int step=amount>0?1:-1;
+                if(c->music_player_open) c->music_scroll-=step*2;
+                else if(c->about_popup_open) c->about_music_page-=step;
+            }
+            break;
+        }
         case SDL_MOUSEMOTION:
             g_mouse.x = ev.motion.x;
             g_mouse.y = ev.motion.y;
@@ -2464,12 +2707,14 @@ int sdl_init(void) {
      * Without this, rendering only covers the top-left quarter on 2x displays. */
     SDL_RenderSetLogicalSize(g_rend, WIN_W, WIN_H);
     SDL_SetRenderDrawBlendMode(g_rend, SDL_BLENDMODE_NONE);
+    ui_font_init();
     SDL_StartTextInput();
     return 1;
 }
 
 void sdl_shutdown(void) {
     SDL_StopTextInput();
+    if (g_ui_font) {SDL_DestroyTexture(g_ui_font);g_ui_font=NULL;}
     if (g_rend) { SDL_DestroyRenderer(g_rend); g_rend = NULL; }
     if (g_win)  { SDL_DestroyWindow(g_win);    g_win  = NULL; }
     SDL_Quit();

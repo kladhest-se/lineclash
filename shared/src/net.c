@@ -283,16 +283,99 @@ int net_connect_nb_poll(sock_t s) {
 /* ============================================================
  * Send a complete line (appends \n)
  * ============================================================ */
-int net_send(sock_t s, const char *msg) {
-    char buf[MAX_MSG_LEN + 2];
-    int len;
-    snprintf(buf, sizeof(buf), "%s\n", msg);
-    len = (int)strlen(buf);
+/* Bounded queues preserve whole lines across partial writes/EAGAIN. Each
+ * application pumps these once per frame, including sockets with no input. */
+#define NET_OUTPUT_LIMIT (64 * 1024)
+#define NET_OUTPUT_TIMEOUT 5
+struct OutputQueue {
+    sock_t sock;
+    size_t len;
+    time_t stalled_since;
+    struct OutputQueue *next;
+    char data[NET_OUTPUT_LIMIT];
+};
+static struct OutputQueue *outputs;
+
+static int send_error_retry(void) {
 #ifdef PLATFORM_WINDOWS
-    return send(s, buf, len, 0) == len;
+    int e = WSAGetLastError();
+    return e == WSAEWOULDBLOCK || e == WSAEINTR;
 #else
-    return send(s, buf, len, MSG_NOSIGNAL) == len;
+    return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR;
 #endif
+}
+
+static void output_discard(sock_t s) {
+    struct OutputQueue **q = &outputs;
+    while (*q) {
+        if ((*q)->sock == s) {
+            struct OutputQueue *old = *q;
+            *q = old->next; free(old); return;
+        }
+        q = &(*q)->next;
+    }
+}
+
+void net_close(sock_t s) {
+    output_discard(s);
+#ifdef PLATFORM_WINDOWS
+    closesocket(s);
+#else
+    close(s);
+#endif
+}
+
+/* On permanent failure, shutdown makes the owner's normal receive path
+ * disconnect the peer; never close a descriptor behind the owner's back. */
+static int output_flush(struct OutputQueue *q) {
+    while (q->len) {
+#ifdef PLATFORM_WINDOWS
+        int n = send(q->sock, q->data, (int)q->len, 0);
+#else
+        int n = (int)send(q->sock, q->data, q->len, MSG_NOSIGNAL);
+#endif
+        if (n > 0) {
+            q->len -= n;
+            memmove(q->data, q->data + n, q->len);
+            q->stalled_since = time(NULL);
+        } else {
+            if (n < 0 && send_error_retry() &&
+                time(NULL) - q->stalled_since < NET_OUTPUT_TIMEOUT) return 1;
+            shutdown(q->sock, 2); return 0;
+        }
+    }
+    return 1;
+}
+
+void net_flush_all(void) {
+    struct OutputQueue **at = &outputs;
+    while (*at) {
+        struct OutputQueue *q = *at;
+        if (!output_flush(q) || !q->len) {
+            *at = q->next; free(q);
+        } else at = &q->next;
+    }
+}
+
+int net_send(sock_t s, const char *msg) {
+    struct OutputQueue *q;
+    size_t len = strlen(msg);
+    if (s == INVALID_SOCK || len > MAX_MSG_LEN) return 0;
+    for (q = outputs; q && q->sock != s; q = q->next) {}
+    if (!q) {
+        q = (struct OutputQueue *)calloc(1, sizeof(*q));
+        if (!q) { shutdown(s, 2); return 0; }
+        q->sock = s; q->stalled_since = time(NULL);
+        q->next = outputs; outputs = q;
+    }
+    if (q->len + len + 1 > sizeof(q->data)) {
+        shutdown(s, 2); output_discard(s); return 0;
+    }
+    memcpy(q->data + q->len, msg, len);
+    q->len += len; q->data[q->len++] = '\n';
+    if (!output_flush(q)) { output_discard(s); return 0; }
+    if (!q->len) output_discard(s);
+    return 1; /* accepted for ordered delivery */
 }
 
 /* ============================================================
@@ -302,72 +385,83 @@ int net_send(sock_t s, const char *msg) {
  * Non-blocking safe: EAGAIN/EWOULDBLOCK → return 0 (try again later).
  * recv() == 0 means the peer closed the connection gracefully → return -1.
  * ============================================================ */
-int net_recv(sock_t s, char *buf, int *len, char *line, int maxline) {
-    char tmp[RECV_BUF_SIZE];
-    int n, i;
-    int would_block = 0;
-    if (s == INVALID_SOCK) return -1;
-
-    /* Try to read more data */
-#ifdef PLATFORM_WINDOWS
-    n = recv(s, tmp, sizeof(tmp) - 1, 0);
-    if (n == SOCKET_ERROR) {
-        int err = WSAGetLastError();
-        if (err == WSAEWOULDBLOCK) { n = 0; would_block = 1; }
-        else return -1;
-    } else if (n == 0) {
-        would_block = -1; /* graceful close — drain buffer then signal -1 */
-    }
-#else
-    n = recv(s, tmp, sizeof(tmp) - 1, 0);
-    if (n < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) { n = 0; would_block = 1; }
-        else { n = 0; would_block = -1; } /* real error — drain buffer then -1 */
-    } else if (n == 0) {
-        would_block = -1; /* graceful close — drain buffer then signal -1 */
-    }
-#endif
-
-    /* Append received data to buffer */
-    if (n > 0) {
-        int space = RECV_BUF_SIZE - 1 - *len;
-        if (space <= 0) {
-            /* Buffer full: try to make room by discarding up to first newline */
-            char *nl = (char *)memchr(buf, '\n', *len);
-            if (!nl) nl = (char *)memchr(buf, '\r', *len);
-            if (nl) {
-                int skip = (int)(nl - buf) + 1;
-                *len -= skip;
-                if (*len > 0) memmove(buf, buf + skip, *len);
-                buf[*len] = '\0';
-                space = RECV_BUF_SIZE - 1 - *len;
-            }
-        }
-        if (n > space) n = space; /* clamp to available space */
-        if (n > 0) {
-            memcpy(buf + *len, tmp, n);
-            *len += n;
-            buf[*len] = '\0';
-        }
-    }
-
-    /* Look for a complete line in the buffer */
+/* Extract before reading so coalesced lines never get discarded. Oversized
+ * or NUL-containing protocol input is rejected, not silently truncated. */
+static int extract_line(char *buf, int *len, char *line, int maxline) {
+    int i;
     for (i = 0; i < *len; i++) {
         if (buf[i] == '\n' || buf[i] == '\r') {
-            int linelen = i;
-            if (linelen >= maxline) linelen = maxline - 1;
-            memcpy(line, buf, linelen);
-            line[linelen] = '\0';
-            /* Consume line (and any trailing \r\n) from buffer */
-            i++;
-            while (i < *len && (buf[i] == '\n' || buf[i] == '\r')) i++;
-            *len -= i;
-            if (*len > 0) memmove(buf, buf + i, *len);
-            buf[*len] = '\0';
+            int used = i + 1;
+            if (i >= maxline) return -1;
+            memcpy(line, buf, i); line[i] = 0;
+            while (used < *len && (buf[used] == '\n' || buf[used] == '\r')) used++;
+            *len -= used; memmove(buf, buf + used, *len); buf[*len] = 0;
             return 1;
         }
     }
+    return *len >= maxline ? -1 : 0;
+}
 
-    /* No complete line yet */
-    return (would_block == -1) ? -1 : 0; /* -1 signals closed connection */
+int net_recv(sock_t s, char *buf, int *len, char *line, int maxline) {
+    int r, n, space;
+    if (s == INVALID_SOCK || maxline < 1 || *len < 0 || *len >= RECV_BUF_SIZE) return -1;
+    net_flush_all();
+    r = extract_line(buf, len, line, maxline);
+    if (r) return r;
+    space = RECV_BUF_SIZE - 1 - *len;
+    if (!space) return -1;
+    n = (int)recv(s, buf + *len, space, 0);
+    if (n == 0) return -1;
+    if (n < 0) return send_error_retry() ? 0 : -1;
+    if (memchr(buf + *len, 0, n)) return -1;
+    *len += n; buf[*len] = 0;
+    return extract_line(buf, len, line, maxline);
+}
+
+/* Reconnect attempts never sleep or wait for connect inside the render loop. */
+uint64_t net_now_ms(void) {
+#ifdef PLATFORM_WINDOWS
+    return (uint64_t)GetTickCount64();
+#else
+    struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+#endif
+}
+void net_peer_address(sock_t s, char *out, size_t size, const char *fallback) {
+    struct sockaddr_in addr; socklen_t len = sizeof(addr);
+    if (getpeername(s, (struct sockaddr *)&addr, &len) == 0)
+        snprintf(out, size, "%s", inet_ntoa(addr.sin_addr));
+    else snprintf(out, size, "%s", fallback);
+}
+void net_reconnect_stop(NetReconnect *r) {
+    if (r->active && r->candidate != INVALID_SOCK) sock_close(r->candidate);
+    r->candidate = INVALID_SOCK; r->active = 0;
+}
+void net_reconnect_begin(NetReconnect *r, uint64_t now, int seconds) {
+    memset(r, 0, sizeof(*r)); r->candidate = INVALID_SOCK;
+    r->active = seconds > 0;
+    r->deadline = now + (uint64_t)(seconds > 0 ? seconds : 0) * 1000;
+    r->due = now + 250; /* allow the server to observe the old connection close */
+}
+sock_t net_reconnect_poll(NetReconnect *r, const char *host, int port, uint64_t now) {
+    if (!r->active) return INVALID_SOCK;
+    if (now >= r->deadline) { net_reconnect_stop(r); return INVALID_SOCK; }
+    if (r->candidate == INVALID_SOCK) {
+        if (now < r->due) return INVALID_SOCK;
+        r->attempts++;
+        r->candidate = net_connect_nb(host, port);
+        r->attempt_deadline = now + 1500;
+        r->due = now + 1000;
+        if (r->candidate == INVALID_SOCK) return INVALID_SOCK;
+    }
+    {
+        int ready = net_connect_nb_poll(r->candidate);
+        if (ready == 1) {
+            sock_t s = r->candidate; r->candidate = INVALID_SOCK; return s;
+        }
+        if (ready < 0 || now >= r->attempt_deadline) {
+            sock_close(r->candidate); r->candidate = INVALID_SOCK;
+        }
+    }
+    return INVALID_SOCK;
 }

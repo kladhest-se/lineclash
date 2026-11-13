@@ -1,25 +1,22 @@
 # lineclash - SDL2 Client Makefile
 UNAME := $(shell uname -s 2>/dev/null || echo Windows)
+ifneq ($(filter MINGW% MSYS% CYGWIN%,$(UNAME)),)
+UNAME := Windows
+endif
 .DEFAULT_GOAL := all
 
-# ---- Version — extracted from CHANGELOG.md via get-version.sh ----
-# Can be overridden on command line: make VERSION=1.0
-ifndef VERSION
-  VERSION     := $(shell "$(CURDIR)/../get-version.sh" 2>/dev/null || echo dev)
-  VERSION_NUM := $(shell "$(CURDIR)/../get-version.sh" num 2>/dev/null || echo 0)
-  BUILD_DATE  := $(shell "$(CURDIR)/../get-version.sh" date 2>/dev/null || echo unknown)
-  ifeq ($(VERSION),)
-    VERSION     := dev
-    VERSION_NUM := 0
-    BUILD_DATE  := unknown
-  endif
-endif
 include ../../version.mk
+
 
 .PHONY: all clean run gen-buildnum
 
-gen-buildnum:
-	@SCRIPT=$(CURDIR)/../get-version.sh; BN=$$($$SCRIPT buildnum 2>/dev/null || echo 0); BD=$$($$SCRIPT date 2>/dev/null || date -u +%Y-%m-%d); { echo '/* auto-generated */'; echo "#define BUILD_NUMBER $$BN"; echo "#define BUILD_DATE \"$$BD\""; } > src/buildnum.h
+gen-buildnum: src/buildnum.h
+
+.PHONY: FORCE
+FORCE:
+src/buildnum.h: FORCE ../../get-version.sh ../../version.mk
+	@VERSION="$(VERSION)" sh ../../get-version.sh header $@
+
 
 
 # ---- SDL2 detection (POSIX/Windows hosts) ----
@@ -76,8 +73,11 @@ INC    = -I../../shared/include -Isrc $(SDL2_CFLAGS)
 ifeq ($(CLIENT_SRCS),)
 CLIENT_SRCS = src/lineclash.c \
               src/client.c    \
+              src/directory.c \
               src/render_sdl.c \
               src/sound.c     \
+              src/music.c     \
+              src/music_decoder.c \
               src/mod.c
 endif
 
@@ -125,6 +125,7 @@ build/protocol.o: $(SHARED)/protocol.c | build
 
 clean:
 	rm -f $(CLIENT_OBJS) $(TARGET) lineclash lineclash.exe src/buildnum.h
+	rm -f src/*.d
 	rm -rf build
 
 run: all
@@ -152,3 +153,15 @@ help:
 	@echo ""
 	@echo ""
 	@echo "  - ahi.device v4+ for sound (AHI package)"
+
+# Track headers and serialize metadata generation before parallel compilation.
+CFLAGS += -MMD -MP
+$(OBJS): src/buildnum.h
+-include $(OBJS:.o=.d)
+
+# HTTPS discovery uses the system TLS stack on Windows and libcurl elsewhere.
+ifneq ($(filter Windows,$(UNAME))$(filter win32,$(PLATFORM)),)
+LDFLAGS += -lwinhttp
+else
+LDFLAGS += -lcurl
+endif

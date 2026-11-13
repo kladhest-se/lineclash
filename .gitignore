@@ -23,3 +23,39 @@ dist/
 # Editor
 .vscode/
 *.swp
+
+# Dependency tracking and test binaries
+*.d
+*.ao
+tests/test_field
+tests/test_net
+tests/test_auth
+tests/test_integration
+
+# Client lifecycle test outputs
+tests/test_gui
+*.dSYM/
+
+# Release artifacts and machine-specific settings
+outputs/
+.release-config.json
+release-config.local.json
+__pycache__/
+*.pyc
+
+tests/test_music
+tests/test_music_ui
+
+tests/test_music_decoder
+
+# Private directory configuration / durable delivery state
+public-web/config.php
+public-web/config.inc.php
+*.local.php
+.env
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+*.health.json
+tests/test_discovery

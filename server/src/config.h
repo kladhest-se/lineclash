@@ -34,7 +34,7 @@ typedef struct {
     int  global_taunts;
     int  status_port;    /* HTTP JSON status API port */
     int  status_api;     /* 1=enabled, 0=disabled */
-    int  debug_auth;     /* 1=log full hash/nonce/hmac on auth failure */
+    int  debug_auth;     /* legacy diagnostic toggle; secrets are never logged */
     int  debug_ingame;   /* 1=log in-game events: specials, attacks, taunts, levels */
     int  allow_bots;     /* 1 = hosts/admins may add AI bots to rooms */
     /* Game defaults — applied to every room at game start */

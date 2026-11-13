@@ -1,0 +1,17 @@
+[
+  {
+    "file": "dr_mp3.h",
+    "url": "https://raw.githubusercontent.com/mackron/dr_libs/master/dr_mp3.h",
+    "sha256": "7a6cc38b0afdb55cfc9eec991d9169d67beb8fd910be2995121510cdaa99c356"
+  },
+  {
+    "file": "dr_wav.h",
+    "url": "https://raw.githubusercontent.com/mackron/dr_libs/master/dr_wav.h",
+    "sha256": "7c9660d75361ad6175e6217c63a1075c9512445c06bc951197fc479179f76b39"
+  },
+  {
+    "file": "stb_vorbis.c",
+    "url": "https://raw.githubusercontent.com/nothings/stb/master/stb_vorbis.c",
+    "sha256": "b52cf518355f7b2d181f18b97b812f361ffeb26299d935c8cf29e842401d60a6"
+  }
+]

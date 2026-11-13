@@ -1,0 +1,59 @@
+/* Render actual game/player/About screens with SDL's software renderer. */
+#include "../clients/gui/src/render_sdl.c"
+#include <assert.h>
+static void capture(const char *name) {
+    int w,h; assert(SDL_GetRendererOutputSize(g_rend,&w,&h)==0);
+    SDL_Surface *s=SDL_CreateRGBSurfaceWithFormat(0,w,h,32,SDL_PIXELFORMAT_ARGB8888); assert(s);
+    assert(SDL_RenderReadPixels(g_rend,NULL,s->format->format,s->pixels,s->pitch)==0);
+    char path[2048];
+#ifdef PLATFORM_WINDOWS
+    char folder[1024]; DWORD n=GetTempPathA(sizeof(folder),folder); assert(n>0 && n<sizeof(folder));
+    snprintf(path,sizeof(path),"%s%s",folder,name);
+#else
+    const char *folder=SDL_getenv("TMPDIR"); if(!folder || !folder[0]) folder="/tmp";
+    snprintf(path,sizeof(path),"%s/%s",folder,name);
+#endif
+    assert(SDL_SaveBMP(s,path)==0); SDL_FreeSurface(s);
+}
+
+int main(void) {
+    SDL_setenv("SDL_VIDEODRIVER","dummy",1); SDL_setenv("SDL_AUDIODRIVER","dummy",1);
+    assert(sdl_init()); assert(sound_init()); music_set_res_prefix("../"); music_select(16);
+    MusicPlayback p;
+    for(int i=0;i<500;i++) { music_tick(); music_snapshot(&p); if(p.duration>0 && p.position>1)break; SDL_Delay(5); }
+    ClientCtx c; memset(&c,0,sizeof(c)); c.running=1; c.state=CS_PLAYING; c.slot=1; c.room_id=1; c.priv_level=3;
+    strcpy(c.nick,"Player"); c.hold.type=-1; c.km.hold=6; c.ping_ms=24;
+    field_init(&c.my_field); piece_init(&c.cur,1); piece_init(&c.next,2);
+    c.music_player_open=1; sdl_render_game(&c); capture("lineclash-music-player.bmp");
+    c.music_player_open=0; c.about_popup_open=1; c.about_music_page=2;
+    sdl_render_game(&c); capture("lineclash-music-about.bmp");
+    c.about_popup_open=0; sdl_render_game(&c); capture("lineclash-music-game.bmp");
+    /* Wheel and Escape route to the player without sending gameplay input. */
+    c.music_player_open=1; c.music_scroll=0; SDL_Event e; SDL_zero(e);
+    e.type=SDL_MOUSEWHEEL; e.wheel.y=-1;
+#if SDL_VERSION_ATLEAST(2,0,18)
+    e.wheel.preciseY=-1;
+#endif
+     e.wheel.windowID=SDL_GetWindowID(g_win); assert(SDL_PushEvent(&e)==1);
+    for(int i=0;i<20 && c.music_scroll!=2;i++) { sdl_poll_events(&c); SDL_Delay(5); }
+    assert(c.music_scroll==2);
+    client_on_key(&c,41,0,0,""); assert(!c.music_player_open);
+    c.state=CS_SERVER_LIST; client_on_button(&c,BTN_MUSIC_PLAYER);
+    assert(!c.music_player_open);
+    music_toggle_pause();
+    c.music_player_open=1; client_tick(&c); assert(!c.music_player_open);
+    music_snapshot(&p); assert(p.index==0 && !p.paused);
+    c.state=CS_PLAYING; client_on_button(&c,BTN_MUSIC_PLAYER);
+    assert(c.music_player_open);
+    c.state=CS_GAMEOVER; client_tick(&c); assert(c.music_player_open);
+    c.music_player_open=0;c.state=CS_SERVER_LIST;c.server_count=0;
+    sdl_render_server_list(&c);capture("lineclash-modern-empty.bmp");
+    c.server_count=8;c.server_cursor=0;c.server_filter=0;c.server_sort=1;
+    strcpy(c.directory_message,"Found 8 public servers");
+    for(int i=0;i<c.server_count;i++) {
+        SavedServer *s=&c.server_list[i];snprintf(s->name,sizeof(s->name),"Public server %d",i+1);strcpy(s->host,"game.example.org");s->port=31457+i;s->online=1;s->ping_ms=20+i*13;s->capacity=8;s->users_idle=i;s->favourite=i%2;s->last_used=100+i;
+    }
+    sdl_render_server_list(&c);capture("lineclash-native-directory.bmp");
+    c.server_filter=1;sdl_render_server_list(&c);capture("lineclash-favourites.bmp");
+    sound_shutdown(); sdl_shutdown(); return 0;
+}

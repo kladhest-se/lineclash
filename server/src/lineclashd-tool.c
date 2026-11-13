@@ -36,63 +36,11 @@
 #include <termios.h>
 #endif
 
-/* The server sends lobby list + full leaderboard on connect, which can exceed
- * the shared RECV_BUF_SIZE (4096). Use a larger buffer for the auth loop. */
-#define TOOL_RECV_BUF 32768
-/* File-scope auth hash buffer — avoids stack corruption on some platforms */
+/* Shared buffering drains complete lines before reading more network data. */
+#define TOOL_RECV_BUF RECV_BUF_SIZE
 static char g_auth_hash[65];
-
-/* net_recv uses RECV_BUF_SIZE as overflow guard, which is too small for
- * the server's lobby+leaderboard burst. This wrapper uses TOOL_RECV_BUF. */
 static int tool_net_recv(sock_t s, char *buf, int *len, char *line, int maxline) {
-    int i;
-    /* IMPORTANT: scan existing buffer for a complete line BEFORE calling recv().
-     * On a blocking socket, recv() will block even if the buffer already has
-     * complete lines waiting to be parsed. */
-    for (i = 0; i < *len; i++) {
-        if (buf[i] == '\n' || buf[i] == '\r') {
-            int ll = i; if (ll >= maxline) ll = maxline-1;
-            memcpy(line, buf, ll); line[ll] = '\0';
-            i++;
-            while (i < *len && (buf[i]=='\n'||buf[i]=='\r')) i++;
-            *len -= i;
-            if (*len > 0) memmove(buf, buf+i, *len);
-            buf[*len] = '\0';
-            return 1;  /* line extracted from buffer — no recv() needed */
-        }
-    }
-    /* Buffer has no complete line — call recv() to get more data */
-    {char tmp[TOOL_RECV_BUF]; int n;
-#ifdef PLATFORM_POSIX
-    n = recv(s, tmp, sizeof(tmp)-1, 0);
-    if (n < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
-        return -1;
-    } else if (n == 0) return -1;
-#else
-    n = recv(s, tmp, sizeof(tmp)-1, 0);
-    if (n == 0) return -1;
-    if (n < 0) return 0;
-#endif
-    if (*len + n < TOOL_RECV_BUF - 1) {
-        memcpy(buf + *len, tmp, n);
-        *len += n;
-        buf[*len] = '\0';
-    }
-    /* Now scan for a line in the newly filled buffer */
-    for (i = 0; i < *len; i++) {
-        if (buf[i] == '\n' || buf[i] == '\r') {
-            int ll = i; if (ll >= maxline) ll = maxline-1;
-            memcpy(line, buf, ll); line[ll] = '\0';
-            i++;
-            while (i < *len && (buf[i]=='\n'||buf[i]=='\r')) i++;
-            *len -= i;
-            if (*len > 0) memmove(buf, buf+i, *len);
-            buf[*len] = '\0';
-            return 1;
-        }
-    }}
-    return 0;  /* got data but no complete line yet */
+    return net_recv(s, buf, len, line, maxline);
 }
 
 /* Password masking removed — tool no longer prompts interactively */
@@ -195,7 +143,7 @@ static void usage(const char *prog) {
     printf("  %s --connect <alias>        Connect and open interactive prompt\n",prog);
     printf("  %s --command <alias> <cmd>  Run a single command, print output, exit\n",prog);
     printf("\nOptions:\n");
-    printf("  --debug                     Show auth hash/nonce/hmac detail\n");
+    printf("  --debug                     Show connection/auth progress (no secrets)\n");
     printf("  --quiet                     Suppress connection/auth status messages\n");
     printf("  --cfg <path>                Use a custom credentials file\n");
     printf("  --version                   Show version\n");
@@ -234,14 +182,11 @@ static int cmd_delete(const char *alias) {
 static sock_t do_connect_auth(const char *host, int port, const char *nick,
                                const char *hash_in, char *srvname_out, int sn_len,
                                char *recv_buf, int *recv_len, int debug, int quiet) {
-#ifndef PLATFORM_POSIX
-    fprintf(stderr,"Remote mode requires POSIX.\n"); return INVALID_SOCK;
-#else
     memset(g_auth_hash, 0, sizeof(g_auth_hash));
     if (hash_in && hash_in[0]) memcpy(g_auth_hash, hash_in, 64);
     const char *hash = g_auth_hash;
     char hmac[65], buf[MAX_MSG_LEN], line2[MAX_MSG_LEN];
-    if (debug) fprintf(stderr,"[AUTH-DEBUG] hash=[%s](%zu)\n", hash, strlen(hash));
+    if (debug) fprintf(stderr,"[AUTH-DEBUG] Starting authentication\n");
     if (srvname_out && sn_len > 0) srvname_out[0] = '\0';
 
     if (!quiet) printf("Connecting to %s:%d ...\n", host, port);
@@ -293,8 +238,7 @@ static sock_t do_connect_auth(const char *host, int port, const char *nick,
                 }
                 hmac_sha256_hex(key, args[0], hmac);
                 snprintf(buf, sizeof(buf), "authresp %s", hmac);
-                if (debug) fprintf(stderr,"[TOOL] hash=[%s](%zu) nonce=[%s](%zu) hmac=[%s]\n",
-                        hash, strlen(hash), args[0], strlen(args[0]), hmac);
+                if (debug) fprintf(stderr,"[TOOL] Challenge response prepared\n");
             }
             net_send(s, buf);
         } else if (!strcmp(cmd,"authok")) {
@@ -309,7 +253,6 @@ static sock_t do_connect_auth(const char *host, int port, const char *nick,
     net_set_nonblocking(s);
     if (!quiet) printf("Authenticated.\n");
     return s;
-#endif
 }
 
 void run_monitor(sock_t s, char *rb, int *rl);  /* forward decl */
@@ -657,7 +600,6 @@ int main(int argc, char *argv[]) {
         char srvname[128]="";
         if (opt_debug) {
             fprintf(stderr,"[debug] nick : %s\n", nick);
-            fprintf(stderr,"[debug] hash : %s\n", hash);
             fprintf(stderr,"[debug] host : %s:%d\n", host, port);
         }
         sock_t s = do_connect_auth(host, port, nick, hash,
@@ -676,7 +618,6 @@ int main(int argc, char *argv[]) {
         char srvname[128]="";
         if (opt_debug) {
             fprintf(stderr,"[debug] nick : %s\n", nick);
-            fprintf(stderr,"[debug] hash : %s\n", hash);
             fprintf(stderr,"[debug] host : %s:%d\n", host, port);
         }
         sock_t s = do_connect_auth(host, port, nick, hash,
@@ -695,7 +636,6 @@ int main(int argc, char *argv[]) {
         char srvname[128]="";
         if (opt_debug) {
             fprintf(stderr,"[debug] nick : %s\n", nick);
-            fprintf(stderr,"[debug] hash : %s\n", hash);
             fprintf(stderr,"[debug] host : %s:%d\n", host, port);
         }
         sock_t s = do_connect_auth(host, port, nick, hash,

@@ -9,7 +9,11 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <time.h>
+#ifdef PLATFORM_WINDOWS
+#include <psapi.h>
+#else
 #include <sys/resource.h>
+#endif
 
 /* ── Network / activity stats ── */
 unsigned long g_stat_bytes_sent    = 0;
@@ -27,7 +31,7 @@ unsigned long g_stat_disconnects   = 0;
 unsigned long g_stat_log_lines     = 0;
 time_t        g_stat_start_time    = 0;
 
-#define OUT(fmt,...) do{ char _ob[512]; snprintf(_ob,sizeof(_ob),fmt,##__VA_ARGS__); out(_ob,ctx); }while(0)
+#define CMD_OUT(fmt,...) do{ char _ob[512]; snprintf(_ob,sizeof(_ob),fmt,##__VA_ARGS__); out(_ob,ctx); }while(0)
 
 /* ── sha256 for mkusr ── */
 typedef unsigned int _u32;typedef unsigned long long _u64;typedef unsigned char _u8;
@@ -189,60 +193,60 @@ int server_exec_command(const char *line, const char *caller,
      * HELP
      * ================================================================ */
     if(!strcmp(verb,"help")||!strcmp(verb,"?")){
-        OUT("LineClash v%s — Admin Command Reference", TETRINETZ_VERSION);
+        CMD_OUT("LineClash v%s — Admin Command Reference", TETRINETZ_VERSION);
         out("", ctx);
-        OUT("SERVER");
-        OUT("  server version                      Version, platform and build info");
-        OUT("  server path                         Config, database and log file paths");
-        OUT("  server status                       Server status snapshot");
-        OUT("  server motd set <text>              Change MOTD (persisted to config)");
-        OUT("  server shutdown                     Shut down immediately");
-        OUT("  server shutdown <minutes> [reason]  Timed shutdown with countdown");
-        OUT("  server shutdown cancel              Cancel pending timed shutdown");
-        OUT("  server set debug 1|0                Toggle verbose debug logging");
+        CMD_OUT("SERVER");
+        CMD_OUT("  server version                      Version, platform and build info");
+        CMD_OUT("  server path                         Config, database and log file paths");
+        CMD_OUT("  server status                       Server status snapshot");
+        CMD_OUT("  server motd set <text>              Change MOTD (persisted to config)");
+        CMD_OUT("  server shutdown                     Shut down immediately");
+        CMD_OUT("  server shutdown <minutes> [reason]  Timed shutdown with countdown");
+        CMD_OUT("  server shutdown cancel              Cancel pending timed shutdown");
+        CMD_OUT("  server set debug 1|0                Toggle verbose debug logging");
         out("", ctx);
-        OUT("CONNECTIONS");
-        OUT("  server connection list              List active connections with ID");
-        OUT("  server connection kill <id>         Kill a connection by ID");
+        CMD_OUT("CONNECTIONS");
+        CMD_OUT("  server connection list              List active connections with ID");
+        CMD_OUT("  server connection kill <id>         Kill a connection by ID");
         out("", ctx);
-        OUT("BOTS  (allow_bots in lineclashd.cfg controls availability)");
-        OUT("  bot add <room_id> easy|medium|hard  Add a bot to a room");
-        OUT("  bot remove <room_id> <slot>         Remove a bot by slot");
-        OUT("  bot list [room_id]                  List active bots");
+        CMD_OUT("BOTS  (allow_bots in lineclashd.cfg controls availability)");
+        CMD_OUT("  bot add <room_id> easy|medium|hard  Add a bot to a room");
+        CMD_OUT("  bot remove <room_id> <slot>         Remove a bot by slot");
+        CMD_OUT("  bot list [room_id]                  List active bots");
         out("", ctx);
-        OUT("ROOMS");
-        OUT("  room list                           Show all room status");
-        OUT("  room set <room_id> specials 0|1     Enable/disable specials");
-        OUT("  room set <room_id> last_wins 0|1    Enable/disable last-player-wins");
-        OUT("  room set <room_id> taunts 0|1       Enable/disable taunts");
-        OUT("  room set <room_id> speedup 0|1      Enable/disable speed-up lines");
-        OUT("  room set <room_id> topic <text>     Set room topic");
+        CMD_OUT("ROOMS");
+        CMD_OUT("  room list                           Show all room status");
+        CMD_OUT("  room set <room_id> specials 0|1     Enable/disable specials");
+        CMD_OUT("  room set <room_id> last_wins 0|1    Enable/disable last-player-wins");
+        CMD_OUT("  room set <room_id> taunts 0|1       Enable/disable taunts");
+        CMD_OUT("  room set <room_id> speedup 0|1      Enable/disable speed-up lines");
+        CMD_OUT("  room set <room_id> topic <text>     Set room topic");
         out("", ctx);
-        OUT("USERS");
-        OUT("  user list                           List online + registered users");
-        OUT("  user list <username>                Show details for one user");
-        OUT("  user add <username>                 Create user account (prompts for password)");
-        OUT("  user remove <username>              Delete user account");
-        OUT("  user set <username> password <pw>   Change password");
-        OUT("  user set <username> hash <sha256>   Set password from hash");
-        OUT("  user set <username> privilege <1-3> Change privilege (1=admin)");
-        OUT("  user set <username> active 1|0      Enable or disable account");
-        OUT("  user kick server <username> [reason]      Kick from server");
-        OUT("  user kick room <room_id> <username> [reason]  Kick from room");
+        CMD_OUT("USERS");
+        CMD_OUT("  user list                           List online + registered users");
+        CMD_OUT("  user list <username>                Show details for one user");
+        CMD_OUT("  user add <username>                 Create user account (prompts for password)");
+        CMD_OUT("  user remove <username>              Delete user account");
+        CMD_OUT("  user set <username> password <pw>   Change password");
+        CMD_OUT("  user set <username> hash <sha256>   Set password from hash");
+        CMD_OUT("  user set <username> privilege <1-3> Change privilege (1=admin)");
+        CMD_OUT("  user set <username> active 1|0      Enable or disable account");
+        CMD_OUT("  user kick server <username> [reason]      Kick from server");
+        CMD_OUT("  user kick room <room_id> <username> [reason]  Kick from room");
         out("", ctx);
-        OUT("MESSAGING");
-        OUT("  say server <msg>                    Send to lobby/server chat");
-        OUT("  say room <room_id> <msg>            Send to players in a room");
-        OUT("  say global <msg>                    Send to all rooms and lobby");
+        CMD_OUT("MESSAGING");
+        CMD_OUT("  say server <msg>                    Send to lobby/server chat");
+        CMD_OUT("  say room <room_id> <msg>            Send to players in a room");
+        CMD_OUT("  say global <msg>                    Send to all rooms and lobby");
         out("", ctx);
-        OUT("BANS");
-        OUT("  ban list                            List all bans");
-        OUT("  ban add user <username> [reason]    Ban user account");
-        OUT("  ban add address <ip> [reason]       Ban IP address");
-        OUT("  ban remove user <username>          Unban user");
-        OUT("  ban remove address <ip>             Unban IP");
+        CMD_OUT("BANS");
+        CMD_OUT("  ban list                            List all bans");
+        CMD_OUT("  ban add user <username> [reason]    Ban user account");
+        CMD_OUT("  ban add address <ip> [reason]       Ban IP address");
+        CMD_OUT("  ban remove user <username>          Unban user");
+        CMD_OUT("  ban remove address <ip>             Unban IP");
         out("", ctx);
-        OUT("  Privilege levels: 1=admin  2=manager  3=user");
+        CMD_OUT("  Privilege levels: 1=admin  2=manager  3=user");
         return 0;
     }
 
@@ -262,26 +266,26 @@ int server_exec_command(const char *line, const char *caller,
     /* server version */
     if(!strcmp(verb,"version")||!strcmp(verb,"lsversion")||
        (!strcmp(sub,"version")||!strcmp(sub,"ver"))) {
-        OUT("LineClash Server v%s", TETRINETZ_VERSION);
+        CMD_OUT("LineClash Server v%s", TETRINETZ_VERSION);
 #if defined(__APPLE__)
-        OUT("Platform : macOS (POSIX)");
+        CMD_OUT("Platform : macOS (POSIX)");
 #elif defined(_WIN32)
-        OUT("Platform : Windows");
+        CMD_OUT("Platform : Windows");
 #else
-        OUT("Platform : Linux/POSIX");
+        CMD_OUT("Platform : Linux/POSIX");
 #endif
-        OUT("Built    : " __DATE__ " " __TIME__);
-        OUT("Database : %s", auth_get_db_path());
+        CMD_OUT("Built    : " __DATE__ " " __TIME__);
+        CMD_OUT("Database : %s", auth_get_db_path());
         return 0;
     }
 
     /* server paths */
     if(!strcmp(verb,"path")||!strcmp(verb,"lspath")||!strcmp(verb,"dbpath")||
        !strcmp(sub,"path")||!strcmp(sub,"paths")) {
-        OUT("Paths:");
-        OUT("  Config  : %s", CFG_FILE);
-        OUT("  Database: %s", auth_get_db_path());
-        OUT("  Log     : %s", g_cfg.log_file[0] ? g_cfg.log_file : "(none)");
+        CMD_OUT("Paths:");
+        CMD_OUT("  Config  : %s", CFG_FILE);
+        CMD_OUT("  Database: %s", auth_get_db_path());
+        CMD_OUT("  Log     : %s", g_cfg.log_file[0] ? g_cfg.log_file : "(none)");
         return 0;
     }
 
@@ -292,7 +296,7 @@ int server_exec_command(const char *line, const char *caller,
         strncpy(g_cfg.motd, new_motd, sizeof(g_cfg.motd)-1);
         g_cfg.motd[sizeof(g_cfg.motd)-1] = '\0';
         config_save_motd(g_cfg.motd); /* persist to config file */
-        OUT("MOTD updated: %s", g_cfg.motd);
+        CMD_OUT("MOTD updated: %s", g_cfg.motd);
         log_info("[ADMIN %s] motd set: %s", caller, g_cfg.motd);
         return 0;
     }
@@ -306,25 +310,25 @@ int server_exec_command(const char *line, const char *caller,
         else if (!strcmp(sub,"set") && n>=4)
             on = atoi(toks[3]);
         else {
-            OUT("Debug: auth=%s  ingame=%s",
+            CMD_OUT("Debug: auth=%s  ingame=%s",
                 g_cfg.debug_auth?"on":"off", g_cfg.debug_ingame?"on":"off");
-            OUT("Usage: server set debug 1|0");
+            CMD_OUT("Usage: server set debug 1|0");
             return 0;
         }
         g_cfg.debug_auth = on; g_cfg.debug_ingame = on;
-        OUT("Debug logging %s.", on?"ENABLED":"DISABLED");
+        CMD_OUT("Debug logging %s.", on?"ENABLED":"DISABLED");
         log_info("[ADMIN %s] debug set %d", caller, on);
         return 0;
     }
     /* legacy debug aliases */
     if(!strcmp(verb,"debug_auth")){
-        if(n>=2){int on=(!strcmp(toks[1],"on")||!strcmp(toks[1],"1"));g_cfg.debug_auth=on;OUT("Auth debug %s.",on?"on":"off");}
-        else OUT("Auth debug: %s",g_cfg.debug_auth?"on":"off");
+        if(n>=2){int on=(!strcmp(toks[1],"on")||!strcmp(toks[1],"1"));g_cfg.debug_auth=on;CMD_OUT("Auth debug %s.",on?"on":"off");}
+        else CMD_OUT("Auth debug: %s",g_cfg.debug_auth?"on":"off");
         return 0;
     }
     if(!strcmp(verb,"debug_ingame")){
-        if(n>=2){int on=(!strcmp(toks[1],"on")||!strcmp(toks[1],"1"));g_cfg.debug_ingame=on;OUT("In-game debug %s.",on?"on":"off");}
-        else OUT("In-game debug: %s",g_cfg.debug_ingame?"on":"off");
+        if(n>=2){int on=(!strcmp(toks[1],"on")||!strcmp(toks[1],"1"));g_cfg.debug_ingame=on;CMD_OUT("In-game debug %s.",on?"on":"off");}
+        else CMD_OUT("In-game debug: %s",g_cfg.debug_ingame?"on":"off");
         return 0;
     }
 
@@ -347,7 +351,7 @@ int server_exec_command(const char *line, const char *caller,
             for(pi=0;pi<MAX_PLAYERS && !killed;pi++){
                 Player *pp=&lb2->players[pi];
                 if(!pp->connected || (int)pp->sock!=kill_id) continue;
-                OUT("Killing connection %d (%s).", kill_id, pp->nick);
+                CMD_OUT("Killing connection %d (%s).", kill_id, pp->nick);
                 log_info("[ADMIN %s] kill connection %d (%s)", caller, kill_id, pp->nick);
                 net_send(pp->sock, "noconnecting Your connection was terminated by an administrator");
                 sock_close(pp->sock); pp->sock=INVALID_SOCK;
@@ -358,21 +362,21 @@ int server_exec_command(const char *line, const char *caller,
         for(pi=0;pi<MAX_PENDING && !killed;pi++){
             Pending *pend=&g_pending[pi];
             if(!pend->active || (int)pend->sock!=kill_id) continue;
-            OUT("Killing connection %d (%s).", kill_id, pend->pending_nick);
+            CMD_OUT("Killing connection %d (%s).", kill_id, pend->pending_nick);
             log_info("[ADMIN %s] kill connection %d (%s)", caller, kill_id, pend->pending_nick);
             net_send(pend->sock, "noconnecting Your connection was terminated by an administrator");
             sock_close(pend->sock);
             memset(pend, 0, sizeof(*pend));
             killed = 1;
         }
-        if(!killed) OUT("No connection with ID %d found.", kill_id);
+        if(!killed) CMD_OUT("No connection with ID %d found.", kill_id);
         return 0;
     }
     if (_do_conn_list || _is_conn_cmd) {
         int cnt=0;
-        OUT("%4s  %-20s %-8s %-12s %-8s %-10s %s",
+        CMD_OUT("%4s  %-20s %-8s %-12s %-8s %-10s %s",
             "ID","Username","Room","Status","Client","Platform","IP");
-        OUT("%4s  %-20s %-8s %-12s %-8s %-10s %s",
+        CMD_OUT("%4s  %-20s %-8s %-12s %-8s %-10s %s",
             "----","--------","----","------","------","--------","--");
         for(li=0;li<g_server.lobby_count;li++){
             Lobby *lb2=&g_server.lobbies[li];
@@ -380,7 +384,7 @@ int server_exec_command(const char *line, const char *caller,
                 Player *pp=&lb2->players[pi];
                 if(!pp->connected||pp->is_bot) continue;
                 const char *st=lb2->game_state==STATE_PLAYING?(pp->alive?"Playing":"Eliminated"):"Idle";
-                OUT("%4d  %-20s %-8s %-12s %-8s %-10s %s",
+                CMD_OUT("%4d  %-20s %-8s %-12s %-8s %-10s %s",
                     (int)pp->sock, pp->nick, lb2->name, st,
                     pp->client_type[0]?pp->client_type:"?",
                     pp->client_platform[0]?pp->client_platform:"?",
@@ -390,13 +394,13 @@ int server_exec_command(const char *line, const char *caller,
         for(pi=0;pi<MAX_PENDING;pi++){
             Pending *pend=&g_pending[pi];
             if(!pend->active||!pend->auth_ok) continue;
-            OUT("%4d  %-20s %-8s %-12s %-8s %-10s %s",
+            CMD_OUT("%4d  %-20s %-8s %-12s %-8s %-10s %s",
                 (int)pend->sock, pend->pending_nick, "-", "LobbySelect",
                 pend->client_type[0]?pend->client_type:"?",
                 pend->client_platform[0]?pend->client_platform:"?",
                 pend->ip); cnt++;
         }
-        OUT("%d connection(s). Use: server connection kill <id>", cnt);
+        CMD_OUT("%d connection(s). Use: server connection kill <id>", cnt);
         return 0;
     }
 
@@ -429,6 +433,17 @@ int server_exec_command(const char *line, const char *caller,
         for(int pk=0;pk<MAX_PENDING;pk++) if(g_pending[pk].active) pending_cnt++;
 
         /* System resource usage */
+#ifdef PLATFORM_WINDOWS
+        PROCESS_MEMORY_COUNTERS pmc;
+        long mem_kb=0; double cpu_user=0, cpu_sys=0;
+        if(GetProcessMemoryInfo(GetCurrentProcess(),&pmc,sizeof(pmc))) mem_kb=(long)(pmc.PeakWorkingSetSize/1024);
+        FILETIME created,exited,kernel,user;
+        if(GetProcessTimes(GetCurrentProcess(),&created,&exited,&kernel,&user)) {
+            ULARGE_INTEGER k,u; k.LowPart=kernel.dwLowDateTime; k.HighPart=kernel.dwHighDateTime;
+            u.LowPart=user.dwLowDateTime; u.HighPart=user.dwHighDateTime;
+            cpu_user=(double)u.QuadPart/10000000.0; cpu_sys=(double)k.QuadPart/10000000.0;
+        }
+#else
         struct rusage ru; getrusage(RUSAGE_SELF,&ru);
         long mem_kb = ru.ru_maxrss;
 #if defined(__APPLE__)
@@ -437,6 +452,7 @@ int server_exec_command(const char *line, const char *caller,
         /* CPU time used by process */
         double cpu_user = ru.ru_utime.tv_sec + ru.ru_utime.tv_usec/1e6;
         double cpu_sys  = ru.ru_stime.tv_sec + ru.ru_stime.tv_usec/1e6;
+#endif
         double cpu_pct  = uptime > 0 ? (cpu_user+cpu_sys)/uptime*100.0 : 0.0;
 
         /* Games in progress */
@@ -448,18 +464,18 @@ int server_exec_command(const char *line, const char *caller,
             if(lb2->paused) rooms_paused++;
         }
 
-        OUT("+----------------------------------------------------------+");
-        OUT("|  LineClash  Server  Status  v%-10s                  |", TETRINETZ_VERSION);
-        OUT("+----------------------------------------------------------+");
-        OUT("|  Uptime : %02dh %02dm %02ds                                    |", uph, upm, ups);
-        OUT("|  Listen  : port %-5d                                   |", g_cfg.port);
-        OUT("+----------------------------------------------------------+");
-        OUT("+-- PLAYERS -----------------------------------------------+");
-        OUT("|  Human  : %-4d   Bots : %-4d   Pending: %-4d             |", humans_online, bots_online, pending_cnt);
-        OUT("|  Playing: %-4d   Spectators : %-4d                     |", playing, spectators);
-        OUT("+----------------------------------------------------------+");
-        OUT("+-- ROOMS -------------------------------------------------+");
-        OUT("|  Active : %-4d   Idle : %-4d   Paused : %-4d             |", rooms_active, rooms_idle, rooms_paused);
+        CMD_OUT("+----------------------------------------------------------+");
+        CMD_OUT("|  LineClash  Server  Status  v%-10s                  |", TETRINETZ_VERSION);
+        CMD_OUT("+----------------------------------------------------------+");
+        CMD_OUT("|  Uptime : %02dh %02dm %02ds                                    |", uph, upm, ups);
+        CMD_OUT("|  Listen  : port %-5d                                   |", g_cfg.port);
+        CMD_OUT("+----------------------------------------------------------+");
+        CMD_OUT("+-- PLAYERS -----------------------------------------------+");
+        CMD_OUT("|  Human  : %-4d   Bots : %-4d   Pending: %-4d             |", humans_online, bots_online, pending_cnt);
+        CMD_OUT("|  Playing: %-4d   Spectators : %-4d                     |", playing, spectators);
+        CMD_OUT("+----------------------------------------------------------+");
+        CMD_OUT("+-- ROOMS -------------------------------------------------+");
+        CMD_OUT("|  Active : %-4d   Idle : %-4d   Paused : %-4d             |", rooms_active, rooms_idle, rooms_paused);
         for(li=0;li<g_server.lobby_count;li++){
             Lobby *lb2=&g_server.lobbies[li];
             int ra=0, rb2=0, pi3;
@@ -472,32 +488,36 @@ int server_exec_command(const char *line, const char *caller,
             rstate[sizeof(rstate)-1]='\0';
             char rtopic[20]="";
             if(lb2->topic[0]) snprintf(rtopic,sizeof(rtopic),"[%.17s]",lb2->topic);
-            OUT("|  Room %-2d  %-7s  %dH+%dB/%-2d  %-19s         |",
+            CMD_OUT("|  Room %-2d  %-7s  %dH+%dB/%-2d  %-19s         |",
                 lb2->id, rstate, ra, rb2, lb2->max_players, rtopic);
         }
-        OUT("+----------------------------------------------------------+");
-        OUT("+-- SYSTEM ------------------------------------------------+");
-        OUT("|  RAM     : %6ld KB                                      |", mem_kb);
-        OUT("|  CPU usr : %5.1f s  sys: %5.1f s  avg: %5.1f%%              |", cpu_user, cpu_sys, cpu_pct);
-         OUT("|  IO r/w  : %-8lu / %-8lu blks                      |", (unsigned long)ru.ru_inblock, (unsigned long)ru.ru_oublock);
-        OUT("+----------------------------------------------------------+");
-        OUT("+-- NETWORK / LIFETIME ------------------------------------+");
-        OUT("|  Connects   : %-8lu  Disconnects: %-8lu         |", g_stat_connects, g_stat_disconnects);
-        OUT("|  Msgs  out  : %-8lu  (%.1f/s)                        |", g_stat_msgs_sent, g_stat_msgs_sent/ups_d);
-        OUT("|  Bytes out  : %-8lu KB (%.1f KB/s)                   |", g_stat_bytes_sent/1024, (g_stat_bytes_sent/1024.0)/ups_d);
-        OUT("|  Msgs  in   : %-8lu  (%.1f/s)                        |", g_stat_msgs_recv, g_stat_msgs_recv/ups_d);
-        OUT("|  Bytes in   : %-8lu KB (%.1f KB/s)                   |", g_stat_bytes_recv/1024, (g_stat_bytes_recv/1024.0)/ups_d);
-        OUT("|  Field upds : %-8lu  (%.1f/s)                        |", g_stat_field_updates, g_stat_field_updates/ups_d);
-        OUT("+----------------------------------------------------------+");
-        OUT("+-- GAMEPLAY ----------------------------------------------+");
-        OUT("|  Games started : %-8lu                                  |", g_stat_games_started);
-        OUT("|  Games ended   : %-8lu                                  |", g_stat_games_ended);
-        OUT("|  Specials fired: %-8lu                                  |", g_stat_specials_fired);
-        OUT("|  Lines cleared : %-8lu                                  |", g_stat_lines_cleared);
-        OUT("|  Kicks         : %-8lu                                  |", g_stat_kicks);
-        OUT("|  Log lines     : %-8lu  (%.1f/s)                        |", g_stat_log_lines, g_stat_log_lines/ups_d);
-        OUT("|  Debug mode    : %-3s                                    |", g_cfg.debug_ingame?"ON":"off");
-        OUT("+----------------------------------------------------------+");
+        CMD_OUT("+----------------------------------------------------------+");
+        CMD_OUT("+-- SYSTEM ------------------------------------------------+");
+        CMD_OUT("|  RAM     : %6ld KB                                      |", mem_kb);
+        CMD_OUT("|  CPU usr : %5.1f s  sys: %5.1f s  avg: %5.1f%%              |", cpu_user, cpu_sys, cpu_pct);
+#ifndef PLATFORM_WINDOWS
+         CMD_OUT("|  IO r/w  : %-8lu / %-8lu blks                      |", (unsigned long)ru.ru_inblock, (unsigned long)ru.ru_oublock);
+#else
+        CMD_OUT("|  IO r/w  : unavailable on Windows                        |");
+#endif
+        CMD_OUT("+----------------------------------------------------------+");
+        CMD_OUT("+-- NETWORK / LIFETIME ------------------------------------+");
+        CMD_OUT("|  Connects   : %-8lu  Disconnects: %-8lu         |", g_stat_connects, g_stat_disconnects);
+        CMD_OUT("|  Msgs  out  : %-8lu  (%.1f/s)                        |", g_stat_msgs_sent, g_stat_msgs_sent/ups_d);
+        CMD_OUT("|  Bytes out  : %-8lu KB (%.1f KB/s)                   |", g_stat_bytes_sent/1024, (g_stat_bytes_sent/1024.0)/ups_d);
+        CMD_OUT("|  Msgs  in   : %-8lu  (%.1f/s)                        |", g_stat_msgs_recv, g_stat_msgs_recv/ups_d);
+        CMD_OUT("|  Bytes in   : %-8lu KB (%.1f KB/s)                   |", g_stat_bytes_recv/1024, (g_stat_bytes_recv/1024.0)/ups_d);
+        CMD_OUT("|  Field upds : %-8lu  (%.1f/s)                        |", g_stat_field_updates, g_stat_field_updates/ups_d);
+        CMD_OUT("+----------------------------------------------------------+");
+        CMD_OUT("+-- GAMEPLAY ----------------------------------------------+");
+        CMD_OUT("|  Games started : %-8lu                                  |", g_stat_games_started);
+        CMD_OUT("|  Games ended   : %-8lu                                  |", g_stat_games_ended);
+        CMD_OUT("|  Specials fired: %-8lu                                  |", g_stat_specials_fired);
+        CMD_OUT("|  Lines cleared : %-8lu                                  |", g_stat_lines_cleared);
+        CMD_OUT("|  Kicks         : %-8lu                                  |", g_stat_kicks);
+        CMD_OUT("|  Log lines     : %-8lu  (%.1f/s)                        |", g_stat_log_lines, g_stat_log_lines/ups_d);
+        CMD_OUT("|  Debug mode    : %-3s                                    |", g_cfg.debug_ingame?"ON":"off");
+        CMD_OUT("+----------------------------------------------------------+");
         return 0;
     }
 
@@ -508,38 +528,38 @@ int server_exec_command(const char *line, const char *caller,
     if(!strcmp(verb,"dedup")){
         /* Delete duplicate/corrupt rows for a nick (case-insensitive).
          * Use when a nick has multiple rows due to case-mismatch re-registration. */
-        if(n<2||!toks[1][0]){OUT("Usage: dedup <nick>");return 0;}
+        if(n<2||!toks[1][0]){CMD_OUT("Usage: dedup <nick>");return 0;}
         const char *dnick=toks[1];
         char listbuf[2048]="";
         auth_list_all_nicks(listbuf,sizeof(listbuf),dnick);
-        OUT("Rows matching '%s':\n%s",dnick,listbuf[0]?listbuf:"(none)");
+        CMD_OUT("Rows matching '%s':\n%s",dnick,listbuf[0]?listbuf:"(none)");
         int deleted=auth_delete_corrupt_dupes(dnick);
-        if(deleted<0) OUT("DB error during dedup.");
-        else if(deleted==0) OUT("No corrupt rows deleted (0 or 1 row found).");
-        else { OUT("Deleted %d corrupt row(s).",deleted);
+        if(deleted<0) CMD_OUT("DB error during dedup.");
+        else if(deleted==0) CMD_OUT("No corrupt rows deleted (0 or 1 row found).");
+        else { CMD_OUT("Deleted %d corrupt row(s).",deleted);
                 log_info("[ADMIN %s] dedup %s: deleted %d corrupt rows",caller,dnick,deleted); }
         return 0;
     }
     if(!strcmp(verb,"lsversion")||!strcmp(verb,"version")||
        (!strcmp(verb,"server")&&n>=2&&(!strcasecmp(toks[1],"version")||!strcasecmp(toks[1],"ver")))){
-        OUT("LineClash Server v%s", TETRINETZ_VERSION);
+        CMD_OUT("LineClash Server v%s", TETRINETZ_VERSION);
 #if defined(__APPLE__)
-        OUT("Platform : macOS (POSIX)");
+        CMD_OUT("Platform : macOS (POSIX)");
 #elif defined(_WIN32)
-        OUT("Platform : Windows");
+        CMD_OUT("Platform : Windows");
 #else
-        OUT("Platform : Linux/POSIX");
+        CMD_OUT("Platform : Linux/POSIX");
 #endif
-        OUT("Database : %s", auth_get_db_path());
-        OUT("Built    : " __DATE__ " " __TIME__);
+        CMD_OUT("Database : %s", auth_get_db_path());
+        CMD_OUT("Built    : " __DATE__ " " __TIME__);
         return 0;
     }
     if(!strcmp(verb,"dbpath")||!strcmp(verb,"lspath")||
        (!strcmp(verb,"server")&&n>=2&&(!strcasecmp(toks[1],"paths")||!strcasecmp(toks[1],"path")))){
-        OUT("Paths:");
-        OUT("  Config  : %s", CFG_FILE);
-        OUT("  Database: %s", auth_get_db_path());
-        OUT("  Log     : %s", g_cfg.log_file[0] ? g_cfg.log_file : "(none)");
+        CMD_OUT("Paths:");
+        CMD_OUT("  Config  : %s", CFG_FILE);
+        CMD_OUT("  Database: %s", auth_get_db_path());
+        CMD_OUT("  Log     : %s", g_cfg.log_file[0] ? g_cfg.log_file : "(none)");
         return 0;
     }
     /* "user X" dispatcher — new command style */
@@ -550,28 +570,28 @@ int server_exec_command(const char *line, const char *caller,
         if(!strcasecmp(_user_sub,"list"))  { /* fall through to lsusr */ goto _do_lsusr; }
         if(!strcasecmp(_user_sub,"add")) {
             /* user add <username>  — create with privilege 3 */
-            if(n<3){OUT("Usage: user add <username>");return 0;}
+            if(n<3){CMD_OUT("Usage: user add <username>");return 0;}
             const char *nick=toks[2];
-            if(auth_nick_exists(nick)){OUT("User '%s' already exists.",nick);return 0;}
+            if(auth_nick_exists(nick)){CMD_OUT("User '%s' already exists.",nick);return 0;}
             /* Generate a random temp password so account exists; admin sets pw next */
             char tmpbuf[32]; snprintf(tmpbuf,sizeof(tmpbuf),"tmp%lu",(unsigned long)time(NULL));
             char hash[65]; sha256_hex_cmd_(tmpbuf,hash);
             if(auth_register(nick,hash)==AUTH_NEW_USER){
                 auth_set_priv_level(nick,3);
-                OUT("User '%s' created (privilege 3). Set password with: user set %s password <pw>",nick,nick);
+                CMD_OUT("User '%s' created (privilege 3). Set password with: user set %s password <pw>",nick,nick);
                 log_info("[ADMIN %s] user add %s",caller,nick);
-            } else OUT("Failed to create '%s'.",nick);
+            } else CMD_OUT("Failed to create '%s'.",nick);
             return 0;
         }
         if(!strcasecmp(_user_sub,"remove")) {
-            if(n<3){OUT("Usage: user remove <username>");return 0;}
+            if(n<3){CMD_OUT("Usage: user remove <username>");return 0;}
             const char *nick=toks[2];
-            if(!auth_nick_exists(nick)){OUT("User '%s' not found.",nick);return 0;}
+            if(!auth_nick_exists(nick)){CMD_OUT("User '%s' not found.",nick);return 0;}
             int tpriv=auth_get_priv_level(nick);
-            if(tpriv>0&&tpriv<=2){OUT("Cannot remove '%s': protected (priv %d).",nick,tpriv);return 0;}
+            if(tpriv>0&&tpriv<=2){CMD_OUT("Cannot remove '%s': protected (priv %d).",nick,tpriv);return 0;}
             kick_player(nick,"Your account has been removed");
             auth_delete_user(nick);
-            OUT("User '%s' removed.",nick);
+            CMD_OUT("User '%s' removed.",nick);
             log_info("[ADMIN %s] user remove %s",caller,nick);
             return 0;
         }
@@ -581,7 +601,7 @@ int server_exec_command(const char *line, const char *caller,
             char prop[32]; strncpy(prop,toks[3],31); lc(prop);
             /* Translate "active" → "activated" for chusr logic */
             if(!strcmp(prop,"active")) strncpy(prop,"activated",31);
-            if(!auth_nick_exists(nick)){OUT("User '%s' not found.",nick);return 0;}
+            if(!auth_nick_exists(nick)){CMD_OUT("User '%s' not found.",nick);return 0;}
             /* Inject chusr-style: shift toks so chusr handler can reuse */
             /* Build fake toks: [chusr, nick, set, prop, value] */
             char fake[6][MAX_MSG_LEN];
@@ -594,22 +614,22 @@ int server_exec_command(const char *line, const char *caller,
             if(!strcmp(prop,"activated")){int val=atoi(fake[4]);int deactivate=!val;
                 if(deactivate) {
                     auth_ban_nick(nick); kick_player(nick,"Account deactivated");
-                    OUT("Account '%s' deactivated.",nick);
+                    CMD_OUT("Account '%s' deactivated.",nick);
                     log_info("[ADMIN %s] user set %s active 0",caller,nick);
                 } else {
                     auth_unban_nick(nick);
-                    OUT("Account '%s' activated.",nick);
+                    CMD_OUT("Account '%s' activated.",nick);
                     log_info("[ADMIN %s] user set %s active 1",caller,nick);
                 }
                 return 0;}
             if(!strcmp(prop,"password")){char hash2[65];sha256_hex_cmd_(fake[4],hash2);
-                if(auth_reset_password(nick,hash2)){OUT("Password updated for '%s'.",nick);log_info("[ADMIN %s] user set %s password",caller,nick);}
-                else {OUT("Failed to update password.");} return 0;}
-            if(!strcmp(prop,"hash")){if(strlen(fake[4])!=64){OUT("Invalid hash (need 64 hex chars).");return 0;}
-                if(auth_reset_password(nick,fake[4])){OUT("Hash updated for '%s'.",nick);log_info("[ADMIN %s] user set %s hash",caller,nick);}
-                else {OUT("Failed.");} return 0;}
+                if(auth_reset_password(nick,hash2)){CMD_OUT("Password updated for '%s'.",nick);log_info("[ADMIN %s] user set %s password",caller,nick);}
+                else {CMD_OUT("Failed to update password.");} return 0;}
+            if(!strcmp(prop,"hash")){if(strlen(fake[4])!=64){CMD_OUT("Invalid hash (need 64 hex chars).");return 0;}
+                if(auth_reset_password(nick,fake[4])){CMD_OUT("Hash updated for '%s'.",nick);log_info("[ADMIN %s] user set %s hash",caller,nick);}
+                else {CMD_OUT("Failed.");} return 0;}
             if(!strcmp(prop,"privilege")){int priv=atoi(fake[4]);
-                if(priv<1||priv>3){OUT("Privilege must be 1-3.");return 0;}
+                if(priv<1||priv>3){CMD_OUT("Privilege must be 1-3.");return 0;}
                 /* Reuse chusr privilege logic by falling through */
                 /* (copy-free: just set toks and jump) */
                 for(int _li2=0;_li2<g_server.lobby_count;_li2++){
@@ -625,16 +645,16 @@ int server_exec_command(const char *line, const char *caller,
                     }
                 }
                 auth_set_priv_level(nick,priv);
-                OUT("Set privilege %d for '%s'.",priv,nick);
+                CMD_OUT("Set privilege %d for '%s'.",priv,nick);
                 log_info("[ADMIN %s] user set %s privilege %d",caller,nick,priv);
                 return 0;}
-            OUT("Usage: user set <username> password|hash|privilege|active <value>");
+            CMD_OUT("Usage: user set <username> password|hash|privilege|active <value>");
             return 0;
         }
         if(!strcasecmp(_user_sub,"kick")) {
             /* user kick server <username> [reason] */
             /* user kick room <room_id> <username> [reason] */
-            if(n<4){OUT("Usage: user kick server <username> [reason]\n       user kick room <room_id> <username> [reason]");return 0;}
+            if(n<4){CMD_OUT("Usage: user kick server <username> [reason]\n       user kick room <room_id> <username> [reason]");return 0;}
             const char *kmode=toks[2]; /* "server" or "room" */
             int kick_from_server=(!strcasecmp(kmode,"server")||!strcasecmp(kmode,"srv"));
             int kick_from_room=(!strcasecmp(kmode,"room"));
@@ -642,11 +662,11 @@ int server_exec_command(const char *line, const char *caller,
                 const char *knick=toks[3];
                 const char *kreason=(n>=5)?toks[4]:"Kicked by admin";
                 int ktpriv=auth_get_priv_level(knick);
-                if(ktpriv>0&&ktpriv<=2){OUT("Cannot kick '%s': protected.",knick);return 0;}
+                if(ktpriv>0&&ktpriv<=2){CMD_OUT("Cannot kick '%s': protected.",knick);return 0;}
                 /* Kick from server — disconnect and remove */
                 int kicked_count=kick_player(knick,kreason);
-                if(kicked_count>0){OUT("Kicked '%s' from server.",knick);log_info("[ADMIN %s] user kick server %s",caller,knick);}
-                else OUT("Player '%s' not found online.",knick);
+                if(kicked_count>0){CMD_OUT("Kicked '%s' from server.",knick);log_info("[ADMIN %s] user kick server %s",caller,knick);}
+                else CMD_OUT("Player '%s' not found online.",knick);
                 return 0;
             }
             if(kick_from_room && n>=5) {
@@ -655,43 +675,43 @@ int server_exec_command(const char *line, const char *caller,
                 /* Delegate to existing kick room logic */
                 /* Find the room, find the player, kick */
                 Lobby *klb=server_find_lobby(&g_server,kroom_id);
-                if(!klb){OUT("Room %d not found.",kroom_id);return 0;}
+                if(!klb){CMD_OUT("Room %d not found.",kroom_id);return 0;}
                 int kfound=kick_player_from_room(klb,knick,caller,NULL);
                 (void)kfound;
-                OUT("Kick sent for '%s' from room %d.",knick,kroom_id);
+                CMD_OUT("Kick sent for '%s' from room %d.",knick,kroom_id);
                 log_info("[ADMIN %s] user kick room %d %s",caller,kroom_id,knick);
                 return 0;
             }
-            OUT("Usage: user kick server <username> [reason]  OR  user kick room <room_id> <username> [reason]");
+            CMD_OUT("Usage: user kick server <username> [reason]  OR  user kick room <room_id> <username> [reason]");
             return 0;
         }
         if(!strcasecmp(_user_sub,"list") || !_user_sub[0]) { /* show user list */ }
-        else { OUT("Unknown user subcommand '%s'. See 'help'.",_user_sub); return 0; }
+        else { CMD_OUT("Unknown user subcommand '%s'. See 'help'.",_user_sub); return 0; }
     }
 _do_lsusr:;
     if(!strcmp(verb,"lsusr")){
         if(n>=2&&toks[1][0]){
             /* Detail view for a single user */
             const char *nick=toks[1];
-            if(!auth_nick_exists(nick)){OUT("User '%s' not found.",nick);return 0;}
+            if(!auth_nick_exists(nick)){CMD_OUT("User '%s' not found.",nick);return 0;}
             char team[64]=""; auth_get_team(nick,team,sizeof(team));
             int wins=auth_get_wins(nick), priv=auth_get_priv_level(nick);
-            OUT("  %-15s | wins:%-4d | priv:%d (%s)%s",
+            CMD_OUT("  %-15s | wins:%-4d | priv:%d (%s)%s",
                 nick, wins, priv,
                 priv==1?"admin":priv==2?"mgr":"normal",
                 auth_is_banned_nick(nick)?" [BANNED]":"");
-            OUT("Nick      : %s",nick);
-            OUT("Team      : %s",team[0]?team:"(none)");
-            OUT("Wins      : %d",wins);
-            OUT("Privilege : %d (%s)",priv,priv==1?"admin":priv==2?"mgr":"normal");
-            OUT("Activated : %s",auth_is_activated(nick)?"yes":"NO -- account is deactivated");
+            CMD_OUT("Nick      : %s",nick);
+            CMD_OUT("Team      : %s",team[0]?team:"(none)");
+            CMD_OUT("Wins      : %d",wins);
+            CMD_OUT("Privilege : %d (%s)",priv,priv==1?"admin":priv==2?"mgr":"normal");
+            CMD_OUT("Activated : %s",auth_is_activated(nick)?"yes":"NO -- account is deactivated");
             int found_online=0;
             for(li=0;li<g_server.lobby_count;li++){
                 Lobby *lb=&g_server.lobbies[li];
                 for(pi=0;pi<MAX_PLAYERS;pi++){
                     Player *p=&lb->players[pi];
                     if(p->connected&&!strcasecmp(p->nick,nick)){
-                        OUT("Online    : %s  P%d  %s",lb->name,p->slot,
+                        CMD_OUT("Online    : %s  P%d  %s",lb->name,p->slot,
                             p->spectator?"Spectator":lb->game_state==STATE_PLAYING?"Playing":"Idle");
                         found_online=1;
                     }
@@ -700,10 +720,10 @@ _do_lsusr:;
             for(pi=0;pi<MAX_PENDING;pi++){
                 Pending *pend=&g_pending[pi];
                 if(pend->active&&pend->auth_ok&&!pend->is_tool&&!strcasecmp(pend->pending_nick,nick)){
-                    OUT("Online    : [selecting lobby]"); found_online=1;
+                    CMD_OUT("Online    : [selecting lobby]"); found_online=1;
                 }
             }
-            if(!found_online) OUT("Online    : no (disconnected)");
+            if(!found_online) CMD_OUT("Online    : no (disconnected)");
             return 0;
         }
 
@@ -753,9 +773,9 @@ _do_lsusr:;
         }
 
         /* Column header */
-        OUT("%-20s %-8s %-12s %-12s %-6s %-8s %-4s",
+        CMD_OUT("%-20s %-8s %-12s %-12s %-6s %-8s %-4s",
             "Username","Room","Connection","Status","Client","Platform","Priv");
-        OUT("%-20s %-8s %-12s %-12s %-6s %-8s %-4s",
+        CMD_OUT("%-20s %-8s %-12s %-12s %-6s %-8s %-4s",
             "--------","----","----------","------","------","--------","----");
 
         /* Walk DB, cross-reference online table */
@@ -793,7 +813,7 @@ _do_lsusr:;
             int oi2; for(oi2=0;oi2<online_count;oi2++)
                 if(!strcasecmp(online[oi2].nick,row_nick))
                     {client_col=online[oi2].client;platform_col=online[oi2].platform;break;}
-            OUT("%-20s %-8s %-12s %-12s %-6s %-8s %d (%s)%s",
+            CMD_OUT("%-20s %-8s %-12s %-12s %-6s %-8s %d (%s)%s",
                 row_nick, room_col, conn_col, status_col,
                 client_col, platform_col,
                 priv, priv_label,
@@ -802,13 +822,13 @@ _do_lsusr:;
             line=nl?nl+1:NULL;
         }
         if(!shown&&!db_count){
-            OUT("No registered users in database.");
+            CMD_OUT("No registered users in database.");
         } else {
             int online_total=0;
             for(li=0;li<g_server.lobby_count;li++)
                 for(pi=0;pi<MAX_PLAYERS;pi++)
                     if(g_server.lobbies[li].players[pi].connected) online_total++;
-            OUT("%d registered user(s), %d online.",shown,online_total);
+            CMD_OUT("%d registered user(s), %d online.",shown,online_total);
         }
         return 0;
     }
@@ -817,22 +837,22 @@ _do_lsusr:;
      * MKUSR
      * ================================================================ */
     if(!strcmp(verb,"mkusr")){
-        if(n<6){OUT("Usage: mkusr \"<nick>\" password \"<pw>\" privilege <1-3>");return 0;}
+        if(n<6){CMD_OUT("Usage: mkusr \"<nick>\" password \"<pw>\" privilege <1-3>");return 0;}
         const char *nick=toks[1], *pw=NULL; int priv=3, i;
         for(i=2;i<n-1;i++){
             char kw[32]; strncpy(kw,toks[i],31); lc(kw);
             if(!strcmp(kw,"password"))  pw=toks[i+1];
             if(!strcmp(kw,"privilege")) priv=atoi(toks[i+1]);
         }
-        if(!pw){OUT("Missing: password \"<pw>\"");return 0;}
+        if(!pw){CMD_OUT("Missing: password \"<pw>\"");return 0;}
         if(priv<1||priv>3) priv=3;
-        if(auth_nick_exists(nick)){OUT("User '%s' already exists.",nick);return 0;}
+        if(auth_nick_exists(nick)){CMD_OUT("User '%s' already exists.",nick);return 0;}
         char hash[65]; sha256_hex_cmd_(pw,hash);
         if(auth_register(nick,hash)==AUTH_NEW_USER){
             auth_set_priv_level(nick,priv); /* stores 1, 2, or 0 (for 3) */
-            OUT("User '%s' created (privilege %d).",nick,priv);
+            CMD_OUT("User '%s' created (privilege %d).",nick,priv);
             log_info("[ADMIN %s] mkusr %s priv=%d",caller,nick,priv);
-        } else OUT("Failed to create '%s'.",nick);
+        } else CMD_OUT("Failed to create '%s'.",nick);
         return 0;
     }
 
@@ -843,12 +863,12 @@ _do_lsusr:;
      * chusr "<nick>" set privilege <1-3>
      * ================================================================ */
     if(!strcmp(verb,"chusr")){
-        if(n<4){OUT("Usage: chusr \"<nick>\" set <property> <value>");return 0;}
+        if(n<4){CMD_OUT("Usage: chusr \"<nick>\" set <property> <value>");return 0;}
         const char *nick=toks[1];
         char op[32],prop[32];
         strncpy(op,toks[2],31); lc(op);
         strncpy(prop,toks[3],31); lc(prop);
-        if(!auth_nick_exists(nick)){OUT("User '%s' not found.",nick);return 0;}
+        if(!auth_nick_exists(nick)){CMD_OUT("User '%s' not found.",nick);return 0;}
 
         if((!strcmp(prop,"activated")||!strcmp(prop,"ban"))&&n>=5){
             int val=atoi(toks[4]);
@@ -857,11 +877,11 @@ _do_lsusr:;
             if(deactivate){
                 auth_ban_nick(nick);
                 kick_player(nick,"Your account has been deactivated");
-                OUT("Account '%s' deactivated.",nick);
+                CMD_OUT("Account '%s' deactivated.",nick);
                 log_info("[ADMIN %s] chusr %s set activated 0",caller,nick);
             } else {
                 auth_unban_nick(nick);
-                OUT("Account '%s' activated.",nick);
+                CMD_OUT("Account '%s' activated.",nick);
                 log_info("[ADMIN %s] chusr %s set activated 1",caller,nick);
             }
             return 0;
@@ -869,9 +889,9 @@ _do_lsusr:;
         if(!strcmp(prop,"password")&&n>=5){
             char hash[65]; sha256_hex_cmd_(toks[4],hash);
             if(auth_reset_password(nick,hash)){
-                OUT("Password updated for '%s'.",nick);
+                CMD_OUT("Password updated for '%s'.",nick);
                 log_info("[ADMIN %s] chusr %s set password",caller,nick);
-            } else OUT("Failed to update password.");
+            } else CMD_OUT("Failed to update password.");
             return 0;
         }
         if(!strcmp(prop,"hash")&&n>=5){
@@ -879,21 +899,21 @@ _do_lsusr:;
              * Useful when the plaintext password is unknown but the hash is
              * available (e.g. from ~/.lineclash_servers on the game client). */
             const char *hex=toks[4];
-            if(strlen(hex)!=64){OUT("Invalid hash: must be exactly 64 hex characters.");return 0;}
+            if(strlen(hex)!=64){CMD_OUT("Invalid hash: must be exactly 64 hex characters.");return 0;}
             if(auth_reset_password(nick,hex)){
-                OUT("Hash updated for '%s'.",nick);
+                CMD_OUT("Hash updated for '%s'.",nick);
                 log_info("[ADMIN %s] chusr %s set hash",caller,nick);
-            } else OUT("Failed to update hash (invalid hex?).");
+            } else CMD_OUT("Failed to update hash (invalid hex?).");
             return 0;
         }
         if(!strcmp(prop,"fixhash")&&n>=5){
             /* Force-update hash using case-insensitive nick match.
              * Use when set password silently fails due to nick encoding mismatch. */
             const char *hex=toks[4];
-            if(strlen(hex)!=64){OUT("Invalid hash: must be exactly 64 hex chars.");return 0;}
+            if(strlen(hex)!=64){CMD_OUT("Invalid hash: must be exactly 64 hex chars.");return 0;}
             int rows=auth_fix_hash(nick,hex);
-            if(rows>0) OUT("Hash force-updated for '%s' (%d row(s)).",nick,rows);
-            else        OUT("FAILED: nick '%s' not found (tried case-insensitive match).",nick);
+            if(rows>0) CMD_OUT("Hash force-updated for '%s' (%d row(s)).",nick,rows);
+            else        CMD_OUT("FAILED: nick '%s' not found (tried case-insensitive match).",nick);
             return 0;
         }
         if(!strcmp(prop,"dbhash")){
@@ -902,18 +922,18 @@ _do_lsusr:;
              * Also lists all nicks so you can spot case/encoding differences. */
             char rawhash[256]=""; int rawlen=0;
             if(auth_get_raw_hash(nick,rawhash,sizeof(rawhash),&rawlen)){
-                OUT("DB hash for '%s': [%s] (%d bytes)",nick,rawhash,rawlen);
-                if(rawlen==64) OUT("Hash looks valid (64 bytes).");
-                else           OUT("WARNING: hash is %d bytes, expected 64 — CORRUPTED.",rawlen);
-            } else { OUT("Nick '%s' not found (exact match). Listing all nicks:",nick);
+                CMD_OUT("DB hash for '%s': [%s] (%d bytes)",nick,rawhash,rawlen);
+                if(rawlen==64) CMD_OUT("Hash looks valid (64 bytes).");
+                else           CMD_OUT("WARNING: hash is %d bytes, expected 64 — CORRUPTED.",rawlen);
+            } else { CMD_OUT("Nick '%s' not found (exact match). Listing all nicks:",nick);
                 char nickbuf[4096]=""; auth_list_all_nicks(nickbuf,sizeof(nickbuf),NULL);
-                OUT("%s",nickbuf);
+                CMD_OUT("%s",nickbuf);
             }
             return 0;
         }
         if(!strcmp(prop,"privilege")&&n>=5){
             int priv=atoi(toks[4]);
-            if(priv<1||priv>3){OUT("Privilege must be 1-3.");return 0;}
+            if(priv<1||priv>3){CMD_OUT("Privilege must be 1-3.");return 0;}
             auth_set_priv_level(nick,priv); /* stores actual value in admin column */
             /* Update online player if present — in a room */
             for(li=0;li<g_server.lobby_count;li++){
@@ -956,11 +976,11 @@ _do_lsusr:;
                          net_send(pend2->sock,"gmsg *** Your admin/manager access has been revoked");
                  }
              }}
-            OUT("Set privilege %d for '%s'.",priv,nick);
+            CMD_OUT("Set privilege %d for '%s'.",priv,nick);
             log_info("[ADMIN %s] chusr %s set privilege %d",caller,nick,priv);
             return 0;
         }
-        OUT("Usage: chusr \"<nick>\" set activated 1|0 | set password \"<pw>\" | set privilege <1-3>");
+        CMD_OUT("Usage: chusr \"<nick>\" set activated 1|0 | set password \"<pw>\" | set privilege <1-3>");
         return 0;
     }
 
@@ -970,13 +990,13 @@ _do_lsusr:;
      * kick <room_id> <nick> [reason] kick back to lobby
      * ================================================================ */
     if(!strcmp(verb,"kick")){
-        if(n<3){OUT("Usage: kick server <nick> [<reason>]  OR  kick <room_id> <nick> [<reason>]");return 0;}
+        if(n<3){CMD_OUT("Usage: kick server <nick> [<reason>]  OR  kick <room_id> <nick> [<reason>]");return 0;}
         int from_server=(!strcasecmp(toks[1],"server")||!strcasecmp(toks[1],"srv"));
         int room_id=from_server?0:atoi(toks[1]);
         const char *nick=toks[2];
         const char *reason=(n>=4)?toks[3]:"Kicked by admin";
         int tpriv=auth_get_priv_level(nick);
-        if(tpriv>0&&tpriv<=2){OUT("Cannot kick '%s': protected (priv %d).",nick,tpriv);return 0;}
+        if(tpriv>0&&tpriv<=2){CMD_OUT("Cannot kick '%s': protected (priv %d).",nick,tpriv);return 0;}
         if(from_server){
             int found=kick_player(nick,reason);
             if(found){
@@ -984,17 +1004,17 @@ _do_lsusr:;
                 snprintf(gbuf,sizeof(gbuf),"schat [SERVER] *** %s was kicked%s%s",
                          nick,reason[0]?" -- ":"",reason);
                 schat_broadcast(gbuf);
-                OUT("Kicked '%s' from server.",nick);
+                CMD_OUT("Kicked '%s' from server.",nick);
                 log_info("[ADMIN %s] kick server %s reason='%s'",caller,nick,reason);
-            } else { OUT("'%s' not online.",nick); }
+            } else { CMD_OUT("'%s' not online.",nick); }
         } else {
             Lobby *lb=server_find_lobby(&g_server,room_id);
-            if(!lb){OUT("Room %d not found.",room_id);return 0;}
+            if(!lb){CMD_OUT("Room %d not found.",room_id);return 0;}
             int tpriv2=0;
             int found=kick_player_from_room(lb,nick,caller,&tpriv2);
-            if(found==-1)  OUT("Cannot kick '%s': protected (priv %d).",nick,tpriv2);
-            else if(found) { OUT("Kicked '%s' from Room %d.",nick,room_id); log_info("[ADMIN %s] kick room %d %s",caller,room_id,nick); }
-            else           OUT("'%s' not found in Room %d.",nick,room_id);
+            if(found==-1)  CMD_OUT("Cannot kick '%s': protected (priv %d).",nick,tpriv2);
+            else if(found) { CMD_OUT("Kicked '%s' from Room %d.",nick,room_id); log_info("[ADMIN %s] kick room %d %s",caller,room_id,nick); }
+            else           CMD_OUT("'%s' not found in Room %d.",nick,room_id);
         }
         return 0;
     }
@@ -1015,46 +1035,46 @@ _do_lsusr:;
         if(!strcasecmp(_ban_sub,"add")||!strcasecmp(_ban_sub,"remove")) {
             /* ban add|remove user|address <target> [reason] */
             /* Remap to chban: toks[0]=chban toks[1]=add/remove toks[2]=user/address toks[3]=target */
-            if(n<4){OUT("Usage: ban add|remove user|address <target> [reason]");return 0;}
+            if(n<4){CMD_OUT("Usage: ban add|remove user|address <target> [reason]");return 0;}
             strncpy(toks[0],"chban",MAX_MSG_LEN-1);
             /* toks[1]=sub toks[2]=what toks[3]=target already aligned */
             strncpy(verb,"chban",63);
             goto _do_chban;
         }
-        OUT("Usage: ban list | ban add user|address <target> [reason] | ban remove user|address <target>");
+        CMD_OUT("Usage: ban list | ban add user|address <target> [reason] | ban remove user|address <target>");
         return 0;
     }
 _do_lsban:;
     if(!strcmp(verb,"lsban")){
-        OUT("=== User Account Bans ===");
+        CMD_OUT("=== User Account Bans ===");
         char dbuf[8192]; auth_list_users(dbuf,sizeof(dbuf));
         int found_banned=0;
         char *ln=dbuf,*nl;
         while((nl=strchr(ln,'\n'))){*nl='\0';
             if(ln[0]&&!auth_is_activated(ln)){
-                OUT("  [DEACTIVATED] %s",ln); found_banned=1;
+                CMD_OUT("  [DEACTIVATED] %s",ln); found_banned=1;
             }
             ln=nl+1;
         }
-        if(!found_banned) OUT("  (no deactivated accounts)");
+        if(!found_banned) CMD_OUT("  (no deactivated accounts)");
         out("", ctx);
-        OUT("=== IP Address Bans ===");
+        CMD_OUT("=== IP Address Bans ===");
         char ibuf[8192]; int icnt=auth_list_banned_ips(ibuf,sizeof(ibuf));
-        if(!icnt) OUT("  (no banned IPs)");
+        if(!icnt) CMD_OUT("  (no banned IPs)");
         else {
-            OUT("  %-18s %-12s %-16s %s","IP","Banned by","Date","Reason");
+            CMD_OUT("  %-18s %-12s %-16s %s","IP","Banned by","Date","Reason");
             char *iln=ibuf,*inl;
-            while((inl=strchr(iln,'\n'))){*inl='\0';if(iln[0])OUT("  %s",iln);iln=inl+1;}
+            while((inl=strchr(iln,'\n'))){*inl='\0';if(iln[0])CMD_OUT("  %s",iln);iln=inl+1;}
         }
         return 0;
     }
 _do_chban:;
     if(!strcmp(verb,"chban")){
         if(n<3){
-            OUT("Usage: chban add user <nick> [reason]");
-            OUT("       chban add address <ip> [reason]");
-            OUT("       chban remove user <nick>");
-            OUT("       chban remove address <ip>");
+            CMD_OUT("Usage: chban add user <nick> [reason]");
+            CMD_OUT("       chban add address <ip> [reason]");
+            CMD_OUT("       chban remove user <nick>");
+            CMD_OUT("       chban remove address <ip>");
             return 0;
         }
         char op[32]; strncpy(op,toks[1],31); lc(op);
@@ -1064,36 +1084,36 @@ _do_chban:;
         int is_user=(!strcmp(what,"user")||!strcmp(what,"nick")||!strcmp(what,"account"));
         int is_addr=(!strcmp(what,"address")||!strcmp(what,"ip")||!strcmp(what,"addr"));
         if((!is_add&&!is_remove)||(!is_user&&!is_addr)||n<4){
-            OUT("Usage: chban add|remove user|address <target> [reason]"); return 0;
+            CMD_OUT("Usage: chban add|remove user|address <target> [reason]"); return 0;
         }
         const char *target=toks[3];
         const char *reason=(n>=5)?toks[4]:"Banned by admin";
         if(is_user){
             if(is_add){
-                if(!auth_nick_exists(target)){OUT("User '%s' not found.",target);return 0;}
+                if(!auth_nick_exists(target)){CMD_OUT("User '%s' not found.",target);return 0;}
                 int tpriv=auth_get_priv_level(target);
-                if(tpriv>0&&tpriv<=2){OUT("Cannot ban '%s': protected.",target);return 0;}
+                if(tpriv>0&&tpriv<=2){CMD_OUT("Cannot ban '%s': protected.",target);return 0;}
                 auth_ban_nick(target); auth_add_ban(target);
                 kick_player(target,"Your account has been banned");
-                OUT("User '%s' banned.",target);
+                CMD_OUT("User '%s' banned.",target);
                 log_info("[ADMIN %s] chban add user %s reason='%s'",caller,target,reason);
                 char gbuf[MAX_MSG_LEN];
                 snprintf(gbuf,sizeof(gbuf),"schat [SERVER] *** %s has been banned",target);
                 schat_broadcast(gbuf);
             } else {
                 auth_unban_nick(target);
-                OUT("User '%s' unbanned.",target);
+                CMD_OUT("User '%s' unbanned.",target);
                 log_info("[ADMIN %s] chban remove user %s",caller,target);
             }
         } else { /* address */
             if(is_add){
                 auth_ban_ip(target,reason,caller);
                 kick_ip(target);
-                OUT("IP %s banned and existing connections kicked.",target);
+                CMD_OUT("IP %s banned and existing connections kicked.",target);
                 log_info("[ADMIN %s] chban add address %s reason='%s'",caller,target,reason);
             } else {
                 auth_unban_ip(target);
-                OUT("IP ban removed: %s.",target);
+                CMD_OUT("IP ban removed: %s.",target);
                 log_info("[ADMIN %s] chban remove address %s",caller,target);
             }
         }
@@ -1101,7 +1121,7 @@ _do_chban:;
     }
     /* legacy aliases */
     if(!strcmp(verb,"mkban")||!strcmp(verb,"banip")||!strcmp(verb,"rmban")||!strcmp(verb,"unbanip")){
-        OUT("Use 'chban' command. See 'help' for usage."); return 0;
+        CMD_OUT("Use 'chban' command. See 'help' for usage."); return 0;
     }
 
 
@@ -1110,11 +1130,11 @@ _do_chban:;
      * ================================================================ */
 _do_chroom:;
     if(!strcmp(verb,"chroom")){
-        if(n<5){OUT("Usage: chroom <id> set specials|last_wins|taunts|speedup|topic on|off|\"text\"");return 0;}
+        if(n<5){CMD_OUT("Usage: chroom <id> set specials|last_wins|taunts|speedup|topic on|off|\"text\"");return 0;}
         int room_id=atoi(toks[1]);
         char prop[32]; strncpy(prop,toks[3],31); lc(prop);
         Lobby *lb=server_find_lobby(&g_server,room_id);
-        if(!lb){OUT("Room %d not found.",room_id);return 0;}
+        if(!lb){CMD_OUT("Room %d not found.",room_id);return 0;}
 
         if(!strcmp(prop,"specials")||!strcmp(prop,"attacks")||!strcmp(prop,"attack")){
             int on=(!strcasecmp(toks[4],"on")||!strcmp(toks[4],"1"));
@@ -1124,7 +1144,7 @@ _do_chroom:;
             snprintf(sbuf,sizeof(sbuf),"lobbysettings %d %d %d %d %d",
                      room_id,lb->no_attacks,lb->last_player_wins,lb->no_taunts,lb->speedup_enabled);
             lobby_broadcast(lb,sbuf,-1);
-            OUT("Room %d: specials = %s",room_id,on?"on":"off");
+            CMD_OUT("Room %d: specials = %s",room_id,on?"on":"off");
             log_info("[ADMIN %s] chroom %d set specials %s",caller,room_id,on?"on":"off");
         } else if(!strcmp(prop,"last_wins")||!strcmp(prop,"last_player_wins")){
             int on=(!strcasecmp(toks[4],"on")||!strcmp(toks[4],"1"));
@@ -1134,7 +1154,7 @@ _do_chroom:;
             snprintf(sbuf,sizeof(sbuf),"lobbysettings %d %d %d %d %d",
                      room_id,lb->no_attacks,lb->last_player_wins,lb->no_taunts,lb->speedup_enabled);
             lobby_broadcast(lb,sbuf,-1);
-            OUT("Room %d: last_wins = %s",room_id,on?"on":"off");
+            CMD_OUT("Room %d: last_wins = %s",room_id,on?"on":"off");
             log_info("[ADMIN %s] chroom %d set last_wins %s",caller,room_id,on?"on":"off");
         } else if(!strcmp(prop,"taunts")){
             int on=(!strcasecmp(toks[4],"on")||!strcmp(toks[4],"1"));
@@ -1143,7 +1163,7 @@ _do_chroom:;
             snprintf(sbuf,sizeof(sbuf),"lobbysettings %d %d %d %d %d",
                      room_id,lb->no_attacks,lb->last_player_wins,lb->no_taunts,lb->speedup_enabled);
             lobby_broadcast(lb,sbuf,-1);
-            OUT("Room %d: taunts = %s",room_id,on?"on":"off");
+            CMD_OUT("Room %d: taunts = %s",room_id,on?"on":"off");
             log_info("[ADMIN %s] chroom %d set taunts %s",caller,room_id,on?"on":"off");
         } else if(!strcmp(prop,"topic")){
             /* Reconstruct topic from remaining tokens */
@@ -1158,7 +1178,7 @@ _do_chroom:;
             {char sbuf[MAX_MSG_LEN];
              snprintf(sbuf,sizeof(sbuf),"gmsg *** Room topic: %s",topic[0]?topic:"(cleared)");
              lobby_broadcast(lb,sbuf,-1);}
-            OUT("Room %d topic set: %s",room_id,topic[0]?topic:"(cleared)");
+            CMD_OUT("Room %d topic set: %s",room_id,topic[0]?topic:"(cleared)");
             log_info("[ADMIN %s] chroom %d set topic '%s'",caller,room_id,topic);
         } else if(!strcmp(prop,"speedup")||!strcmp(prop,"speed_up")){
             int on=(!strcasecmp(toks[4],"on")||!strcmp(toks[4],"1"));
@@ -1168,11 +1188,11 @@ _do_chroom:;
             {char sbuf[MAX_MSG_LEN];
              snprintf(sbuf,sizeof(sbuf),"gmsg *** Speed-up: %s",on?"enabled":"disabled");
              lobby_broadcast(lb,sbuf,-1);}
-            OUT("Room %d: speedup = %s (delay=%dmin interval=%ds lines=%d)",
+            CMD_OUT("Room %d: speedup = %s (delay=%dmin interval=%ds lines=%d)",
                 room_id,on?"on":"off",lb->speedup_delay,lb->speedup_interval,lb->speedup_lines);
             log_info("[ADMIN %s] chroom %d set speedup %s",caller,room_id,on?"on":"off");
         } else {
-            OUT("Unknown property '%s'. Use: specials, last_wins, taunts, speedup, topic",prop);
+            CMD_OUT("Unknown property '%s'. Use: specials, last_wins, taunts, speedup, topic",prop);
         }
         return 0;
     }
@@ -1186,10 +1206,10 @@ _do_chroom:;
          * Sender displayed as [SERVER] in all cases.
          */
         if(n<3){
-            OUT("Usage:");
-            OUT("  say server <msg>             Send to lobby/server chat");
-            OUT("  say room <room_id> <msg>     Send to players in a room");
-            OUT("  say global <msg>             Send to all rooms and lobby");
+            CMD_OUT("Usage:");
+            CMD_OUT("  say server <msg>             Send to lobby/server chat");
+            CMD_OUT("  say room <room_id> <msg>     Send to players in a room");
+            CMD_OUT("  say global <msg>             Send to all rooms and lobby");
             return 0;
         }
         char sbuf[MAX_MSG_LEN];
@@ -1200,7 +1220,7 @@ _do_chroom:;
             const char *msg=toks[2];
             snprintf(sbuf,sizeof(sbuf),"schat [SERVER] %s",msg);
             schat_lobby(sbuf);
-            OUT("-> server: %s",msg);
+            CMD_OUT("-> server: %s",msg);
             log_info("[ADMIN say-server] %s",msg);
             return 0;
         }
@@ -1214,7 +1234,7 @@ _do_chroom:;
              snprintf(rbuf,sizeof(rbuf),"pline [SERVER] %s",msg);
              for(li2=0;li2<g_server.lobby_count;li2++)
                  lobby_broadcast(&g_server.lobbies[li2],rbuf,-1);}
-            OUT("-> global: %s",msg);
+            CMD_OUT("-> global: %s",msg);
             log_info("[ADMIN say-global] %s",msg);
             return 0;
         }
@@ -1224,10 +1244,10 @@ _do_chroom:;
             int room_id=atoi(toks[2]);
             const char *msg=toks[3];
             Lobby *lb=server_find_lobby(&g_server,room_id);
-            if(!lb){OUT("Room %d not found.",room_id);return 0;}
+            if(!lb){CMD_OUT("Room %d not found.",room_id);return 0;}
             snprintf(sbuf,sizeof(sbuf),"pline [SERVER] %s",msg);
             lobby_broadcast(lb,sbuf,-1);
-            OUT("-> Room %d: %s",room_id,msg);
+            CMD_OUT("-> Room %d: %s",room_id,msg);
             log_info("[ADMIN say-room %d] %s",room_id,msg);
             return 0;
         }
@@ -1236,24 +1256,24 @@ _do_chroom:;
         {
             int room_id=atoi(target);
             const char *msg=toks[2];
-            if(room_id<=0){OUT("Usage: say server|global <msg>  OR  say room <id> <msg>");return 0;}
+            if(room_id<=0){CMD_OUT("Usage: say server|global <msg>  OR  say room <id> <msg>");return 0;}
             Lobby *lb=server_find_lobby(&g_server,room_id);
-            if(!lb){OUT("Room %d not found.",room_id);return 0;}
+            if(!lb){CMD_OUT("Room %d not found.",room_id);return 0;}
             snprintf(sbuf,sizeof(sbuf),"pline [SERVER] %s",msg);
             lobby_broadcast(lb,sbuf,-1);
-            OUT("-> Room %d: %s",room_id,msg);
+            CMD_OUT("-> Room %d: %s",room_id,msg);
             log_info("[ADMIN say-room %d] %s",room_id,msg);
         }
         return 0;
     }
 
     if(!strcmp(verb,"mkban")){
-        if(n<2){OUT("Usage: mkban <nick> [<reason>]");return 0;}
+        if(n<2){CMD_OUT("Usage: mkban <nick> [<reason>]");return 0;}
         const char *nick=toks[1];
         const char *reason=(n>=3)?toks[2]:"Banned by admin";
-        if(!auth_nick_exists(nick)){OUT("User '%s' not found.",nick);return 0;}
+        if(!auth_nick_exists(nick)){CMD_OUT("User '%s' not found.",nick);return 0;}
         int tpriv=auth_get_priv_level(nick);
-        if(tpriv>0&&tpriv<=2){OUT("Cannot ban '%s': privilege %d accounts are protected.",nick,tpriv);return 0;}
+        if(tpriv>0&&tpriv<=2){CMD_OUT("Cannot ban '%s': privilege %d accounts are protected.",nick,tpriv);return 0;}
         /* Deactivate account (set admin column to -1 = deactivated/banned) */
         auth_ban_nick(nick);
         auth_add_ban(nick);
@@ -1268,14 +1288,14 @@ _do_chroom:;
         char gbuf[MAX_MSG_LEN];
         snprintf(gbuf,sizeof(gbuf),"schat [SERVER] *** %s has been banned by %s",nick,caller);
         schat_broadcast(gbuf);
-        OUT("Banned '%s' (account deactivated%s).",nick,tip[0]?" + IP banned":"");
+        CMD_OUT("Banned '%s' (account deactivated%s).",nick,tip[0]?" + IP banned":"");
         log_info("[ADMIN %s] mkban %s reason='%s'%s",caller,nick,reason,tip[0]?" ip-banned":"");
         return 0;
     }
     if(!strcmp(verb,"rmban")||!strcmp(verb,"unbanip")){
-        if(n<2){OUT("Usage: rmban <ip>");return 0;}
+        if(n<2){CMD_OUT("Usage: rmban <ip>");return 0;}
         auth_unban_ip(toks[1]);
-        OUT("Removed IP ban: %s",toks[1]);
+        CMD_OUT("Removed IP ban: %s",toks[1]);
         log_info("[ADMIN %s] rmban %s",caller,toks[1]);
         return 0;
     }
@@ -1283,17 +1303,17 @@ _do_chroom:;
         /* Legacy aliases — kept for backwards compat */
         const char *ip,*reason2;
         if(!strcmp(verb,"chblock")){
-            if(n<3){OUT("Usage: banip <ip> [<reason>] (or: mkban <nick>)");return 0;}
+            if(n<3){CMD_OUT("Usage: banip <ip> [<reason>] (or: mkban <nick>)");return 0;}
             char op[32]; strncpy(op,toks[1],31); lc(op);
-            if(!strcmp(op,"remove")){auth_unban_ip(toks[2]);OUT("Removed IP ban: %s",toks[2]);return 0;}
+            if(!strcmp(op,"remove")){auth_unban_ip(toks[2]);CMD_OUT("Removed IP ban: %s",toks[2]);return 0;}
             ip=toks[2]; reason2=(n>=4)?toks[3]:"banned by admin";
         } else {
-            if(n<2){OUT("Usage: banip <ip> [<reason>]");return 0;}
+            if(n<2){CMD_OUT("Usage: banip <ip> [<reason>]");return 0;}
             ip=toks[1]; reason2=(n>=3)?toks[2]:"banned by admin";
         }
         auth_ban_ip(ip,reason2,caller);
         kick_ip(ip);
-        OUT("Banned IP %s.",ip);
+        CMD_OUT("Banned IP %s.",ip);
         log_info("[ADMIN %s] banip %s reason='%s'",caller,ip,reason2);
         return 0;
     }
@@ -1301,9 +1321,9 @@ _do_chroom:;
         if(n>=2){
             int on=(!strcmp(toks[1],"on")||!strcmp(toks[1],"1"));
             g_cfg.debug_auth=on;
-            OUT("Auth debug logging %s",on?"ENABLED":"DISABLED");
+            CMD_OUT("Auth debug logging %s",on?"ENABLED":"DISABLED");
         } else {
-            OUT("Auth debug: %s",g_cfg.debug_auth?"on":"off");
+            CMD_OUT("Auth debug: %s",g_cfg.debug_auth?"on":"off");
         }
         return 0;
     }
@@ -1311,9 +1331,9 @@ _do_chroom:;
         if(n>=2){
             int on=(!strcmp(toks[1],"on")||!strcmp(toks[1],"1"));
             g_cfg.debug_ingame=on;
-            OUT("In-game debug logging %s",on?"ENABLED":"DISABLED");
+            CMD_OUT("In-game debug logging %s",on?"ENABLED":"DISABLED");
         } else {
-            OUT("In-game debug: %s",g_cfg.debug_ingame?"on":"off");
+            CMD_OUT("In-game debug: %s",g_cfg.debug_ingame?"on":"off");
         }
         return 0;
     }
@@ -1342,7 +1362,7 @@ _do_chroom:;
         for(li=0;li<g_server.lobby_count;li++){
             Lobby *lb=&g_server.lobbies[li]; int cnt=0;
             for(pi=0;pi<MAX_PLAYERS;pi++) if(lb->players[pi].connected) cnt++;
-            OUT("Room %-2d  %d/%d  %-8s  Spec:%-4s  Last:%-4s  Taunt:%-4s  SpeedUp:%-3s%s%s",
+            CMD_OUT("Room %-2d  %d/%d  %-8s  Spec:%-4s  Last:%-4s  Taunt:%-4s  SpeedUp:%-3s%s%s",
                 lb->id,cnt,lb->max_players,
                 lb->game_state==STATE_PLAYING?"PLAYING":"WAITING",
                 lb->no_attacks?"off":"on",
@@ -1374,9 +1394,9 @@ _do_chroom:;
                 g_server.shutdown_reason[0] = '\0';
                 schat_broadcast("gmsg *** Server shutdown has been cancelled.");
                 log_info("[ADMIN %s] shutdown cancelled", caller);
-                OUT("Shutdown cancelled.");
+                CMD_OUT("Shutdown cancelled.");
             } else {
-                OUT("No shutdown is currently scheduled.");
+                CMD_OUT("No shutdown is currently scheduled.");
             }
             return 0;
         }
@@ -1396,7 +1416,7 @@ _do_chroom:;
 
         if(minutes <= 0) {
             /* Immediate — no broadcast */
-            OUT("Server shutting down immediately.");
+            CMD_OUT("Server shutting down immediately.");
             g_server.running = 0;
         } else {
             g_server.shutdown_ticks = minutes * 60 * 20; /* 20 ticks/s */
@@ -1415,7 +1435,7 @@ _do_chroom:;
                     minutes, minutes==1?"":"s");
             schat_broadcast(gbuf);
             log_info("Shutdown scheduled in %d minute(s)", minutes);
-            OUT("Shutdown scheduled in %d minute(s). Reason: %s",
+            CMD_OUT("Shutdown scheduled in %d minute(s). Reason: %s",
                 minutes, reason[0] ? reason : "(none)");
         }
         return 0;
@@ -1441,22 +1461,22 @@ _do_chroom:;
                      || (_is_bot_cmd && (!strcasecmp(_bot_sub,"list")||!strcasecmp(_bot_sub,"ls")));
 
     if (_do_addbot) {
-        if (!g_cfg.allow_bots) { OUT("Bots are disabled (allow_bots in lineclashd.cfg)."); return 0; }
+        if (!g_cfg.allow_bots) { CMD_OUT("Bots are disabled (allow_bots in lineclashd.cfg)."); return 0; }
         /* Arg offset: "bot add <room> <diff>" vs "addbot <room> <diff>" */
         int _aoff = (_is_bot_cmd && n>=4) ? 1 : 0; /* skip "add" token */
-        if (n < 3+_aoff) { OUT("Usage: bot add <room_id> easy|medium|hard"); return 0; }
+        if (n < 3+_aoff) { CMD_OUT("Usage: bot add <room_id> easy|medium|hard"); return 0; }
         int rid = atoi(toks[1+_aoff]);
         int diff = AI_EASY;
         if (!strcasecmp(toks[2+_aoff],"medium")) diff = AI_MEDIUM;
         else if (!strcasecmp(toks[2+_aoff],"hard")) diff = AI_HARD;
         Lobby *lb2 = server_find_lobby(&g_server, rid);
-        if (!lb2) { OUT("Room %d not found.", rid); return 0; }
-        if (lb2->game_state != STATE_MENU) { OUT("Cannot add bot during a game."); return 0; }
+        if (!lb2) { CMD_OUT("Room %d not found.", rid); return 0; }
+        if (lb2->game_state != STATE_MENU) { CMD_OUT("Cannot add bot during a game."); return 0; }
         int count = 0;
         for (int ci=0; ci<MAX_PLAYERS; ci++) if (lb2->players[ci].connected) count++;
-        if (count >= lb2->max_players) { OUT("Room %d is full (%d/%d).", rid, count, lb2->max_players); return 0; }
+        if (count >= lb2->max_players) { CMD_OUT("Room %d is full (%d/%d).", rid, count, lb2->max_players); return 0; }
         int slot = lobby_add_bot(lb2, diff);
-        if (slot < 0) { OUT("Could not add bot."); return 0; }
+        if (slot < 0) { CMD_OUT("Could not add bot."); return 0; }
         Player *bp = NULL;
         for (int ci=0; ci<MAX_PLAYERS; ci++)
             if (lb2->players[ci].connected && lb2->players[ci].slot==slot) { bp=&lb2->players[ci]; break; }
@@ -1469,7 +1489,7 @@ _do_chroom:;
             bp->ready = 1;
             snprintf(jmsg,sizeof(jmsg),"readystatus %d 1",bp->slot);
             lobby_broadcast(lb2,jmsg,-1);
-            OUT("Added %s bot '%s' to room %d (slot %d).",
+            CMD_OUT("Added %s bot '%s' to room %d (slot %d).",
                 diff==AI_EASY?"easy":diff==AI_MEDIUM?"medium":"hard",
                 bp->nick, rid, slot);
             log_info("[ADMIN %s] addbot room=%d diff=%s slot=%d nick=%s",
@@ -1481,21 +1501,21 @@ _do_chroom:;
     }
     if (!strcmp(verb,"removebot") || _do_removebot) {
         int _roff = (_is_bot_cmd && n>=4) ? 1 : 0;
-        if (n < 3+_roff) { OUT("Usage: bot remove <room_id> <slot>"); return 0; }
+        if (n < 3+_roff) { CMD_OUT("Usage: bot remove <room_id> <slot>"); return 0; }
         int rid = atoi(toks[1+_roff]), slot = atoi(toks[2+_roff]);
         Lobby *lb2 = server_find_lobby(&g_server, rid);
-        if (!lb2) { OUT("Room %d not found.", rid); return 0; }
+        if (!lb2) { CMD_OUT("Room %d not found.", rid); return 0; }
         int found = 0;
         for (int ci=0; ci<MAX_PLAYERS; ci++) {
             if (lb2->players[ci].connected && lb2->players[ci].is_bot && lb2->players[ci].slot==slot) {
-                OUT("Removed bot '%s' from room %d.", lb2->players[ci].nick, rid);
+                CMD_OUT("Removed bot '%s' from room %d.", lb2->players[ci].nick, rid);
                 log_info("[ADMIN %s] removebot room=%d slot=%d nick=%s",
                          caller, rid, slot, lb2->players[ci].nick);
                 lobby_remove_bot(lb2, slot);
                 found = 1; break;
             }
         }
-        if (!found) OUT("No bot in slot %d of room %d.", slot, rid);
+        if (!found) CMD_OUT("No bot in slot %d of room %d.", slot, rid);
         return 0;
     }
     if (_do_listbots) {
@@ -1508,7 +1528,7 @@ _do_chroom:;
             for (pi=0; pi<MAX_PLAYERS; pi++) {
                 Player *bp = &lb2->players[pi];
                 if (!bp->connected || !bp->is_bot) continue;
-                OUT("Room %-2d  Slot %-2d  %-20s  %s  %s",
+                CMD_OUT("Room %-2d  Slot %-2d  %-20s  %s  %s",
                     lb2->id, bp->slot, bp->nick,
                     bp->bot_difficulty==AI_EASY?"easy  ":
                     bp->bot_difficulty==AI_MEDIUM?"medium":"hard  ",
@@ -1516,7 +1536,7 @@ _do_chroom:;
                 any++;
             }
         }
-        if (!any) { if(rid) OUT("No bots active in room %d.", rid); else OUT("No bots active."); }
+        if (!any) { if(rid) CMD_OUT("No bots active in room %d.", rid); else CMD_OUT("No bots active."); }
         return 0;
     }
 

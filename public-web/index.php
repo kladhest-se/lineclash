@@ -436,6 +436,7 @@ footer {
 </style>
 </head>
 <body>
+<div style="text-align:center;padding:1rem"><a href="directory/">Live servers &amp; game statistics</a></div>
 
 <nav class="nav" role="navigation" aria-label="Main">
   <div class="nav-inner">

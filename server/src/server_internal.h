@@ -51,3 +51,4 @@ void   server_api_init(void);
 void   server_api_shutdown(void);
 sock_t server_api_get_sock(void);
 void   server_api_accept(void);
+void   server_api_poll(void);

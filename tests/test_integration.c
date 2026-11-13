@@ -22,6 +22,8 @@
 static int g_pass = 0, g_fail = 0;
 static pid_t g_server_pid = -1;
 static int   g_port = 0;
+static char test_dir[] = "/tmp/lineclash-tests-XXXXXX";
+static char config_path[512];
 
 #define ASSERT(cond, msg) do { \
     if (cond) { printf("  PASS  %s\n", msg); g_pass++; } \
@@ -40,10 +42,11 @@ static pid_t start_server(const char *binary, int port) {
     if (pid == 0) {
         /* child — redirect stdout/stderr to /dev/null to keep test output clean */
         freopen("/dev/null", "w", stdout);
-        freopen("/dev/null", "w", stderr);
+        /* Keep startup diagnostics visible. */
         char port_str[16];
         snprintf(port_str, sizeof(port_str), "%d", port);
-        execl(binary, binary, "--port", port_str, "--db", "/tmp/lineclash_test.db", NULL);
+        execl(binary, binary, "--port", port_str, "--config", config_path, NULL);
+        perror("exec server");
         exit(1);
     }
     return pid;
@@ -55,7 +58,12 @@ static void stop_server(void) {
         int status;
         waitpid(g_server_pid, &status, 0);
         g_server_pid = -1;
-        unlink("/tmp/lineclash_test.db");
+        const char *files[] = {"server.cfg", "database.sqlite3", "database.sqlite3-wal",
+                               "database.sqlite3-shm", "server.log"};
+        for (unsigned i = 0; i < sizeof(files)/sizeof(files[0]); i++) {
+            char path[512]; snprintf(path, sizeof(path), "%s/%s", test_dir, files[i]); unlink(path);
+        }
+        rmdir(test_dir);
     }
 }
 
@@ -63,6 +71,11 @@ static void stop_server(void) {
 static int wait_for_server(int port, int timeout_ms) {
     int waited = 0;
     while (waited < timeout_ms) {
+        int status;
+        if (waitpid(g_server_pid, &status, WNOHANG) == g_server_pid) {
+            fprintf(stderr, "Server exited early (status %d)\n", status);
+            g_server_pid = -1; return 0;
+        }
         sock_t s = net_connect("127.0.0.1", port);
         if (s != INVALID_SOCK) { sock_close(s); return 1; }
         usleep(50000); /* 50ms */
@@ -73,22 +86,21 @@ static int wait_for_server(int port, int timeout_ms) {
 
 /* Read lines from socket until we see a line containing needle, timeout in ms */
 static int recv_until(sock_t s, const char *needle, char *out, int outsz, int timeout_ms) {
-    char buf[4096] = "";
-    int blen = 0;
-    char line[MAX_MSG_LEN];
-    int waited = 0;
-
+    char line[MAX_MSG_LEN]; int len = 0, waited = 0;
+    /* Consume one byte at a time: do not lose later lines between calls. */
     while (waited < timeout_ms) {
-        int n = net_recv(s, buf, &blen, line, sizeof(line));
-        if (n < 0) return 0; /* disconnected */
-        if (n == 1 && line[0]) {
+        char ch; net_flush_all();
+        int n = (int)recv(s, &ch, 1, 0);
+        if (n == 0) return 0;
+        if (n < 0) { usleep(10000); waited += 10; continue; }
+        if (ch == '\n' || ch == '\r') {
+            line[len] = 0;
             if (strstr(line, needle)) {
                 if (out) snprintf(out, outsz, "%s", line);
                 return 1;
             }
-        }
-        usleep(10000); /* 10ms */
-        waited += 10;
+            len = 0;
+        } else if (len < (int)sizeof(line)-1) line[len++] = ch;
     }
     return 0;
 }
@@ -110,10 +122,10 @@ static void test_connect(void) {
 static void test_auth_challenge(void) {
     puts("server: auth handshake");
     sock_t s = connect_client();
-    if (s == INVALID_SOCK) { printf("  SKIP  cannot connect\n"); return; }
+    if (s == INVALID_SOCK) { g_fail++; printf("  FAIL  cannot connect\n"); return; }
 
     /* Send nick command to trigger auth */
-    net_send(s, "nick testuser");
+    net_send(s, "authnick testuser");
 
     char line[MAX_MSG_LEN];
     int got = recv_until(s, "authchallenge", line, sizeof(line), 2000);
@@ -128,9 +140,9 @@ static void test_auth_challenge(void) {
 static void test_register(void) {
     puts("server: register new account");
     sock_t s = connect_client();
-    if (s == INVALID_SOCK) { printf("  SKIP  cannot connect\n"); return; }
+    if (s == INVALID_SOCK) { g_fail++; printf("  FAIL  cannot connect\n"); return; }
 
-    net_send(s, "nick newuser_inttest");
+    net_send(s, "authnick newuser_inttest");
 
     char line[MAX_MSG_LEN];
     /* Server should challenge with "new" for unknown nick */
@@ -152,8 +164,8 @@ static void test_login(void) {
     puts("server: login existing account");
     /* First register */
     sock_t s1 = connect_client();
-    if (s1 == INVALID_SOCK) { printf("  SKIP  cannot connect\n"); return; }
-    net_send(s1, "nick logintest");
+    if (s1 == INVALID_SOCK) { g_fail++; printf("  FAIL  cannot connect\n"); return; }
+    net_send(s1, "authnick logintest");
     char line[MAX_MSG_LEN];
     if (recv_until(s1, "authchallenge new", line, sizeof(line), 2000)) {
         net_send(s1, "authresp aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
@@ -164,8 +176,8 @@ static void test_login(void) {
 
     /* Now login with same nick — should get HMAC challenge (not "new") */
     sock_t s2 = connect_client();
-    if (s2 == INVALID_SOCK) { printf("  SKIP  cannot connect\n"); return; }
-    net_send(s2, "nick logintest");
+    if (s2 == INVALID_SOCK) { g_fail++; printf("  FAIL  cannot connect\n"); return; }
+    net_send(s2, "authnick logintest");
     int got = recv_until(s2, "authchallenge", line, sizeof(line), 2000);
     ASSERT(got, "server challenges existing user");
     if (got) {
@@ -178,12 +190,12 @@ static void test_login(void) {
 static void test_lobby_list(void) {
     puts("server: lobby list after auth");
     sock_t s = connect_client();
-    if (s == INVALID_SOCK) { printf("  SKIP  cannot connect\n"); return; }
+    if (s == INVALID_SOCK) { g_fail++; printf("  FAIL  cannot connect\n"); return; }
 
-    net_send(s, "nick lobbytest");
+    net_send(s, "authnick lobbytest");
     char line[MAX_MSG_LEN];
     if (!recv_until(s, "authchallenge new", line, sizeof(line), 2000)) {
-        printf("  SKIP  registration challenge not received\n");
+        g_fail++; printf("  FAIL  registration challenge not received\n");
         sock_close(s); return;
     }
     net_send(s, "authresp bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
@@ -191,6 +203,7 @@ static void test_lobby_list(void) {
     ASSERT(got_ok, "authenticated successfully");
 
     if (got_ok) {
+        net_send(s, "listlobbies");
         int got_list = recv_until(s, "lobbylistend", line, sizeof(line), 2000);
         ASSERT(got_list, "server sends lobbylistend after auth");
     }
@@ -201,22 +214,23 @@ static void test_lobby_list(void) {
 static void test_join_room(void) {
     puts("server: join room");
     sock_t s = connect_client();
-    if (s == INVALID_SOCK) { printf("  SKIP  cannot connect\n"); return; }
+    if (s == INVALID_SOCK) { g_fail++; printf("  FAIL  cannot connect\n"); return; }
 
-    net_send(s, "nick jointest");
+    net_send(s, "authnick jointest");
     char line[MAX_MSG_LEN];
     if (!recv_until(s, "authchallenge new", line, sizeof(line), 2000)) {
-        printf("  SKIP  registration challenge not received\n");
+        g_fail++; printf("  FAIL  registration challenge not received\n");
         sock_close(s); return;
     }
     net_send(s, "authresp cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
     if (!recv_until(s, "authok", line, sizeof(line), 2000)) {
-        printf("  SKIP  auth failed\n"); sock_close(s); return;
+        g_fail++; printf("  FAIL  auth failed\n"); sock_close(s); return;
     }
+    net_send(s, "listlobbies");
     recv_until(s, "lobbylistend", line, sizeof(line), 2000);
 
     /* Join room 1 */
-    net_send(s, "lineclash_join 1");
+    net_send(s, "lineclash_join jointest - 1");
     int got_num = recv_until(s, "playernum", line, sizeof(line), 2000);
     ASSERT(got_num, "server sends playernum after joining room");
     if (got_num) {
@@ -233,29 +247,31 @@ static void test_two_clients(void) {
 
     /* Client A */
     sock_t sa = connect_client();
-    if (sa == INVALID_SOCK) { printf("  SKIP  cannot connect A\n"); return; }
-    net_send(sa, "nick player_a");
+    if (sa == INVALID_SOCK) { g_fail++; printf("  FAIL  cannot connect A\n"); return; }
+    net_send(sa, "authnick player_a");
     char line[MAX_MSG_LEN];
     if (!recv_until(sa, "authchallenge new", line, sizeof(line), 2000)) {
-        printf("  SKIP\n"); sock_close(sa); return;
+        g_fail++; printf("  FAIL\n"); sock_close(sa); return;
     }
     net_send(sa, "authresp dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd");
     recv_until(sa, "authok", line, sizeof(line), 2000);
+    net_send(sa, "listlobbies");
     recv_until(sa, "lobbylistend", line, sizeof(line), 2000);
-    net_send(sa, "lineclash_join 1");
+    net_send(sa, "lineclash_join player_a - 1");
     recv_until(sa, "playernum", line, sizeof(line), 2000);
 
     /* Client B */
     sock_t sb = connect_client();
-    if (sb == INVALID_SOCK) { printf("  SKIP  cannot connect B\n"); return; }
-    net_send(sb, "nick player_b");
+    if (sb == INVALID_SOCK) { g_fail++; printf("  FAIL  cannot connect B\n"); return; }
+    net_send(sb, "authnick player_b");
     if (!recv_until(sb, "authchallenge new", line, sizeof(line), 2000)) {
-        printf("  SKIP\n"); sock_close(sa); sock_close(sb); return;
+        g_fail++; printf("  FAIL\n"); sock_close(sa); sock_close(sb); return;
     }
     net_send(sb, "authresp eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
     recv_until(sb, "authok", line, sizeof(line), 2000);
+    net_send(sb, "listlobbies");
     recv_until(sb, "lobbylistend", line, sizeof(line), 2000);
-    net_send(sb, "lineclash_join 1");
+    net_send(sb, "lineclash_join player_b - 1");
     recv_until(sb, "playernum", line, sizeof(line), 2000);
 
     /* A should receive playerjoin for B */
@@ -269,25 +285,23 @@ static void test_two_clients(void) {
 /* ── test: server API responds ────────────────────────────── */
 static void test_api(void) {
     puts("server: HTTP stats API");
-    /* Connect to API port (server port + 1 by convention, or port 31458) */
-    int api_port = g_port + 1;
-    sock_t s = net_connect("127.0.0.1", api_port);
-    if (s == INVALID_SOCK) {
-        printf("  SKIP  API port not available (expected %d)\n", api_port);
-        return;
+    sock_t s = net_connect("127.0.0.1", g_port + 1);
+    ASSERT(s != INVALID_SOCK, "API port is available");
+    if (s == INVALID_SOCK) return;
+    const char *request = "GET / HTTP/1.0\r\n\r\n";
+    send(s, request, (int)strlen(request), 0);
+    char response[65536]; int len = 0;
+    for (int i = 0; i < 200; i++) {
+        int n = (int)recv(s, response + len, sizeof(response)-1-len, 0);
+        if (n > 0) len += n;
+        else if (n == 0) break;
+        if (len == sizeof(response)-1) break;
+        usleep(10000);
     }
-    net_send(s, "GET /api/status HTTP/1.0\r\nHost: localhost\r\n\r\n");
-    char line[MAX_MSG_LEN];
-    char buf[4096] = "";
-    int blen = 0;
-    int got_json = 0;
-    for (int i = 0; i < 50; i++) {
-        int n = net_recv(s, buf, &blen, line, sizeof(line));
-        if (n < 0) break;
-        if (n == 1 && strstr(line, "server_stats")) { got_json = 1; break; }
-        usleep(20000);
-    }
-    ASSERT(got_json, "API returns JSON with server_stats");
+    response[len] = 0;
+    ASSERT(strstr(response, "server_stats") != NULL, "API returns server_stats");
+    ASSERT(len >= 2 && response[len-1] == '}' && response[len-2] == '}',
+           "API closes server_stats and root JSON objects");
     sock_close(s);
 }
 
@@ -310,6 +324,13 @@ int main(int argc, char **argv) {
     g_port = pick_port();
     printf("  Server: %s\n  Port:   %d\n\n", server_bin, g_port);
 
+    if (!mkdtemp(test_dir)) { perror("mkdtemp"); return 2; }
+    snprintf(config_path, sizeof(config_path), "%s/server.cfg", test_dir);
+    FILE *cfg = fopen(config_path, "w");
+    if (!cfg) { perror("config"); return 2; }
+    fprintf(cfg, "db_file = %s/database.sqlite3\nlog_file = %s/server.log\n"
+                 "status_port = %d\nnum_lobbies = 3\n", test_dir, test_dir, g_port+1);
+    fclose(cfg);
     /* Start server */
     g_server_pid = start_server(server_bin, g_port);
     if (g_server_pid < 0) { puts("  ERROR: fork failed"); return 2; }

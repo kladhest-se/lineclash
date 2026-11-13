@@ -1,25 +1,22 @@
 # lineclashd — Server Makefile
 UNAME := $(shell uname -s 2>/dev/null || echo Windows)
+ifneq ($(filter MINGW% MSYS% CYGWIN%,$(UNAME)),)
+UNAME := Windows
+endif
 .DEFAULT_GOAL := all
 
-# ---- Version — extracted from CHANGELOG.md via get-version.sh ----
-# Can be overridden on command line: make VERSION=1.0
-ifndef VERSION
-  VERSION     := $(shell "$(CURDIR)/../get-version.sh" 2>/dev/null || echo dev)
-  VERSION_NUM := $(shell "$(CURDIR)/../get-version.sh" num 2>/dev/null || echo 0)
-  BUILD_DATE  := $(shell "$(CURDIR)/../get-version.sh" date 2>/dev/null || echo unknown)
-  ifeq ($(VERSION),)
-    VERSION     := dev
-    VERSION_NUM := 0
-    BUILD_DATE  := unknown
-  endif
-endif
 include ../version.mk
+
 
 .PHONY: all clean run gen-buildnum
 
-gen-buildnum:
-	@SCRIPT=$(CURDIR)/../get-version.sh; BN=$$($$SCRIPT buildnum 2>/dev/null || echo 0); BD=$$($$SCRIPT date 2>/dev/null || date -u +%Y-%m-%d); { echo '/* auto-generated */'; echo "#define BUILD_NUMBER $$BN"; echo "#define BUILD_DATE \"$$BD\""; } > src/buildnum.h
+gen-buildnum: src/buildnum.h
+
+.PHONY: FORCE
+FORCE:
+src/buildnum.h: FORCE ../get-version.sh ../version.mk
+	@VERSION="$(VERSION)" sh ../get-version.sh header $@
+
 
 
 ifeq ($(UNAME),Darwin)
@@ -43,7 +40,7 @@ endif
 ifeq ($(UNAME),Windows)
     CC          = gcc
     CFLAGS      = -Wall -O2 -DPLATFORM_WINDOWS $(VERSION_CFLAGS)
-    LDFLAGS     = -lws2_32
+    LDFLAGS     = -lws2_32 -lpsapi
     SQLITE_LIBS = -lsqlite3
     SERVER      = lineclashd.exe
     ADMIN       = lineclashd-tool.exe
@@ -51,7 +48,7 @@ endif
 ifeq ($(PLATFORM),win32)
     CC          = x86_64-w64-mingw32-gcc
     CFLAGS      = -Wall -O2 -DPLATFORM_WINDOWS $(VERSION_CFLAGS)
-    LDFLAGS     = -lws2_32
+    LDFLAGS     = -lws2_32 -lpsapi
     SQLITE_LIBS = -lsqlite3
     SERVER      = lineclashd.exe
     ADMIN       = lineclashd-tool.exe
@@ -66,7 +63,7 @@ ifeq ($(PLATFORM),amiga)
 endif
 
 SHARED = ../shared/src
-INC    = -I../shared/include -Isrc -Isqlite3
+INC    = -I../shared/include -Isrc
 
 # Server sources (own files)
 SERVER_OWN_SRCS = src/lineclashd.c \
@@ -97,7 +94,7 @@ ADMIN_OBJS     = $(ADMIN_OWN_OBJS) $(SHARED_AO)
 
 
 
-all: gen-buildnum build $(SERVER) lineclashd-tool
+all: gen-buildnum build $(SERVER) $(ADMIN)
 	@rm -f lineclash-admin lineclash-admin.exe src/lineclash-admin.ao
 	@echo "Server built:     $(SERVER)"
 	@echo "Tool built: lineclashd-tool"
@@ -110,8 +107,8 @@ build:
 $(SERVER): $(SERVER_OBJS)
 	$(CC) $(SERVER_OBJS) -o $@ $(LDFLAGS) $(SQLITE_LIBS)
 
-lineclashd-tool: $(ADMIN_OBJS)
-	$(CC) $(ADMIN_OBJS) -o $@ $(SQLITE_LIBS)
+$(ADMIN): $(ADMIN_OBJS)
+	$(CC) $(ADMIN_OBJS) -o $@ $(LDFLAGS) $(SQLITE_LIBS)
 
 # Server own sources → src/*.o
 src/%.o: src/%.c
@@ -146,7 +143,13 @@ clean:
 	rm -f $(SERVER_OWN_OBJS) $(ADMIN_OWN_OBJS)
 	rm -f $(SERVER) lineclashd-tool lineclashd.exe lineclashd-tool.exe
 	rm -f lineclash-admin lineclash-admin.exe src/lineclash-admin.ao src/lineclash-admin.c.old
+	rm -f src/*.d
 	rm -rf build
 
 run: all
 	./$(SERVER)
+
+# Track headers and serialize metadata generation before parallel compilation.
+CFLAGS += -MMD -MP
+$(SERVER_OWN_OBJS) $(ADMIN_OWN_OBJS) $(SHARED_OBJS) $(SHARED_AO): src/buildnum.h
+-include $(SERVER_OWN_OBJS:.o=.d) $(ADMIN_OWN_OBJS:.ao=.d) $(SHARED_OBJS:.o=.d) $(SHARED_AO:.ao=.d)

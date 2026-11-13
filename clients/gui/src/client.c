@@ -180,6 +180,7 @@ static void settings_save(ClientCtx *c) {
     fprintf(f, "music = %d\n",  music_get_enabled());
     fprintf(f, "sfx_vol = %.2f\n",   sound_get_sfx_volume());
     fprintf(f, "music_vol = %.2f\n", music_get_volume());
+    fprintf(f, "music_shuffle = %d\n", music_get_shuffle());
     fprintf(f, "\n# Keymap (SDL scancodes — see https://wiki.libsdl.org/SDL_Scancode)\n");
     fprintf(f, "key_move_left  = %d\n", c->km.move_left);
     fprintf(f, "key_move_right = %d\n", c->km.move_right);
@@ -213,6 +214,7 @@ static void settings_load(ClientCtx *c) {
             c->have_saved_music    = 1;
         }
         if (!strcmp(key, "sfx_vol"))   sound_set_sfx_volume((float)atof(val));
+        if (!strcmp(key, "music_shuffle")) music_set_shuffle(atoi(val));
         if (!strcmp(key, "music_vol")) music_set_volume((float)atof(val));
         if (!strcmp(key, "key_move_left"))  c->km.move_left  = atoi(val);
         if (!strcmp(key, "key_move_right")) c->km.move_right = atoi(val);
@@ -229,15 +231,34 @@ static void settings_load(ClientCtx *c) {
     fclose(f);
 }
 
+int client_server_order(ClientCtx *c,int visible[MAX_SAVED_SERVERS]) {
+    int count=0;
+    for(int n=0;n<c->server_count;n++) {
+        SavedServer *ss=&c->server_list[n];
+        if(c->server_filter==1 && !ss->favourite)continue;
+        if(c->server_filter==2 && !ss->last_used)continue;
+        if(c->server_filter==4 && (ss->online!=1 || ss->ping_ms<=0 || ss->ping_ms>100))continue;
+        if(c->server_filter==3 && (ss->capacity<=0 || ss->users_playing+ss->users_idle>=ss->capacity || ss->online<0))continue;
+        visible[count++]=n;
+    }
+    for(int x=0;x<count;x++)for(int y=x+1;y<count;y++) {
+        SavedServer *a=&c->server_list[visible[x]],*b=&c->server_list[visible[y]];
+        int swap=c->server_sort==1?((b->online==1 && b->ping_ms>0?b->ping_ms:999999)<(a->online==1 && a->ping_ms>0?a->ping_ms:999999)):c->server_sort==2?(b->last_used>a->last_used):0;
+        if(swap){int t=visible[x];visible[x]=visible[y];visible[y]=t;}
+    }
+    return count;
+}
+
 static void server_list_save(ClientCtx *c) {
     ensure_appdata_dir(server_list_path());
     FILE *f = fopen(server_list_path(), "w"); if (!f) return;
     int i;
     for (i = 0; i < c->server_count; i++) {
         SavedServer *s = &c->server_list[i];
-        fprintf(f, "[server]\nname=%s\nhost=%s\nport=%d\nnick=%s\nhash=%s\n\n",
+        if(s->discovered && !s->favourite && !s->last_used) continue;
+        fprintf(f, "[server]\nname=%s\nhost=%s\nport=%d\nnick=%s\nhash=%s\nfavourite=%d\nlast_used=%lld\n\n",
                 s->name, s->host, s->port, s->nick,
-                s->pw_hash[0] ? s->pw_hash : "");
+                s->pw_hash[0] ? s->pw_hash : "",s->favourite,s->last_used);
     }
     fclose(f);
 #ifndef PLATFORM_WINDOWS
@@ -255,7 +276,7 @@ static void server_list_load(ClientCtx *c) {
         char *nl=strchr(line,'\n'); if(nl)*nl='\0';
         char *cr=strchr(line,'\r'); if(cr)*cr='\0';
         if (!strcmp(line, "[server]")) {
-            if (in_block && cur.host[0]) {
+            if (in_block && cur.host[0] && c->server_count<MAX_SAVED_SERVERS) {
                 if (!cur.name[0]) strncpy(cur.name, cur.host, MAX_SERVER_NAME-1);
                 c->server_list[c->server_count++] = cur;
             }
@@ -266,11 +287,13 @@ static void server_list_load(ClientCtx *c) {
             if(!strcmp(k,"name")) strncpy(cur.name,v,MAX_SERVER_NAME-1);
             else if(!strcmp(k,"host")) strncpy(cur.host,v,127);
             else if(!strcmp(k,"port")) cur.port=atoi(v);
+            else if(!strcmp(k,"favourite")) cur.favourite=atoi(v)!=0;
+            else if(!strcmp(k,"last_used")) cur.last_used=strtoll(v,NULL,10);
             else if(!strcmp(k,"nick")) strncpy(cur.nick,v,MAX_NICK_LEN-1);
             else if(!strcmp(k,"hash")&&strlen(v)==64) strncpy(cur.pw_hash,v,64);
         }
     }
-    if (in_block && cur.host[0]) {
+    if (in_block && cur.host[0] && c->server_count<MAX_SAVED_SERVERS) {
         if (!cur.name[0]) strncpy(cur.name, cur.host, MAX_SERVER_NAME-1);
         c->server_list[c->server_count++] = cur;
     }
@@ -495,13 +518,69 @@ int display_id(ClientCtx *c, int slot) {
 /* ============================================================
  * Message handler
  * ============================================================ */
+static void gui_reconnect_finish(ClientCtx *c, const char *reason) {
+    net_reconnect_stop(&c->reconnect);
+    if(c->sock!=INVALID_SOCK) { sock_close(c->sock); c->sock=INVALID_SOCK; }
+    ctx_reset_lobby(c); c->state=CS_SERVER_LIST; music_start_menu();
+    snprintf(c->connect_error,sizeof(c->connect_error),"%s",reason);
+    ctx_status(c,reason);
+}
+static void gui_connection_lost(ClientCtx *c) {
+    if (!c->reconnect.active && !c->reconnect_blocked &&
+        c->state>=CS_LOBBY_SELECT && c->auth_pass_hash[0]) {
+        net_peer_address(c->sock,c->reconnect_host,sizeof(c->reconnect_host),c->tf_host.text);
+        c->reconnect_room=(c->state==CS_PLAYING && !c->is_spectator) ? c->room_id : 0;
+        /* reconnect_round was supplied by the server roundid message. */
+        net_reconnect_begin(&c->reconnect,net_now_ms(),c->reconnect_window);
+    }
+    if(c->sock!=INVALID_SOCK) sock_close(c->sock);
+    c->sock=INVALID_SOCK; c->recv_len=0; c->recv_buf[0]=0;
+    if(c->reconnect.active) {
+        c->state=CS_AUTH; ctx_status(c,"Connection lost. Reconnecting (Esc cancels)...");
+    } else gui_reconnect_finish(c,"Disconnected from server");
+}
+static void gui_reconnect_tick(ClientCtx *c) {
+    if(!c->reconnect.active) return;
+    uint64_t now=net_now_ms();
+    if(now>=c->reconnect.deadline) { gui_reconnect_finish(c,"Reconnect window expired. Select a server to reconnect."); return; }
+    snprintf(c->connect_error,sizeof(c->connect_error),"Reconnecting: %llu seconds remaining (Esc cancels)",
+        (unsigned long long)((c->reconnect.deadline-now+999)/1000));
+    if(c->sock==INVALID_SOCK) {
+        c->sock=net_reconnect_poll(&c->reconnect,c->reconnect_host,atoi(c->tf_port.text),now);
+        if(c->sock!=INVALID_SOCK) { c->last_received=net_now_ms(); c->recv_len=0; c->state=CS_AUTH; }
+    }
+}
+
 void client_handle_msg(ClientCtx *c, const char *line) {
     char cmd[MAX_MSG_LEN], args[16][MAX_MSG_LEN];
     int n = proto_parse(line,cmd,args,16);
     if (!n) return;
 
+    if(!strcmp(cmd,"roundid") && n>=2) { c->reconnect_round=atoi(args[0]); return; }
+    if(!strcmp(cmd,"resume_inventory") && n>=2) {
+        c->my_field.special_head=c->my_field.special_tail=c->my_field.special_count=0;
+        for(const char *sp=args[0]; *sp && *sp!='-'; sp++) {
+            const char *found=strchr(SPECIAL_CHARS,*sp);
+            if(found) field_add_special(&c->my_field,(uint8)(found-SPECIAL_CHARS+1));
+        }
+        return;
+    }
+    if(!strcmp(cmd,"reconnectwindow") && n>=2) { c->reconnect_window=atoi(args[0]); return; }
+    if(!strcmp(cmd,"reconnect_failed")) {
+        net_reconnect_stop(&c->reconnect); ctx_reset_lobby(c); c->state=CS_LOBBY_SELECT; music_start_menu();
+        c->room_id=0; ctx_status(c,"Round ended or reconnect window expired; choose a room.");
+        net_send(c->sock,"listlobbies"); return;
+    }
+    if(!strcmp(cmd,"resume_ok") && n>=3 && c->reconnect.active) {
+        net_reconnect_stop(&c->reconnect);
+        c->state=atoi(args[1])?CS_PLAYING:CS_GAMEOVER;
+        memset(c->opp_nicks,0,sizeof(c->opp_nicks)); memset(c->opp_alive,0,sizeof(c->opp_alive));
+        ctx_status(c,"Connection restored"); return;
+    }
+    if(!strcmp(cmd,"resume_field") && n>=2) { field_decode(&c->my_field,args[0]); return; }
     /* ---- KICKED / BANNED notification — show popup before disconnect ---- */
     if (!strcmp(cmd,"kicked") && n>=2) {
+        c->reconnect_blocked=1; net_reconnect_stop(&c->reconnect);
         /* Reconstruct full reason (may be multi-word) */
         char reason[256]=""; int ri;
         for(ri=0;ri<n-1&&ri<15;ri++){
@@ -523,6 +602,7 @@ void client_handle_msg(ClientCtx *c, const char *line) {
            Only treat as fatal error if it carries a rejection reason. */
         const char *msg = args[0];
         if (strcmp(msg,"LineClash/1.0") != 0) {
+            c->reconnect_blocked=1; net_reconnect_stop(&c->reconnect);
             /* Check if this is an admin-initiated kill — show popup */
             if (strstr(msg, "terminated by an administrator") != NULL) {
                 strncpy(c->kick_popup_msg, "Connection terminated by an administrator",
@@ -533,13 +613,17 @@ void client_handle_msg(ClientCtx *c, const char *line) {
             }
             snprintf(c->connect_error, sizeof(c->connect_error), "%s", msg);
             if (c->sock != INVALID_SOCK) { sock_close(c->sock); c->sock = INVALID_SOCK; }
-            c->state = CS_CONNECT;
+            c->state = CS_CONNECT; music_start_menu();
         }
         return;
     }
 
     /* ---- AUTH RESPONSES (received while in CS_AUTH state) ---- */
     if (!strcmp(cmd,"authok") && n>=2) {
+        for(int i=0;i<c->server_count;i++) {
+            SavedServer *ss=&c->server_list[i];
+            if(!strcasecmp(ss->host,c->tf_host.text) && ss->port==atoi(c->tf_port.text)) {ss->last_used=(long long)time(NULL);server_list_save(c);break;}
+        }
         int is_new = (strcmp(args[0],"new")==0);
         snprintf(c->connect_error, sizeof(c->connect_error), "%s",
                  is_new ? "Account created!" : "Logged in.");
@@ -559,22 +643,35 @@ void client_handle_msg(ClientCtx *c, const char *line) {
         net_send(c->sock, "clientinfo gui linux " TETRINETZ_VERSION);
 #endif
         net_send(c->sock, "reqleaderboard");
+        if(c->reconnect.active) {
+            if(c->reconnect_room) {
+                char join[MAX_MSG_LEN]; snprintf(join,sizeof(join),"lineclash_join %s - %d resume %d",
+                    c->auth_nick,c->reconnect_room,c->reconnect_round); net_send(c->sock,join);
+            } else { net_reconnect_stop(&c->reconnect); ctx_reset_lobby(c); c->state=CS_LOBBY_SELECT; net_send(c->sock,"listlobbies"); }
+        }
         return;
     }
     if (!strcmp(cmd,"autherr") && n>=2) {
+        if(c->reconnect.active && strstr(line,"already logged in")) {
+            sock_close(c->sock); c->sock=INVALID_SOCK; c->recv_len=0; return;
+        }
+        c->reconnect_blocked=1; net_reconnect_stop(&c->reconnect);
         snprintf(c->connect_error, sizeof(c->connect_error), "%s", args[0]);
         {int si2; for(si2=0;si2<c->server_count;si2++)
             if(!strcasecmp(c->server_list[si2].host,c->tf_host.text))
                 {c->server_list[si2].auth_status=-1;c->server_list[si2].online=1;break;}}
         if (c->sock != INVALID_SOCK) { sock_close(c->sock); c->sock = INVALID_SOCK; }
         c->is_admin=0; c->priv_level=0;
-        c->state = CS_SERVER_LIST;
+        c->state = CS_SERVER_LIST; music_start_menu();
         return;
     }
     /* ---- Step 2: server issued a challenge ---- */
     if (!strcmp(cmd,"authchallenge") && n>=2) {
         char buf[MAX_MSG_LEN];
         char resp[65];
+        if(c->reconnect.active && !strcmp(args[0],"new")) {
+            gui_reconnect_finish(c,"Account unavailable after reconnect; sign in manually."); return;
+        }
         if (strcmp(args[0], "new") == 0) {
             /* New account: send sha256(password) directly */
             c->auth_nick_is_new = 1;
@@ -987,14 +1084,14 @@ void client_handle_msg(ClientCtx *c, const char *line) {
             ctx_chat(c,"=== GAME STARTED (spectating) ===",COL_GRAY);
         }
         sound_play(c,SFX_ROUND_START);
-        music_load("lineclash_game.mod");
+        music_start_game();
         return;
     }
     if (!strcmp(cmd,"ingame")) {
-        c->state=CS_PLAYING;
+        if(c->state!=CS_GAMEOVER) c->state=CS_PLAYING;
         if (c->is_spectator) ctx_chat(c,"Game in progress -- spectating",COL_GRAY);
         sound_play(c,SFX_ROUND_START);
-        music_load("lineclash_game.mod");
+        music_start_game();
         return;
     }
     if (!strcmp(cmd,"pause") && n>=2) {
@@ -1009,7 +1106,7 @@ void client_handle_msg(ClientCtx *c, const char *line) {
         memset(c->opp_alive,0,sizeof(c->opp_alive));
         ctx_chat(c,"=== GAME OVER ===",COL_LTGRAY);
         sound_play(c,SFX_ROUND_END);
-        music_load("lineclash_menu.mod");
+        music_start_menu();
         return;
     }
     if (!strcmp(cmd,"playerlost") && n>=2) {
@@ -1313,6 +1410,23 @@ void client_on_key(ClientCtx *c, int sc, int sym, int is_text, const char *txt) 
     #define SK_C   6   /* hold piece */
     #define SK_LSHIFT 225
     #define SK_RSHIFT 229
+    if((c->state==CS_PLAYING || c->state==CS_GAMEOVER) && (sc==65 || sc==66 || sc==67)) {
+        if(sc==65) music_previous();
+        else if(sc==66) music_toggle_pause();
+        else music_next();
+        return;
+    }
+    if(c->about_popup_open && sc==41) { c->about_popup_open=0; c->license_popup_open=0; return; }
+    if(c->state!=CS_PLAYING && c->state!=CS_GAMEOVER) c->music_player_open=0;
+    if(c->music_player_open) {
+        if(sc==41) c->music_player_open=0;
+        else if(sc==80) music_previous();
+        else if(sc==79) music_next();
+        else if(sc==44) { if(!music_get_enabled()) music_set_enabled(1); else music_toggle_pause(); }
+        else if(sc==82) c->music_scroll--;
+        else if(sc==81) c->music_scroll++;
+        return;
+    }
     /* Always support both WASD and arrow keys simultaneously */
     if(sc==SK_W) sc=SK_UP;
     else if(sc==SK_S) sc=SK_DOWN;
@@ -1321,6 +1435,10 @@ void client_on_key(ClientCtx *c, int sc, int sym, int is_text, const char *txt) 
     #define SK_9 38
     (void)sym;
 
+    if(c->reconnect.active) {
+        if(sc==41) gui_reconnect_finish(c,"Reconnect cancelled");
+        return;
+    }
     /* Connect screen text field input */
     if (c->state == CS_CONNECT) {
         TextField *focus = NULL;
@@ -1528,10 +1646,13 @@ void client_on_key(ClientCtx *c, int sc, int sym, int is_text, const char *txt) 
             if(c->about_popup_open) c->about_popup_open=0;
             else if(c->server_popup_open) { c->server_popup_open=0; c->server_edit_idx=-1; }
         }
-        else if(sc==SK_UP)  { if(c->server_cursor>0){ c->server_cursor--; c->srv_page=c->server_cursor/6; }}
-        else if(sc==SK_DOWN){ if(c->server_cursor<c->server_count-1){ c->server_cursor++; c->srv_page=c->server_cursor/6; }}
-        else if(sc==SK_LEFT) { if(c->srv_page>0){ c->srv_page--; c->server_cursor=c->srv_page*6; }}
-        else if(sc==SK_RIGHT){ int mp=(c->server_count-1)/6; if(c->srv_page<mp){ c->srv_page++; c->server_cursor=c->srv_page*6; }}
+        else if(sc==SK_UP || sc==SK_DOWN || sc==SK_LEFT || sc==SK_RIGHT) {
+            int order[MAX_SAVED_SERVERS],count=client_server_order(c,order),at=0;
+            for(int n=0;n<count;n++)if(order[n]==c->server_cursor)at=n;
+            at+=sc==SK_UP?-1:sc==SK_DOWN?1:sc==SK_LEFT?-6:6;
+            if(at<0)at=0;if(at>=count)at=count-1;
+            if(count){c->server_cursor=order[at];c->srv_page=at/6;}
+        }
         return;
     }
     if (c->state==CS_LOBBY_SELECT) {
@@ -1714,11 +1835,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
                 if(!strcasecmp(c->server_list[si].host,host)&&c->server_list[si].port==port){
                     strncpy(c->server_list[si].nick,nick,MAX_NICK_LEN-1);
                     strncpy(c->server_list[si].pw_hash,c->auth_pass_hash,64);
-                    server_list_save(c); break;}}}
-        } else if (c->have_saved_creds &&
-                   strcmp(c->saved_nick, nick) == 0 &&
-                   c->auth_pass_hash[0] != '\0') {
-            /* Blank password + same nick → use stored hash silently */
+                    break;}}}
         } else {
             /* Try hash from server list entry */
             int si; int found=0;
@@ -1739,6 +1856,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
             }
         }
 
+        net_reconnect_stop(&c->reconnect); c->reconnect_blocked=0;
         strncpy(c->auth_nick, nick, MAX_NICK_LEN-1);
         c->connect_error[0] = '\0';
         if (c->sock != INVALID_SOCK) { sock_close(c->sock); c->sock=INVALID_SOCK; }
@@ -1748,6 +1866,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
             snprintf(c->connect_error,sizeof(c->connect_error),"Cannot connect to %s:%d",htrunc,port);
         } else {
             net_set_nonblocking(c->sock);
+            c->last_received=net_now_ms();
             c->state = CS_AUTH;
             c->lobby_list_count = 0;
             c->lobby_cursor = 0;
@@ -1760,8 +1879,9 @@ void client_on_button(ClientCtx *c, BtnId btn) {
     }
     case BTN_QUIT:         c->running=0; break;
 
+    case BTN_MUSIC_PLAYER: if(c->state!=CS_PLAYING && c->state!=CS_GAMEOVER) break; c->music_player_open=1; c->about_popup_open=0; break;
     case BTN_SRV_ABOUT:
-        c->about_popup_open=1;
+        c->music_player_open=0; c->about_popup_open=1;
         break;
     case BTN_SRV_REFRESH:
         if (c->server_cursor>=0&&c->server_cursor<c->server_count) {
@@ -1776,6 +1896,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
                 ps->users_playing=0; ps->users_idle=0;
                 c->srv_test_recv_len=0; c->srv_test_ticks=0;
                 c->srvlist_probe_idx=c->server_cursor;
+                c->probe_started=net_now_ms();
                 c->srv_test_sock=net_connect_nb(ps->host,ps->port);
                 if(c->srv_test_sock==INVALID_SOCK){
                     ps->online=-1; ps->auth_status=-3;
@@ -1787,6 +1908,16 @@ void client_on_button(ClientCtx *c, BtnId btn) {
             }
         }
         break;
+    case BTN_DISCOVER:
+        directory_start(getenv("LINECLASH_DIRECTORY_API"),c->directory_message,sizeof(c->directory_message));
+        break;
+    case BTN_FAVOURITE:
+        if(c->server_cursor>=0 && c->server_cursor<c->server_count) {
+            c->server_list[c->server_cursor].favourite=!c->server_list[c->server_cursor].favourite; server_list_save(c);
+        }
+        break;
+    case BTN_SERVER_FILTER: c->server_filter=(c->server_filter+1)%5; c->srv_page=0; break;
+    case BTN_SERVER_SORT: c->server_sort=(c->server_sort+1)%3; c->srv_page=0; break;
     case BTN_SRV_ADD:
         c->server_popup_open=1;
         c->server_edit_idx=-1;
@@ -1874,6 +2005,12 @@ void client_on_button(ClientCtx *c, BtnId btn) {
             if(ss->nick[0]){
                 strncpy(c->tf_nick.text,ss->nick,sizeof(c->tf_nick.text)-1);
                 c->tf_nick.len=(int)strlen(ss->nick);}
+            c->have_saved_creds=0; c->auth_pass_hash[0]=0; c->saved_pw_hash[0]=0;
+            c->tf_pass.len=0; c->tf_pass.text[0]=0;
+            if(!ss->nick[0] || !ss->pw_hash[0]) {
+                c->tf_nick.text[0]=0; c->tf_nick.len=0;
+                c->state=CS_CONNECT; c->connect_error[0]=0; break;
+            }
             if(ss->pw_hash[0]){
                 strncpy(c->auth_pass_hash,ss->pw_hash,64);
                 strncpy(c->saved_nick,ss->nick,MAX_NICK_LEN-1);
@@ -1887,6 +2024,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
         case BTN_TOGGLE_SOUND:   c->sound_enabled=!c->sound_enabled; settings_save(c); break;
         case BTN_TOGGLE_MUSIC:   music_set_enabled(!music_get_enabled()); settings_save(c); break;
     case BTN_BACK_CONNECT:
+        net_reconnect_stop(&c->reconnect); c->reconnect_blocked=1;
         if (c->sock!=INVALID_SOCK) { sock_close(c->sock); c->sock=INVALID_SOCK; }
         if (c->srv_test_sock!=INVALID_SOCK) { sock_close(c->srv_test_sock); c->srv_test_sock=INVALID_SOCK; }
         c->srv_test_state=0; c->srvlist_probe_timer=1; c->srvlist_probe_idx=0;
@@ -1894,7 +2032,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
         c->is_admin=0; c->priv_level=0;
         c->state = CS_SERVER_LIST;
         c->lobby_list_count=0;
-        music_load("lineclash_menu.mod");
+        music_start_menu();
         break;
     case BTN_LOBBY_JOIN:
         if (c->lobby_list_count>0) ctx_join_lobby(c,c->lobby_list[c->lobby_cursor].id);
@@ -1923,7 +2061,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
         c->lobby_refresh_timer=10; /* refresh quickly */
         net_send(c->sock,"listlobbies"); /* explicit request in case server auto-send missed */
         net_send(c->sock,"reqleaderboard");
-        music_load("lineclash_menu.mod");
+        music_start_menu();
         break;
     case BTN_ADD_BOT_EASY:
     case BTN_ADD_BOT_MEDIUM:
@@ -2160,6 +2298,26 @@ void client_on_button(ClientCtx *c, BtnId btn) {
  * Tick
  * ============================================================ */
 void client_tick(ClientCtx *c) {
+    if(c->state!=CS_PLAYING && c->state!=CS_GAMEOVER) { c->music_player_open=0; music_start_menu(); }
+    else music_start_game();
+    music_tick();
+    SavedServer found[MAX_SAVED_SERVERS];
+    int discovered=directory_poll(found,MAX_SAVED_SERVERS,c->directory_message,sizeof(c->directory_message));
+    if(discovered>=0) {
+        if(c->srv_test_state==10 && c->srv_test_sock!=INVALID_SOCK) {sock_close(c->srv_test_sock);c->srv_test_sock=INVALID_SOCK;c->srv_test_state=0;}
+        for(int n=0;n<c->server_count;) {
+            SavedServer *old=&c->server_list[n];
+            if(old->discovered && !old->favourite && !old->last_used) {memmove(old,old+1,(c->server_count-n-1)*sizeof(*old));c->server_count--;}
+            else n++;
+        }
+        for(int n=0;n<discovered;n++) {
+            int match=-1;
+            for(int j=0;j<c->server_count;j++) if(!strcasecmp(c->server_list[j].host,found[n].host) && c->server_list[j].port==found[n].port) {match=j;break;}
+            if(match>=0) c->server_list[match].capacity=found[n].capacity;
+            else if(c->server_count<MAX_SAVED_SERVERS) c->server_list[c->server_count++]=found[n];
+        }
+        c->server_cursor=c->server_count?0:-1;c->srv_page=0;c->srvlist_probe_idx=0;c->srvlist_probe_timer=1;
+    }
     int i;
     for (i=0;i<c->chat_count;i++) c->chat[i].age++;
     for (i=0;i<c->schat_count;i++) c->schat[i].age++;
@@ -2228,9 +2386,13 @@ void client_tick(ClientCtx *c) {
                 } else if(!strcmp(tcmd,"authok")){
                     /* Success — save the server entry */
                     int port=c->tf_srv_port.len>0?atoi(c->tf_srv_port.text):DEFAULT_PORT;
-                    if(c->server_count<MAX_SAVED_SERVERS){
-                        SavedServer *ns=&c->server_list[c->server_count++];
-                        memset(ns,0,sizeof(*ns));
+                    int existing=-1;
+                    for(int j=0;j<c->server_count;j++)if(!strcasecmp(c->server_list[j].host,c->tf_srv_host.text) && c->server_list[j].port==port){existing=j;break;}
+                    if(existing>=0 || c->server_count<MAX_SAVED_SERVERS){
+                        int index=existing>=0?existing:c->server_count++;
+                        SavedServer *ns=&c->server_list[index];
+                        if(existing<0)memset(ns,0,sizeof(*ns));
+                        ns->last_used=(long long)time(NULL);
                         strncpy(ns->host,c->tf_srv_host.text,127);
                         ns->port=port;
                         strncpy(ns->nick,c->tf_srv_nick.text,MAX_NICK_LEN-1);
@@ -2241,7 +2403,7 @@ void client_tick(ClientCtx *c) {
                             strncpy(ns->name,ns->host,MAX_SERVER_NAME-1);
                         strncpy(ns->pw_hash,c->srv_test_hash,64);
                         ns->auth_status=1; ns->online=1;
-                        c->server_cursor=c->server_count-1;
+                        c->server_cursor=index;
                         server_list_save(c);
                     }
                     sock_close(c->srv_test_sock); c->srv_test_sock=INVALID_SOCK;
@@ -2289,7 +2451,7 @@ void client_tick(ClientCtx *c) {
                     } else if(r==1&&tline[0]){
                         char tcmd[64],targs[17][MAX_MSG_LEN];
                         proto_parse(tline,tcmd,targs,16);
-                        if(!strcmp(tcmd,"noconnecting")&&ps)      { ps->online=1; ps->auth_status=0; }
+                        if(!strcmp(tcmd,"noconnecting")&&ps)      { ps->online=1; ps->auth_status=0; ps->ping_ms=(int)(net_now_ms()-c->probe_started);if(ps->ping_ms<1)ps->ping_ms=1; }
                         else if(!strcmp(tcmd,"servername")&&ps){
                             if(!strcmp(ps->name,ps->host))
                                 strncpy(ps->name,targs[0],MAX_SERVER_NAME-1);
@@ -2335,7 +2497,8 @@ void client_tick(ClientCtx *c) {
             ps->users_playing=0; ps->users_idle=0;
             c->srv_test_conncount=0;
             c->srv_test_recv_len=0; c->srv_test_ticks=0;
-            c->srv_test_sock=net_connect_nb(ps->host,ps->port);
+            c->probe_started=net_now_ms();
+                c->srv_test_sock=net_connect_nb(ps->host,ps->port);
             if(c->srv_test_sock==INVALID_SOCK){
                 ps->online=-1; ps->auth_status=-3;
                 c->srvlist_probe_idx=(pi+1)%c->server_count;
@@ -2420,17 +2583,35 @@ void client_tick(ClientCtx *c) {
     }
 }
 
+/* Also used by headless client lifecycle regression tests. */
+void client_network_tick(ClientCtx *c) {
+    char line[MAX_MSG_LEN]; int n;
+    gui_reconnect_tick(c);
+        if(c->sock!=INVALID_SOCK && c->state>=CS_LOBBY_SELECT && c->last_received &&
+           net_now_ms()-c->last_received>5000) gui_connection_lost(c);
+        /* Drain network when connected */
+        if (c->sock!=INVALID_SOCK && c->state!=CS_CONNECT) {
+            while (1) {
+                n=net_recv(c->sock,c->recv_buf,&c->recv_len,line,sizeof(line));
+                if (n<0) { gui_connection_lost(c); break; }
+                if(c->sock==INVALID_SOCK) break;
+                if(n==1) c->last_received=net_now_ms();
+                if (n==1&&line[0]) client_handle_msg(c,line); else break;
+            }
+        }
+
+ }
+
 /* ============================================================
  * Main run loop
  * ============================================================ */
 void client_run_gui(void) {
     ClientCtx c;
-    char line[MAX_MSG_LEN];
-    int n;
 
     srand((unsigned)time(NULL));
     net_init();
     memset(&c,0,sizeof(c));
+    c.reconnect_window=15;
     c.running=1; c.state=CS_SERVER_LIST; c.sock=INVALID_SOCK; c.srv_test_sock=INVALID_SOCK;
     c.drop_interval=level_to_interval(1); c.drop_timer=50; c.last_player_wins=1;
     c.sound_enabled=1;
@@ -2475,27 +2656,13 @@ void client_run_gui(void) {
 
     /* Apply saved music preference now that audio device is open */
     if (c.have_saved_music) music_set_enabled(c.saved_music_enabled);
-    music_load("lineclash_menu.mod");
+    music_start_menu();
 
     while (c.running) {
+        net_flush_all();
         if (!sdl_poll_events(&c)) break;
 
-        /* Drain network when connected */
-        if (c.sock!=INVALID_SOCK && c.state!=CS_CONNECT) {
-            while (1) {
-                n=net_recv(c.sock,c.recv_buf,&c.recv_len,line,sizeof(line));
-                if (n<0) {
-                    if (c.state!=CS_CONNECT) {
-                        ctx_chat(&c,"Disconnected from server",COL_INGAME_RED);
-                        ctx_reset_lobby(&c);
-                    }
-                    sock_close(c.sock); c.sock=INVALID_SOCK;
-                    c.state=CS_SERVER_LIST;
-                    break;
-                }
-                if (n==1&&line[0]) client_handle_msg(&c,line); else break;
-            }
-        }
+        client_network_tick(&c);
 
         client_tick(&c);
 
@@ -2508,6 +2675,8 @@ void client_run_gui(void) {
         SLEEP_MS(16);
     }
 
+    net_reconnect_stop(&c.reconnect);
+    directory_shutdown();
     sound_shutdown();
     sdl_shutdown();
     if (c.sock!=INVALID_SOCK) sock_close(c.sock);

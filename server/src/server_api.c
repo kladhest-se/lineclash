@@ -24,22 +24,60 @@
 
 /* ---- State shared with server.c ---- */
 static sock_t g_api_sock = INVALID_SOCK;
+#define API_CLIENTS 16
+#define API_TIMEOUT 5
+#define API_RESPONSE_LIMIT (512 * 1024)
+typedef struct {
+    int active;
+    sock_t sock;
+    time_t started;
+    char request[512];
+    int received;
+    char *response;
+    size_t length, sent;
+} ApiClient;
+static ApiClient api_clients[API_CLIENTS];
+
+static void api_close(ApiClient *c) {
+    if (c->active) sock_close(c->sock);
+    free(c->response);
+    memset(c, 0, sizeof(*c));
+}
+
 
 /* ---- JSON helpers ---- */
 static char *g_jbuf = NULL;
 static int   g_jlen = 0;
 static int   g_jcap = 0;
+static int   g_jfailed = 0;
 
-static void j_reset(void) { g_jlen = 0; if (g_jbuf) g_jbuf[0] = '\0'; }
-static void j_ensure(int extra) {
+static void j_reset(void) { g_jlen = 0; g_jfailed = 0; if (g_jbuf) g_jbuf[0] = 0; }
+static int j_ensure(int extra) {
+    if (g_jfailed) return 0;
+    if (extra > API_RESPONSE_LIMIT - g_jlen) { g_jfailed = 1; return 0; }
     if (g_jlen + extra + 2 > g_jcap) {
-        g_jcap = (g_jlen + extra + 2) * 2 + 4096;
-        g_jbuf = (char*)realloc(g_jbuf, g_jcap);
+        int cap = (g_jlen + extra + 2) * 2 + 4096;
+        char *next = (char *)realloc(g_jbuf, cap);
+        if (!next) { g_jfailed = 1; return 0; }
+        g_jbuf = next; g_jcap = cap;
     }
+    return 1;
 }
 static void j_raw(const char *s) {
-    int l = (int)strlen(s); j_ensure(l);
-    memcpy(g_jbuf + g_jlen, s, l); g_jlen += l; g_jbuf[g_jlen] = '\0';
+    int l = (int)strlen(s);
+    if (!j_ensure(l)) return;
+    memcpy(g_jbuf + g_jlen, s, l); g_jlen += l; g_jbuf[g_jlen] = 0;
+}
+/* Preserve valid UTF-8 from config; legacy player text may be Latin-1. */
+static int utf8_span(const unsigned char *s) {
+    int n = s[0] >= 0xc2 && s[0] <= 0xdf ? 2 :
+            s[0] >= 0xe0 && s[0] <= 0xef ? 3 :
+            s[0] >= 0xf0 && s[0] <= 0xf4 ? 4 : 0;
+    int i;
+    for (i = 1; i < n; i++) if ((s[i] & 0xc0) != 0x80) return 0;
+    if (n == 3 && ((s[0] == 0xe0 && s[1] < 0xa0) || (s[0] == 0xed && s[1] >= 0xa0))) return 0;
+    if (n == 4 && ((s[0] == 0xf0 && s[1] < 0x90) || (s[0] == 0xf4 && s[1] >= 0x90))) return 0;
+    return n;
 }
 static void j_str(const char *s) {
     j_raw("\"");
@@ -48,7 +86,18 @@ static void j_str(const char *s) {
         else if (*s == '\\') j_raw("\\\\");
         else if (*s == '\n') j_raw("\\n");
         else if (*s == '\r') j_raw("\\r");
-        else { j_ensure(1); g_jbuf[g_jlen++] = *s; g_jbuf[g_jlen] = '\0'; }
+        else if ((unsigned char)*s >= 0x80 && utf8_span((const unsigned char *)s)) {
+            int n = utf8_span((const unsigned char *)s);
+            if (!j_ensure(n)) return;
+            memcpy(g_jbuf + g_jlen, s, n); g_jlen += n;
+            g_jbuf[g_jlen] = 0; s += n - 1;
+        }
+        else if ((unsigned char)*s < 0x20 || (unsigned char)*s >= 0x80) {
+            /* Player text uses Latin-1; emit valid Unicode JSON escapes. */
+            char esc[7]; snprintf(esc, sizeof(esc), "\\u%04x", (unsigned char)*s);
+            j_raw(esc);
+        }
+        else { if (!j_ensure(1)) return; g_jbuf[g_jlen++] = *s; g_jbuf[g_jlen] = '\0'; }
     }
     j_raw("\"");
 }
@@ -349,13 +398,13 @@ static void build_json(void) {
      j_kv_int("garbage_hole_style",g_cfg.garbage_hole_style,      1);
      j_kv_int("lock_delay_ms",     g_cfg.lock_delay_ms,           1);
     }
-    j_raw("}");
+    j_raw("}}"); /* server_stats and root */
 }
 
 /* ── HTTP listener ────────────────────────────────────────────────────────── */
 
 void server_api_init(void) {
-    if (g_cfg.status_port <= 0) return;
+    if (!g_cfg.status_api || g_cfg.status_port <= 0) return;
     g_api_sock = net_listen(g_cfg.status_port);
     if (g_api_sock == INVALID_SOCK)
         log_info("API: failed to listen on port %d", g_cfg.status_port);
@@ -364,37 +413,84 @@ void server_api_init(void) {
 }
 
 void server_api_shutdown(void) {
+    int i; for (i = 0; i < API_CLIENTS; i++) api_close(&api_clients[i]);
     if (g_api_sock != INVALID_SOCK) { sock_close(g_api_sock); g_api_sock = INVALID_SOCK; }
     free(g_jbuf); g_jbuf = NULL; g_jcap = g_jlen = 0;
 }
 
 sock_t server_api_get_sock(void) { return g_api_sock; }
 
+/* All accepted sockets are explicitly nonblocking on every platform. */
 void server_api_accept(void) {
-    struct sockaddr_in sa; socklen_t sl=sizeof(sa);
-    sock_t client = accept(g_api_sock,(struct sockaddr*)&sa,&sl);
+    struct sockaddr_in sa; socklen_t sl = sizeof(sa);
+    sock_t client = accept(g_api_sock, (struct sockaddr *)&sa, &sl);
+    int i;
     if (client == INVALID_SOCK) return;
-
-    /* Drain the HTTP request (we don't care about path/method) */
-    char req[512]; int got = 0;
-    do {
-        int n = recv(client, req + got, sizeof(req) - got - 1, 0);
-        if (n <= 0) break;
-        got += n; req[got] = '\0';
-    } while (got < (int)sizeof(req)-1 && !strstr(req, "\r\n\r\n"));
-
-    build_json();
-
-    int jlen = g_jlen;
-    char hdr[128];
-    int hlen = snprintf(hdr, sizeof(hdr),
-        "HTTP/1.0 200 OK\r\n"
-        "Content-Type: application/json\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "Content-Length: %d\r\n"
-        "Connection: close\r\n\r\n", jlen);
-
-    send(client, hdr, hlen, 0);
-    if (g_jbuf && jlen > 0) send(client, g_jbuf, jlen, 0);
+    net_set_nonblocking(client);
+    for (i = 0; i < API_CLIENTS; i++) {
+        ApiClient *c = &api_clients[i];
+        if (c->active) continue;
+        c->active = 1; c->sock = client; c->started = time(NULL);
+        return;
+    }
     sock_close(client);
+}
+
+static int api_retry(void) {
+#ifdef PLATFORM_WINDOWS
+    int e = WSAGetLastError();
+    return e == WSAEWOULDBLOCK || e == WSAEINTR;
+#else
+    return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR;
+#endif
+}
+
+/* Called every game-loop iteration, even when the listener has no activity.
+ * Slots, header size, response size and total lifetime are bounded. */
+void server_api_poll(void) {
+    int i;
+    for (i = 0; i < API_CLIENTS; i++) {
+        ApiClient *c = &api_clients[i];
+        if (!c->active) continue;
+        if (time(NULL) - c->started >= API_TIMEOUT) { api_close(c); continue; }
+        if (!c->response) {
+            int n = (int)recv(c->sock, c->request + c->received,
+                             sizeof(c->request) - c->received - 1, 0);
+            if (n <= 0) {
+                if (n < 0 && api_retry()) continue;
+                api_close(c); continue;
+            }
+            if (memchr(c->request + c->received, 0, n)) { api_close(c); continue; }
+            c->received += n; c->request[c->received] = 0;
+            if (!strstr(c->request, "\r\n\r\n")) {
+                if (c->received == sizeof(c->request) - 1) api_close(c);
+                continue;
+            }
+            build_json();
+            if (g_jfailed || g_jlen > API_RESPONSE_LIMIT) { api_close(c); continue; }
+            {
+                char hdr[256];
+                int hlen = snprintf(hdr, sizeof(hdr),
+                    "HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n"
+                    "Access-Control-Allow-Origin: *\r\nContent-Length: %d\r\n"
+                    "Connection: close\r\n\r\n", g_jlen);
+                c->length = hlen + g_jlen;
+                c->response = (char *)malloc(c->length);
+                if (!c->response) { api_close(c); continue; }
+                memcpy(c->response, hdr, hlen);
+                memcpy(c->response + hlen, g_jbuf, g_jlen);
+            }
+        }
+        {
+#ifdef PLATFORM_WINDOWS
+            int n = send(c->sock, c->response + c->sent, (int)(c->length - c->sent), 0);
+#else
+            int n = (int)send(c->sock, c->response + c->sent, c->length - c->sent, MSG_NOSIGNAL);
+#endif
+            if (n > 0) {
+                c->sent += n;
+                if (c->sent == c->length) api_close(c);
+            } else if (n == 0 || !api_retry()) api_close(c);
+        }
+    }
 }

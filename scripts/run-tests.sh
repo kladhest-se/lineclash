@@ -23,16 +23,14 @@ FAILED=0
 
 if [[ $DO_UNIT -eq 1 ]]; then
     header "Unit tests"
-    make test_field
-    ./test_field || FAILED=$((FAILED+1))
+    make unit || FAILED=$((FAILED+1))
 fi
 
 if [[ $DO_INTEGRATION -eq 1 ]]; then
     header "Integration tests"
     SERVER="$ROOT/server/lineclashd"
     [[ -f "$SERVER" ]] || fail "server binary not found at $SERVER — build it first"
-    make test_integration
-    ./test_integration "$SERVER" || FAILED=$((FAILED+1))
+    make integration SERVER="$SERVER" || FAILED=$((FAILED+1))
 fi
 
 [[ $FAILED -eq 0 ]] && ok "All tests passed" || fail "$FAILED test suite(s) failed"

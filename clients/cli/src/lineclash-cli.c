@@ -201,6 +201,11 @@ typedef struct {
 typedef struct {
     /* Network */
     sock_t  sock;
+    uint64_t last_received, last_probe;
+    NetReconnect reconnect;
+    int reconnect_window, reconnect_room, reconnect_round, reconnect_blocked;
+    char reconnect_host[256];
+
     char    recv_buf[RECV_BUF_SIZE];
     int     recv_len;
 
@@ -494,7 +499,12 @@ static void draw_connect_screen(CliCtx *c) {
     gotoxy(cx, cy+2); fg(150,150,150); printf("Port    : "); fg(255,255,255); printf("%-28d", c->port);
     gotoxy(cx, cy+3); fg(150,150,150); printf("Nick    : "); fg(255,255,255); printf("%-28s", c->nick);
     gotoxy(cx, cy+4); fg(150,150,150); printf("Password: "); fg(255,255,255); printf("%-28s", "***");
-    gotoxy(cx, cy+6); fg(100,200,100); printf("Connecting...");
+    gotoxy(cx, cy+6); fg(100,200,100);
+    if(c->reconnect.active) {
+        uint64_t now=net_now_ms();
+        printf("Reconnecting: %llu seconds left (Q cancels)",
+          (unsigned long long)(now<c->reconnect.deadline?(c->reconnect.deadline-now+999)/1000:0));
+    } else printf("Connecting... (Q quits)");
     attr_reset();
     /* PAUSED overlay */
     if (c->paused) {
@@ -1124,6 +1134,36 @@ static void send_msg(CliCtx *c, const char *fmt, ...) {
     net_send(c->sock, buf);
 }
 
+static void cli_reconnect_stop(CliCtx *c, const char *why) {
+    net_reconnect_stop(&c->reconnect);
+    if(c->sock!=INVALID_SOCK) sock_close(c->sock);
+    c->sock=INVALID_SOCK; c->state=CLI_CONNECT;
+    c->reconnect_blocked=1; c->dirty=1;
+    fprintf(stderr,"\n%s\n",why);
+}
+static void cli_connection_lost(CliCtx *c) {
+    if(!c->reconnect.active && !c->reconnect_blocked && c->state>=CLI_LOBBY_SEL) {
+        net_peer_address(c->sock,c->reconnect_host,sizeof(c->reconnect_host),c->host);
+        c->reconnect_room=(c->state==CLI_PLAYING && !c->is_spectator)?c->room_id:0;
+        /* reconnect_round was supplied by the server roundid message. */
+        net_reconnect_begin(&c->reconnect,net_now_ms(),c->reconnect_window);
+    }
+    if(c->sock!=INVALID_SOCK) sock_close(c->sock);
+    c->sock=INVALID_SOCK; c->recv_len=0; c->recv_buf[0]=0;
+    if(c->reconnect.active) { c->state=CLI_AUTH; c->dirty=1; }
+    else { c->running=0; }
+}
+static void cli_reconnect_tick(CliCtx *c) {
+    if(!c->reconnect.active) return;
+    uint64_t now=net_now_ms();
+    if(now>=c->reconnect.deadline) { cli_reconnect_stop(c,"Reconnect window expired. Quit and reconnect manually."); return; }
+    c->dirty=1;
+    if(c->sock==INVALID_SOCK) {
+        c->sock=net_reconnect_poll(&c->reconnect,c->reconnect_host,c->port,now);
+        if(c->sock!=INVALID_SOCK) { c->last_received=net_now_ms(); c->recv_len=0; c->state=CLI_AUTH; }
+    }
+}
+
 static void handle_message(CliCtx *c, const char *line) {
     DLOG("[hm] entry sock=%d &sock=%p &c=%p line=%s\n",(int)c->sock,(void*)&c->sock,(void*)c,line);
     static char args[32][MAX_MSG_LEN];
@@ -1134,10 +1174,33 @@ static void handle_message(CliCtx *c, const char *line) {
     c->dirty = 1;
     DLOG("[msg] cmd=%s n=%d sock=%d\n", cmd, n, (int)c->sock);
 
+    if(!strcmp(cmd,"roundid") && n>=2) { c->reconnect_round=atoi(args[0]); return; }
+    if(!strcmp(cmd,"resume_inventory") && n>=2) {
+        c->field.special_head=c->field.special_tail=c->field.special_count=0;
+        for(const char *sp=args[0]; *sp && *sp!='-'; sp++) {
+            const char *found=strchr(SPECIAL_CHARS,*sp);
+            if(found) field_add_special(&c->field,(uint8)(found-SPECIAL_CHARS+1));
+        }
+        return;
+    }
+    if(!strcmp(cmd,"reconnectwindow") && n>=2) { c->reconnect_window=atoi(args[0]); return; }
+    if(!strcmp(cmd,"reconnect_failed")) {
+        net_reconnect_stop(&c->reconnect); c->state=CLI_LOBBY_SEL; c->room_id=0;
+        c->room_count=0; c->alive=0; send_msg(c,"listlobbies");
+        add_gchat(c,"***","Round ended or reconnect window expired; choose a room.",1); return;
+    }
+    if(!strcmp(cmd,"resume_ok") && n>=3 && c->reconnect.active) {
+        net_reconnect_stop(&c->reconnect); c->alive=atoi(args[1]);
+        memset(c->opp_nicks,0,sizeof(c->opp_nicks)); memset(c->opp_alive,0,sizeof(c->opp_alive));
+        c->state=c->alive?CLI_PLAYING:CLI_GAMEOVER;
+        add_chat(c,"***","Connection restored",1); return;
+    }
+    if(!strcmp(cmd,"resume_field") && n>=2) { field_decode(&c->field,args[0]); return; }
     /* ---- Auth flow ---- */
     if (!strcmp(cmd,"noconnecting")) {
         /* If it carries a rejection reason (not the greeting), it is a disconnect */
         if (n>=2 && strcmp(args[0],"LineClash/1.0")!=0) {
+            c->reconnect_blocked=1; net_reconnect_stop(&c->reconnect);
             /* Terminated by administrator — show clearly */
             const char *why = args[0];
             char dmsg[256];
@@ -1156,6 +1219,9 @@ static void handle_message(CliCtx *c, const char *line) {
     }
     if (!strcmp(cmd,"authchallenge") && n>=2) {
         char resp[65];
+        if(c->reconnect.active && !strcmp(args[0],"new")) {
+            cli_reconnect_stop(c,"Account unavailable; sign in manually."); return;
+        }
         if (!strcmp(args[0],"new")) {
             c->is_new_account = 1;
             strncpy(resp, c->pass_hash, 65);
@@ -1190,6 +1256,10 @@ static void handle_message(CliCtx *c, const char *line) {
         send_msg(c, "listlobbies");
         send_msg(c, "reqleaderboard");
         c->state = CLI_LOBBY_SEL;
+        if(c->reconnect.active) {
+            if(c->reconnect_room) send_msg(c,"lineclash_join %s - %d resume %d",c->nick,c->reconnect_room,c->reconnect_round);
+            else net_reconnect_stop(&c->reconnect);
+        }
         /* Auto-save profile if connected without a saved alias */
         if (c->save_on_auth) {
             c->save_on_auth = 0;
@@ -1211,6 +1281,11 @@ static void handle_message(CliCtx *c, const char *line) {
         return;
     }
     if (!strcmp(cmd,"autherr")) {
+        if(c->reconnect.active && strstr(line,"already logged in")) {
+            sock_close(c->sock); c->sock=INVALID_SOCK; c->recv_len=0; return;
+        }
+        if(c->reconnect.active) { cli_reconnect_stop(c,"Authentication rejected; automatic retry stopped."); return; }
+
         add_gchat(c, "***", args[0][0] ? args[0] : "Authentication failed", 1);
         return;
     }
@@ -1350,7 +1425,11 @@ static void handle_message(CliCtx *c, const char *line) {
         }
         return;
     }
-    if (!strcmp(cmd,"endgame") || !strcmp(cmd,"ingame")) {
+    if (!strcmp(cmd,"ingame")) {
+        if(c->state!=CLI_GAMEOVER) c->state=CLI_PLAYING;
+        return;
+    }
+    if (!strcmp(cmd,"endgame")) {
         /* Only act if we are still in the room — ignore stale messages */
         if(c->state==CLI_PLAYING || c->state==CLI_IN_LOBBY || c->state==CLI_GAMEOVER) {
             c->state=CLI_IN_LOBBY;
@@ -1575,6 +1654,7 @@ static void handle_message(CliCtx *c, const char *line) {
         return;
     }
     if (!strcmp(cmd,"kicked") && n>=2) {
+        c->reconnect_blocked=1; net_reconnect_stop(&c->reconnect);
         char msg[MAX_MSG_LEN]; snprintf(msg,sizeof(msg),"*** KICKED: %.31s",args[0]);
         add_gchat(c,"***",msg,1);
         c->state=CLI_LOBBY_SEL;
@@ -1611,37 +1691,23 @@ static void handle_message(CliCtx *c, const char *line) {
  * Network receive
  * ============================================================ */
 static void net_tick(CliCtx *c) {
-    char line[MAX_MSG_LEN * 4]; /* extra large to prevent any overflow */
-    int r, got_close = 0;
-    DLOG("[net_tick] start sock=%d recv_len=%d\n", (int)c->sock, c->recv_len);
-    static sock_t prev_sock = INVALID_SOCK;
-    if (prev_sock != INVALID_SOCK && c->sock != prev_sock)
-        DLOG("[net_tick] !!! SOCK CHANGED from %d to %d\n", (int)prev_sock, (int)c->sock);
-    prev_sock = c->sock;
-    /* Keep draining even after graceful close — server may have sent data+FIN */
-    while (1) {
-        r = net_recv(c->sock, c->recv_buf, &c->recv_len, line, sizeof(line));
-        if (r == 1) {
-            DLOG("[net_tick] recv: %s\n", line);
-            if (line[0]) handle_message(c, line);
-            DLOG("[net_tick] after handle_message, state=%d sock=%d\n", c->state, (int)c->sock);
-        } else if (r == -1) {
-            DLOG("[net_tick] r=-1 errno=%d recv_len=%d got_close=%d sock=%d buf=[%.*s]\n",
-                 errno, c->recv_len, got_close, (int)c->sock, c->recv_len, c->recv_buf);
-            if (got_close) break;
-            got_close = 1;
-            if (c->recv_len == 0) break;
-        } else {
-            break; /* r==0: EAGAIN, no more data right now */
-        }
+    char line[MAX_MSG_LEN * 4];
+    if(c->sock==INVALID_SOCK) return;
+    uint64_t now=net_now_ms();
+    if(c->state>=CLI_LOBBY_SEL && c->last_received && now-c->last_received>5000) {
+        cli_connection_lost(c); return;
     }
-    if (got_close && c->recv_len == 0) {
-        /* Connection closed and buffer empty — disconnect */
-        DLOG("[net_tick] connection closed by server\n");
-        c->running = 0;
+    if(c->state>=CLI_LOBBY_SEL && now-c->last_probe>=1000) {
+        send_msg(c,"ping health"); c->last_probe=now;
     }
-    DLOG("[net_tick] done, r=%d recv_len=%d got_close=%d sock=%d\n", r, c->recv_len, got_close, (int)c->sock);
-    DLOG("[net_tick] returning now\n");
+    for(;;) {
+        int r=net_recv(c->sock,c->recv_buf,&c->recv_len,line,sizeof(line));
+        if(r<0) { cli_connection_lost(c); return; }
+        if(!r) return;
+        c->last_received=net_now_ms();
+        if(line[0]) handle_message(c,line);
+        if(c->sock==INVALID_SOCK) return;
+    }
 }
 
 /* ============================================================
@@ -2013,6 +2079,10 @@ static void handle_input(CliCtx *c) {
     char buf[16]; memset(buf,0,sizeof(buf));
     int n = read_key(buf, sizeof(buf));
     if (n <= 0) return;
+    if(c->reconnect.active) {
+        if(buf[0]=='q' || buf[0]==3 || buf[0]==27) { net_reconnect_stop(&c->reconnect); c->running=0; }
+        return;
+    }
     switch (c->state) {
         case CLI_LOBBY_SEL:  handle_input_lobby(c,buf,n);   break;
         case CLI_IN_LOBBY:   handle_input_room(c,buf,n);    break;
@@ -2177,7 +2247,7 @@ static int cli_probe_auth(const char *host, int port, const char *nick,
     /* Keep socket non-blocking — recv loop uses select() for timeout */
 
     server_name_out[0] = '\0';
-    char recv_buf[4096]; int recv_len = 0;
+    char recv_buf[RECV_BUF_SIZE]; int recv_len = 0;
     int authed = 0, failed = 0;
     time_t deadline = time(NULL) + 10; /* 10-second overall timeout */
 
@@ -2456,6 +2526,7 @@ int main(int argc, char **argv) {
     }
 
 do_connect:
+    c.reconnect_window=15; c.reconnect_blocked=0;
     /* Connect */
     net_init();
     c.sock = net_connect(c.host, c.port);
@@ -2465,7 +2536,7 @@ do_connect:
         fprintf(stderr, "Cannot connect to %s:%d\n", c.host, c.port);
         return 1;
     }
-    net_set_nonblocking(c.sock);
+    net_set_nonblocking(c.sock); c.last_received=net_now_ms();
 
     /* Terminal */
     term_raw();
@@ -2483,10 +2554,12 @@ do_connect:
 
     /* Main loop */
     while (c.running) {
+        net_flush_all();
         /* Handle SIGWINCH */
         if (g_sigwinch) { g_sigwinch=0; c.dirty=1; }
 
         /* Network */
+        cli_reconnect_tick(&c);
         net_tick(&c);
 
         /* Input */
@@ -2537,6 +2610,7 @@ do_connect:
         { struct timespec ts = {0, 16000000L}; nanosleep(&ts, NULL); }
     }
 
+    net_reconnect_stop(&c.reconnect);
     term_restore();
     if (c.sock != INVALID_SOCK) sock_close(c.sock);
     printf("LineClash CLI disconnected.\n");

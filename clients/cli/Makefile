@@ -7,7 +7,7 @@ SRCDIR   := src
 SHARED   := ../../shared/src
 
 CC       ?= cc
-CFLAGS   := -Wall -Wextra -O2 -DPLATFORM_POSIX -I../../shared/include -I$(SRCDIR)
+CFLAGS   := -MMD -MP -Wall -Wextra -O2 -DPLATFORM_POSIX -I../../shared/include -I$(SRCDIR)
 LDFLAGS  :=
 
 # Include TETRINETZ_VERSION if version.mk exists
@@ -47,3 +47,5 @@ $(BINARY): $(OBJS)
 
 clean:
 	rm -rf $(BUILDDIR) $(BINARY)
+
+-include $(OBJS:.o=.d)

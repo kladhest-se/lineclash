@@ -61,6 +61,7 @@ docker:ubuntu24:
   script:
     - chmod +x scripts/*.sh
     - ./scripts/run-tests.sh --unit
+    - make release-tools-test
 
 test:leap15:
   extends: .unit_test
@@ -86,7 +87,7 @@ build:server:
   tags: [linux, docker, opensuse]
   image: registry.kladhest.se/kladhest/lineclash/ci-leap15:latest
   rules:
-    - changes: [server/**, shared/**]
+    - changes: [server/**, shared/**, scripts/**, version.mk, get-version.sh, .gitlab-ci.yml]
     - when: manual
   before_script:
     - zypper install -y sqlite3-devel 2>/dev/null || true
@@ -98,16 +99,26 @@ build:server:
     paths:
       - server/lineclashd
       - server/lineclashd-tool
-      - build_number.txt
       - server/src/buildnum.h
-      - clients/gui/src/buildnum.h
+
+# Server artifacts must match the packaging platform.
+build:server:macos:
+  extends: build:server
+  tags: [macos, shell]
+  image: null
+  before_script: []
+
+build:server:ubuntu:
+  extends: build:server
+  image: registry.kladhest.se/kladhest/lineclash/ci-ubuntu24:latest
+  before_script: []
 
 # ── GUI Client ───────────────────────────────────────────────
 build:client:macos:
   stage: build
   tags: [macos, shell]
   rules:
-    - changes: [clients/gui/**, clients/cli/**, shared/**]
+    - changes: [clients/gui/**, clients/cli/**, shared/**, scripts/**, version.mk, get-version.sh, .gitlab-ci.yml]
     - when: manual
   script:
     - brew list sdl2 &>/dev/null || brew install sdl2
@@ -122,7 +133,7 @@ build:client:leap15:
   tags: [linux, docker, opensuse]
   image: registry.kladhest.se/kladhest/lineclash/ci-leap15:latest
   rules:
-    - changes: [clients/gui/**, clients/cli/**, shared/**]
+    - changes: [clients/gui/**, clients/cli/**, shared/**, scripts/**, version.mk, get-version.sh, .gitlab-ci.yml]
     - when: manual
   script:
     - chmod +x scripts/*.sh
@@ -136,7 +147,7 @@ build:client:ubuntu:
   tags: [linux, docker, opensuse]
   image: registry.kladhest.se/kladhest/lineclash/ci-ubuntu24:latest
   rules:
-    - changes: [clients/gui/**, clients/cli/**, shared/**]
+    - changes: [clients/gui/**, clients/cli/**, shared/**, scripts/**, version.mk, get-version.sh, .gitlab-ci.yml]
     - when: manual
   script:
     - chmod +x scripts/*.sh
@@ -150,7 +161,7 @@ build:cli:macos:
   stage: build
   tags: [macos, shell]
   rules:
-    - changes: [clients/cli/**, shared/**]
+    - changes: [clients/cli/**, shared/**, scripts/**, version.mk, get-version.sh, .gitlab-ci.yml]
     - when: manual
   script:
     - chmod +x scripts/*.sh
@@ -164,7 +175,7 @@ build:cli:leap15:
   tags: [linux, docker, opensuse]
   image: registry.kladhest.se/kladhest/lineclash/ci-leap15:latest
   rules:
-    - changes: [clients/cli/**, shared/**]
+    - changes: [clients/cli/**, shared/**, scripts/**, version.mk, get-version.sh, .gitlab-ci.yml]
     - when: manual
   script:
     - chmod +x scripts/*.sh
@@ -178,7 +189,7 @@ build:cli:ubuntu:
   tags: [linux, docker, opensuse]
   image: registry.kladhest.se/kladhest/lineclash/ci-ubuntu24:latest
   rules:
-    - changes: [clients/cli/**, shared/**]
+    - changes: [clients/cli/**, shared/**, scripts/**, version.mk, get-version.sh, .gitlab-ci.yml]
     - when: manual
   script:
     - chmod +x scripts/*.sh
@@ -193,9 +204,10 @@ build:cli:ubuntu:
 
 .integration_test:
   stage: integration-test
-  needs: [build:server]
+  needs: []
   script:
     - chmod +x scripts/*.sh
+    - ./scripts/build-server.sh
     - ./scripts/run-tests.sh --integration
 
 integration:leap15:
@@ -222,8 +234,9 @@ package:macos:
   needs:
     - build:client:macos
     - build:cli:macos
-    - build:server
+    - build:server:macos
     - integration:macos
+    - verify:macos
   script:
     - chmod +x scripts/*.sh
     - ./scripts/package-macos.sh
@@ -241,6 +254,7 @@ package:leap15:
     - build:cli:leap15
     - build:server
     - integration:leap15
+    - verify:leap15
   script:
     - chmod +x scripts/*.sh
     - ./scripts/package-linux.sh --opensuse-leap15
@@ -257,8 +271,9 @@ package:ubuntu:
   needs:
     - build:client:ubuntu
     - build:cli:ubuntu
-    - build:server
+    - build:server:ubuntu
     - integration:ubuntu
+    - verify:ubuntu
   script:
     - chmod +x scripts/*.sh
     - ./scripts/package-linux.sh --deb
@@ -266,3 +281,65 @@ package:ubuntu:
     name: "lineclash-ubuntu24-x86_64-$CI_COMMIT_SHORT_SHA"
     paths:
       - dist/lineclash_*.deb
+
+# Native verification is an explicit release gate. The Windows runner uses
+# MSYS2 UCRT64 Bash; install compiler, make, SDL2, SQLite and Python beforehand.
+.platform_verification:
+  stage: integration-test
+  needs: []
+  script:
+    - bash scripts/verify-platform.sh
+  artifacts:
+    when: always
+    paths: [dist/verification/]
+
+verify:macos:
+  extends: .platform_verification
+  tags: [macos, shell]
+
+verify:ubuntu:
+  extends: .platform_verification
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-ubuntu24:latest
+
+verify:leap15:
+  extends: .platform_verification
+  tags: [linux, docker, opensuse]
+  image: registry.kladhest.se/kladhest/lineclash/ci-leap15:latest
+
+verify:windows:
+  variables:
+    LINECLASH_MSYS2_ROOT: 'C:\msys64'
+  script:
+    - |
+      & "$env:LINECLASH_MSYS2_ROOT\usr\bin\bash.exe" -lc 'export PATH=/ucrt64/bin:/usr/bin:$PATH; cd "$(cygpath -u "$CI_PROJECT_DIR")"; bash scripts/verify-platform.sh'
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  rules:
+    - if: '$LINECLASH_WINDOWS_RUNNER == "1"'
+    - when: never
+  extends: .platform_verification
+  tags: [windows, msys2]
+
+# Real database integration; independent of native game-platform jobs.
+test:web-directory:
+  stage: test
+  tags: [linux, docker, opensuse]
+  image: php:8.3-cli
+  services:
+    - name: mariadb:10.11
+      alias: mariadb
+  variables:
+    MYSQL_DATABASE: lineclash_test
+    MYSQL_ROOT_PASSWORD: lineclash-disposable-ci
+    MYSQL_ROOT_HOST: "%"
+    LINECLASH_WEB_CONFIG: /tmp/lineclash-web.php
+  before_script:
+    - apt-get update && apt-get install -y python3 make gcc libsqlite3-dev
+    - docker-php-ext-install pdo_mysql
+    - cp tests/web-config.ci.php /tmp/lineclash-web.php
+  script:
+    - |
+      php -r 'require "public-web/inc/service.php"; for ($i=0;$i<60;$i++) { try { database()->query("SELECT 1"); exit(0); } catch(Throwable $e) { usleep(500000); } } exit(1);'
+    - find public-web -name '*.php' -exec php -l {} \;
+    - python3 tests/test_web_refresh.py
+    - make directory-test web-test

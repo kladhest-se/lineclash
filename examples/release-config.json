@@ -1,0 +1,18 @@
+{
+  "github": "https://github.com/kladhest-se/lineclash",
+  "github_git": "git@github.com:kladhest-se/lineclash.git",
+  "gitlab": "https://gitlab.kladhest.se/kladhest/lineclash/lineclash",
+  "gitlab_git": "git@gitlab.kladhest.se:kladhest/lineclash/lineclash.git",
+  "source_branch": "main",
+  "env": {},
+  "credentials": {
+    "github": {
+      "provider": "env",
+      "variable": "GITHUB_TOKEN"
+    },
+    "gitlab": {
+      "provider": "env",
+      "variable": "GITLAB_TOKEN"
+    }
+  }
+}

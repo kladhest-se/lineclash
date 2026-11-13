@@ -23,19 +23,9 @@ header()  { echo -e "\n${BOLD}==> $*${RESET}"; }
 hr()      { echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"; }
 
 # ── Version ───────────────────────────────────────────────────
-VERSION="$(grep -m1 '^## v' "$ROOT/CHANGELOG.md" 2>/dev/null \
-    | sed 's/^## v//' | sed 's/[[:space:]].*$//' || echo '0.9')"
-BUILD_DATE="$(date -u +%Y-%m-%d)"
-
-# Build number — incremented each compile, stored in build_number.txt
-bn=0
-[[ -f "$ROOT/build_number.txt" ]] && bn=$(cat "$ROOT/build_number.txt")
-bn=$((bn+1))
-echo "$bn" > "$ROOT/build_number.txt"
-printf "/* auto */\n#define BUILD_NUMBER %d\n#define BUILD_DATE \"%s\"\n" \
-    "$bn" "$BUILD_DATE" > "$CLIENT_DIR/src/buildnum.h"
-printf "/* auto */\n#define BUILD_NUMBER %d\n#define BUILD_DATE \"%s\"\n" \
-    "$bn" "$BUILD_DATE" > "$SERVER_DIR/src/buildnum.h"
+VERSION="$(sh "$ROOT/get-version.sh")"
+BUILD_DATE="$(sh "$ROOT/get-version.sh" date)"
+bn="$(sh "$ROOT/get-version.sh" buildnum)"
 
 # ── Platform detection ────────────────────────────────────────
 OS="$(uname -s)"   # Darwin / Linux

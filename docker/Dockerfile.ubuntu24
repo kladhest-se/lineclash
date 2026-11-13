@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     make \
     libsdl2-dev \
+    libcurl4-openssl-dev \
+    libsqlite3-dev \
+    python3 \
     dpkg-dev \
     gzip \
     ca-certificates \

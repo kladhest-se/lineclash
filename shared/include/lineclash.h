@@ -20,10 +20,12 @@
   #include <winsock2.h>
   #include <ws2tcpip.h>
   #include <windows.h>
+  #ifdef _MSC_VER
   #pragma comment(lib, "ws2_32.lib")
+  #endif
   typedef SOCKET sock_t;
   #define INVALID_SOCK   INVALID_SOCKET
-  #define sock_close(s)  closesocket(s)
+  #define sock_close(s)  net_close(s)
   #define sock_error()   WSAGetLastError()
   #define SLEEP_MS(ms)   Sleep(ms)
 #else
@@ -40,14 +42,28 @@
   #include <sys/select.h>
   typedef int sock_t;
   #define INVALID_SOCK   (-1)
-  #define sock_close(s)  close(s)
+  #define sock_close(s)  net_close(s)
   #define sock_error()   errno
   #define SLEEP_MS(ms)   usleep((ms)*1000)
 #endif
 
+void net_close(sock_t s);
+void net_flush_all(void);
+typedef struct {
+    int active, attempts;
+    sock_t candidate;
+    uint64_t deadline, due, attempt_deadline;
+} NetReconnect;
+uint64_t net_now_ms(void);
+void net_reconnect_begin(NetReconnect *r, uint64_t now, int seconds);
+void net_reconnect_stop(NetReconnect *r);
+sock_t net_reconnect_poll(NetReconnect *r, const char *host, int port, uint64_t now);
+void net_peer_address(sock_t s, char *out, size_t size, const char *fallback);
+
+
 /* ---- Constants ---- */
 /* Version is injected at compile time via -DTETRINETZ_VERSION=\"...\"
- * set by the Makefile from CHANGELOG.md. Fallback if built manually. */
+ * set by the Makefile from version.mk. Fallback if built manually. */
 #ifndef TETRINETZ_VERSION
 #  define TETRINETZ_VERSION "dev"
 #endif
@@ -207,6 +223,7 @@ typedef struct {
 
 /* ---- Lobby (server-side) ---- */
 typedef struct {
+    int session_round; /* increments for every round, including unranked/solo */
     int     id;
     char    name[MAX_LOBBY_NAME];
     int     max_players;
