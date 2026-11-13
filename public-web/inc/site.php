@@ -19,7 +19,7 @@ function site_header(string $title,string $active='home',string $base='../'): vo
 </div></nav>
 <?php }
 function site_footer(string $base='../'): void { ?>
-<footer><div class="footer-inner"><a class="footer-logo" href="<?=site_h($base)?>">Line<span class="clash">Clash</span></a><ul class="footer-links"><li><a href="<?=site_h($base)?>">Home</a></li><li><a href="<?=site_h($base)?>documentation/">Documentation</a></li><li><a href="<?=site_h($base)?>source/">Source</a></li><li><a href="<?=site_h($base)?>servers/">Servers</a></li><li><a href="<?=site_h($base)?>statistics/#leaderboards">Leaderboards</a></li><li><a href="https://github.com/kladhest-se/lineclash">GitHub</a></li><li><a href="<?=site_h($base)?>api/?action=statistics">API</a></li><li><a href="https://github.com/kladhest-se/lineclash/blob/main/LICENSE.md">GPL-3.0-or-later</a></li></ul><span class="footer-copy">&copy; <?=date('Y')?> Tommy Frössman</span></div></footer>
+<footer><div class="footer-inner"><a class="footer-logo" href="<?=site_h($base)?>">Line<span class="clash">Clash</span></a><ul class="footer-links" aria-label="Footer"><li><a href="<?=site_h($base)?>credits/">Credits</a></li><li><a href="<?=site_h($base)?>privacy/">Privacy</a></li><li><a href="<?=site_h($base)?>documentation/">Documentation</a></li><li><a href="<?=site_h($base)?>api/docs/">API</a></li><li><a href="https://github.com/kladhest-se/lineclash">GitHub</a></li></ul><span class="footer-copy">&copy; <?=date('Y')?> Tommy Frössman</span></div></footer>
 <script src="<?=site_h($base)?>assets/blocks.js" defer></script>
 <script src="<?=site_h($base)?>assets/community.js" defer></script>
 </body></html>

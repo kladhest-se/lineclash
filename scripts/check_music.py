@@ -37,4 +37,9 @@ header+='};\n'
 path=root/'clients/gui/src/music_catalog.h'
 if a.write_catalog:path.write_text(header)
 assert path.read_text()==header,'Run scripts/check_music.py --write-catalog after editing metadata'
+web_credits=root/'public-web/inc/music-credits.json'
+fields=['title','artist','license','license_url','source_url','role','attribution','modifications']
+expected_credits=[{key:track.get(key,'') for key in fields} for track in tracks]
+if a.write_catalog:web_credits.write_text(json.dumps(expected_credits,ensure_ascii=False,indent=2)+'\n')
+assert json.loads(web_credits.read_text())==expected_credits,'Run scripts/check_music.py --write-catalog to update website credits'
 print(f'Verified {len(tracks)} credited selections and all original audio/decoder checksums')

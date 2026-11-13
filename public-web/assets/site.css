@@ -1020,3 +1020,7 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 .viewer-stage.actual-size { text-align:left; }
 .viewer-stage.actual-size img { max-width:none; max-height:none; margin:0; }
 @media(max-width:480px) { .viewer-toolbar { gap:10px; padding:12px; } }
+
+.credit-entry { padding:24px 0; border-bottom:1px solid var(--surface0); }
+.credit-entry h3 { font-size:19px; margin-bottom:8px; }
+.credit-entry p + p { margin-top:8px; }

@@ -24,9 +24,9 @@ with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryFile() as log:
   assert code==200 and 'Community data is temporarily unavailable' not in home and 'id="screenshots"' in home and 'Get the game' in home
   assert '0 live servers' not in home
   assert 'id="get"' in home and '>Screenshots</a>' not in home
-  for path,heading in [('/documentation/','Default desktop controls'),('/source/','License &amp; credits')]:
+  for path,heading in [('/documentation/','Default desktop controls'),('/source/','License &amp; credits'),('/credits/','The people behind LineClash.'),('/privacy/','Public game information'),('/api/docs/','Public endpoints')]:
    code,body=get(path);assert code==200 and heading in body and 'id="block-background"' in body,path
-   assert 'aria-current="page"' in body and 'href="../#get"' in body
+   assert 'aria-label="Main"' in body and '#get"' in body
   assert 'href="./" aria-current="page">Home</a>' in home
   for path in ['/servers/','/leaderboards/','/matches/','/statistics/']:
    code,body=get(path);assert code==503 and 'aria-label="Main"' in body and 'temporarily unavailable' in body,path

@@ -99,3 +99,5 @@ Home uses unboxed text features and a compact section index. Its dedicated scree
 To regenerate arena, AI, rules and room screenshots after building the GUI, compile `scripts/render_web_previews.c` with the same objects/libraries as the music UI test (excluding `render_sdl.o`), then run it. It writes `/tmp/lineclash-web-*.bmp`; convert these to PNG in `public-web/assets/screenshots/` and regenerate their 360px thumbnail variants.
 
 Home omits static platform labels; published GitHub release assets supply the available downloads in Get the game. The introduction is a single paragraph; screenshots include server discovery in the visible gallery. Platform build instructions remain on Source.
+
+The footer contains only Credits, Privacy, Documentation, API and GitHub. `/credits/` lists soundtrack attributions and component notices; `/privacy/` describes public community data and third-party requests; `/api/docs/` documents the community API. These pages share the animated background and work without MariaDB. Website music-credit metadata in `public-web/inc/music-credits.json` is derived from `music/tracks.json`; keep it in sync when updating the soundtrack.
