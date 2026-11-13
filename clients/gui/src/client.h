@@ -91,6 +91,7 @@ typedef struct { char text[MAX_ACT_LEN]; uint32_t colour; int age; } ActLine;
 
 /* ---- States ---- */
 typedef enum {
+    CS_ACCOUNT,        /* saved central accounts and HTTPS sign-in */
     CS_CONNECT,        /* launch screen: server/nick/options */
     CS_SERVER_LIST,    /* persistent server list screen */
     CS_AUTH,           /* waiting for server auth response */
@@ -241,6 +242,12 @@ typedef struct {
     /* State */
     ClientState state;
 
+    /* Central profiles persist names only; sessions stay in memory. */
+    struct {char handle[15],token[65];time_t expires;} accounts[8];
+    int account_count,account_active,account_cursor,account_join_after,account_job;
+    ClientState account_return;
+    TextField tf_account_handle,tf_account_password;
+    char account_message[256];
     /* Connect screen */
     TextField tf_host;
     TextField tf_port;
@@ -477,6 +484,7 @@ void sdl_shutdown(void);
 const char *sdl_get_res_dir(void); /* resource dir — Contents/Resources/ on macOS bundle */
 void sdl_render_server_list(ClientCtx *c);
 void sdl_render_connect(ClientCtx *c);
+void sdl_render_accounts(ClientCtx *c);
 void sdl_render_lobby_select(ClientCtx *c);
 void sdl_render_game(ClientCtx *c);
 void sdl_text_start(void);  /* ensure SDL text input active (needed on macOS) */
@@ -532,6 +540,23 @@ int directory_poll(SavedServer *rows,int capacity,char *message,int length);
 int directory_parse(char *body,SavedServer *rows,int capacity);
 int directory_url_valid(const char *url,int local);
 void directory_shutdown(void);
+
+enum {ACCOUNT_SIGNIN=1,ACCOUNT_USE,ACCOUNT_LOGOUT,ACCOUNT_REMOVE,ACCOUNT_BACK};
+void account_erase(void *,size_t);
+int account_https_start(const char *);
+int account_https_busy(void);
+int account_https_poll(char *,int);
+void account_https_shutdown(void);
+void client_accounts_load(ClientCtx *);
+void client_accounts_open(ClientCtx *,int);
+void client_accounts_select(ClientCtx *,int);
+void client_accounts_action(ClientCtx *,int);
+void client_accounts_key(ClientCtx *,int,int,const char *);
+void client_accounts_tick(ClientCtx *);
+void client_accounts_shutdown(ClientCtx *);
+int client_account_ready(ClientCtx *);
+void client_account_challenge(ClientCtx *,const char *);
+
 #endif /* CLIENT_H */
 
 void sdl_set_ui_options(int scale,int patterns,int contrast);

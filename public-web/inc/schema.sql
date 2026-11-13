@@ -58,3 +58,11 @@ CREATE TABLE IF NOT EXISTS account_devices (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS auth_version INT NOT NULL DEFAULT 1;
+
+-- Native-client sessions contain only hashes of high-entropy bearer tokens.
+CREATE TABLE IF NOT EXISTS account_sessions (
+ token_hash CHAR(64) CHARACTER SET ascii PRIMARY KEY,
+ account_id CHAR(32) CHARACTER SET ascii NOT NULL,
+ auth_version INT NOT NULL, expires BIGINT NOT NULL, revoked TINYINT NOT NULL DEFAULT 0,
+ FOREIGN KEY(account_id) REFERENCES accounts(id), INDEX expiry(expires)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

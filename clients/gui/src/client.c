@@ -659,7 +659,8 @@ void client_handle_msg(ClientCtx *c, const char *line) {
         return;
     }
 
-    if(!strcmp(cmd,"authmethods")){c->central_supported=strstr(line,"central-v1")!=NULL;return;}
+    if(!strcmp(cmd,"authmethods")){c->central_supported=strstr(line,"central-profile-v1")?2:strstr(line,"central-v1")?1:0;return;}
+    if(!strcmp(cmd,"centralchallenge") && n==2){client_account_challenge(c,args[0]);return;}
     if(!strcmp(cmd,"centralcode") && n==2 && strlen(args[0])==8 && strspn(args[0],"0123456789ABCDEF")==8){snprintf(c->central_code,sizeof(c->central_code),"%s",args[0]);sdl_open_account_code(c->central_code);return;}
     if(!strcmp(cmd,"centralidentity") && n==2 && args[0][0]=='@' && strlen(args[0])<=15){snprintf(c->auth_nick,sizeof(c->auth_nick),"%s",args[0]);snprintf(c->nick,sizeof(c->nick),"%s",args[0]);snprintf(c->central_profile,sizeof(c->central_profile),"%s",args[0]);return;}
     if(!strcmp(cmd,"centralresume") && n==2 && strlen(args[0])==64){snprintf(c->central_resume,sizeof(c->central_resume),"%s",args[0]);return;}
@@ -785,8 +786,8 @@ void client_handle_msg(ClientCtx *c, const char *line) {
          }}
         if (c->state == CS_AUTH) {
             char buf[MAX_MSG_LEN];
-            if(c->central_mode && !c->central_supported){snprintf(c->connect_error,sizeof(c->connect_error),"This server supports local accounts only");sock_close(c->sock);c->sock=INVALID_SOCK;c->state=CS_CONNECT;return;}
-            if(c->central_mode){if(c->reconnect.active && c->central_resume[0])snprintf(buf,sizeof(buf),"centralresume %s",c->central_resume);else snprintf(buf,sizeof(buf),"centralauth");}
+            if(c->central_mode && c->central_supported!=2){snprintf(c->connect_error,sizeof(c->connect_error),"Update this server to support central account profiles");sock_close(c->sock);c->sock=INVALID_SOCK;c->state=CS_CONNECT;return;}
+            if(c->central_mode){if(c->reconnect.active && c->central_resume[0])snprintf(buf,sizeof(buf),"centralresume %s",c->central_resume);else snprintf(buf,sizeof(buf),"centralauth profiles-v1");}
             else snprintf(buf,sizeof(buf),"authnick %s", c->auth_nick);
             net_send(c->sock, buf);
         }
@@ -1445,6 +1446,7 @@ void client_handle_msg(ClientCtx *c, const char *line) {
  * Nick enforces MAX_NICK_DISPLAY (8) char limit
  * ============================================================ */
 void client_on_key(ClientCtx *c, int sc, int sym, int is_text, const char *txt) {
+    if(c->state==CS_ACCOUNT){client_accounts_key(c,sc,is_text,txt);return;}
     /* Convert SDL_TEXTINPUT UTF-8 to Latin-1 so Swedish/accented chars
      * display correctly in input boxes (font uses Latin-1 indices). */
     char txt_l1[32]="";
@@ -1884,6 +1886,8 @@ void client_on_button(ClientCtx *c, BtnId btn) {
     char buf[MAX_MSG_LEN];
     switch(btn) {
     case BTN_CENTRAL_CONNECT:{
+        if(account_https_busy())break;
+        if(!client_account_ready(c)){client_accounts_open(c,1);break;}
         c->central_mode=1;c->central_supported=0;c->central_code[0]=0;c->central_resume[0]=0;c->connect_error[0]=0;
         if(c->sock!=INVALID_SOCK)sock_close(c->sock);
         c->sock=net_connect(c->tf_host.text[0]?c->tf_host.text:"localhost",atoi(c->tf_port.text)>0?atoi(c->tf_port.text):DEFAULT_PORT);
@@ -2379,6 +2383,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
  * Tick
  * ============================================================ */
 void client_tick(ClientCtx *c) {
+    client_accounts_tick(c);
     if(c->state!=CS_PLAYING && c->state!=CS_GAMEOVER) { c->music_player_open=0; music_start_menu(); }
     else music_start_game();
     music_tick();
@@ -2725,6 +2730,7 @@ void client_run_gui(void) {
     c.tf_port.len=(int)strlen(c.tf_port.text);
 
     /* Load server list — credentials (nick+hash) are stored per server entry */
+    client_accounts_load(&c);
     server_list_load(&c);
     c.state = CS_SERVER_LIST;
     /* Pre-fill nick/hash from the most recently used server entry if available */
@@ -2763,7 +2769,8 @@ void client_run_gui(void) {
 
         client_tick(&c);
 
-        if      (c.state==CS_SERVER_LIST)  sdl_render_server_list(&c);
+        if      (c.state==CS_ACCOUNT)      sdl_render_accounts(&c);
+        else if (c.state==CS_SERVER_LIST)  sdl_render_server_list(&c);
         else if (c.state==CS_CONNECT)      sdl_render_connect(&c);
         else if (c.state==CS_AUTH)         sdl_render_connect(&c);
         else if (c.state==CS_LOBBY_SELECT) sdl_render_lobby_select(&c);
@@ -2774,6 +2781,7 @@ void client_run_gui(void) {
 
     net_reconnect_stop(&c.reconnect);
     directory_shutdown();
+    client_accounts_shutdown(&c);
     sound_shutdown();
     sdl_shutdown();
     if (c.sock!=INVALID_SOCK) sock_close(c.sock);

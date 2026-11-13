@@ -122,10 +122,10 @@ void server_directory_start(void){
     next_announce=time(NULL);reported=0;
     log_info("Public discovery enabled; announcing to https://lineclash.kladhest.se (public_server = off disables it)");
 }
-void server_central_begin(Pending *pending){
+void server_central_begin(Pending *pending,int direct){
     if(!token[0]){net_send(pending->sock,"autherr Central sign-in needs an enabled, verified public server");return;}
     if(pending->auth_ok || pending->central_state)return;
-    auth_make_nonce(pending->central_nonce);pending->central_state=1;pending->central_next=time(NULL);
+    pending->central_direct=direct;auth_make_nonce(pending->central_nonce);pending->central_state=1;pending->central_next=time(NULL);
 }
 static void central_result(void){
     Pending *pending=&g_pending[job_slot];
@@ -133,6 +133,9 @@ static void central_result(void){
     char code[16],id[40],handle[24];
     if(response==200 && sscanf(response_body,"central-code %15s",code)==1 && strlen(code)==8 && strspn(code,"0123456789ABCDEF")==8){
         char message[64];snprintf(message,sizeof(message),"centralcode %s",code);net_send(pending->sock,message);pending->central_state=2;pending->central_next=time(NULL)+3;return;
+    }
+    if(response==200 && pending->central_direct && !strncmp(response_body,"central-challenge ",18) && strlen(response_body+18)==64 && strspn(response_body+18,"0123456789abcdef")==64){
+        char message[96];snprintf(message,sizeof(message),"centralchallenge %s",response_body+18);net_send(pending->sock,message);pending->central_state=2;pending->central_next=time(NULL)+1;return;
     }
     if(response==200 && !strcmp(response_body,"central-pending")){pending->central_next=time(NULL)+3;return;}
     if(response==200 && sscanf(response_body,"central-approved %39s %23s",id,handle)==2){
@@ -151,7 +154,7 @@ static int central_job(void){
         Pending *pending=&g_pending[i];
         if(!pending->active || !pending->central_state || pending->central_next>time(NULL))continue;
         job_kind=pending->central_state;job_slot=i;job_socket=pending->sock;snprintf(job_nonce,sizeof(job_nonce),"%s",pending->central_nonce);
-        snprintf(payload,sizeof(payload),"{\"action\":\"account-%s\",\"server_key\":\"%s\",\"nonce\":\"%s\"}",job_kind==1?"begin":"poll",token,job_nonce);return 1;
+        snprintf(payload,sizeof(payload),"{\"action\":\"account-%s\",\"server_key\":\"%s\",\"nonce\":\"%s\",\"direct\":%s}",job_kind==1?"begin":"poll",token,job_nonce,pending->central_direct?"true":"false");return 1;
     }
     return 0;
 }

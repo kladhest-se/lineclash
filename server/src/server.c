@@ -2411,7 +2411,7 @@ void server_run(int port, const char *cfg_path) {
                             found = 1;
                             log_info("New connection from %s", client_ip);
                             net_send(client, "noconnecting LineClash/1.0");
-                            net_send(client,"authmethods central-v1 local-v1");
+                            net_send(client,"authmethods central-profile-v1 central-v1 local-v1");
                             /* Send server name so client can display it */
                             {char sn[MAX_MSG_LEN];
                              snprintf(sn,sizeof(sn),"servername %s",g_cfg.server_name);
@@ -2476,7 +2476,7 @@ void server_run(int port, const char *cfg_path) {
                     }
                     continue;
                 }
-                if(!strcmp(cmd,"centralauth")){server_central_begin(pend);continue;}
+                if(!strcmp(cmd,"centralauth")){server_central_begin(pend,np==2 && !strcmp(args[0],"profiles-v1"));continue;}
                 if(!strcmp(cmd,"directory-proof") && np==2){
                     char proof[65],reply[96];server_directory_proof(args[0],proof);
                     if(proof[0]){snprintf(reply,sizeof(reply),"directory-proof %s",proof);net_send(pend->sock,reply);}

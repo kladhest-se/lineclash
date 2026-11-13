@@ -75,6 +75,8 @@ ifeq ($(CLIENT_SRCS),)
 CLIENT_SRCS = src/lineclash.c \
               src/client.c    \
               src/directory.c \
+              src/accounts.c \
+              src/account_https.c \
               src/render_sdl.c \
               src/sound.c     \
               src/music.c     \

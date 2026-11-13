@@ -38,7 +38,7 @@ function account_api(PDO $db,array $a): string {
         account_limit($db,'account-begin',20);
         if(!$device){$code=strtoupper(bin2hex(random_bytes(4)));$q=$db->prepare('INSERT INTO account_devices(request_hash,code,server_id,expires,state) VALUES(?,?,?,?,?)');$q->execute([$request,$code,$server['id'],time()+300,'pending']);$device=['code'=>$code,'expires'=>time()+300];}
         if((int)$device['expires']<time())return 'central-error Sign-in expired';
-        return 'central-code '.$device['code'];
+        return !empty($a['direct'])?'central-challenge '.$request:'central-code '.$device['code'];
     }
     if(!$device || (int)$device['expires']<time())return 'central-error Sign-in expired';
     if($device['state']==='pending')return 'central-pending';
@@ -48,4 +48,36 @@ function account_api(PDO $db,array $a): string {
     $q=$db->prepare("UPDATE account_devices SET state='used' WHERE request_hash=? AND state='approved'");$q->execute([$request]);
     if($q->rowCount()!==1)return 'central-error Sign-in already used';
     return 'central-approved '.$user['id'].' '.$user['handle'];
+}
+
+function account_client_api(PDO $db,array $a): string {
+    $action=$a['action']??'';
+    if($action==='account-client-login') {
+        account_limit($db,'account-client-login');
+        $handle=account_handle(is_string($a['handle']??null)?$a['handle']:'');
+        $password=is_string($a['password']??null)?$a['password']:'';
+        $q=$db->prepare('SELECT id,handle,password_hash,auth_version FROM accounts WHERE handle=? AND active=1');$q->execute([$handle]);$user=$q->fetch();
+        $hash=$user['password_hash']??'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
+        $valid=strlen($password)<=72 && password_verify($password,$hash);
+        if(!$user || !$valid){http_response_code(401);return 'central-error Incorrect username or password';}
+        $token=bin2hex(random_bytes(32));$expires=time()+43200;
+        $q=$db->prepare('INSERT INTO account_sessions(token_hash,account_id,auth_version,expires) VALUES(?,?,?,?)');$q->execute([hash('sha256',$token),$user['id'],$user['auth_version'],$expires]);
+        return 'central-session '.$token.' '.$user['handle'].' '.$expires;
+    }
+    $token=text_value($a,'session',64);
+    if(!preg_match('/^[a-f0-9]{64}$/D',$token)){http_response_code(401);return 'central-expired Sign in to your account again';}
+    $q=$db->prepare('SELECT a.id,a.handle FROM account_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.revoked=0 AND s.expires>=? AND a.active=1 AND s.auth_version=a.auth_version');$q->execute([hash('sha256',$token),time()]);$user=$q->fetch();
+    if(!$user){http_response_code(401);return 'central-expired Sign in to your account again';}
+    if($action==='account-client-logout'){
+        $q=$db->prepare('UPDATE account_sessions SET revoked=1 WHERE token_hash=?');$q->execute([hash('sha256',$token)]);return 'central-signed-out';
+    }
+    if($action!=='account-client-join')throw new InvalidArgumentException('Unknown account action');
+    account_limit($db,'account-client-join',40);
+    $challenge=text_value($a,'challenge',64);$host=text_value($a,'host',127);$port=filter_var($a['port']??0,FILTER_VALIDATE_INT);
+    if(!preg_match('/^[a-f0-9]{64}$/D',$challenge))throw new InvalidArgumentException('Invalid server challenge');
+    $q=$db->prepare("SELECT d.request_hash,s.host,s.port FROM account_devices d JOIN directory_servers s ON s.id=d.server_id WHERE d.request_hash=? AND d.state='pending' AND d.expires>=? AND s.last_seen>=?");$q->execute([$challenge,time(),time()-ttl()]);$device=$q->fetch();
+    if(!$device || strcasecmp($device['host'],$host)!==0 || (int)$device['port']!==$port){http_response_code(403);return 'central-error Server verification failed; refresh the public server list';}
+    $q=$db->prepare("UPDATE account_devices SET account_id=?,state='approved' WHERE request_hash=? AND state='pending' AND expires>=?");$q->execute([$user['id'],$challenge,time()]);
+    if($q->rowCount()!==1){http_response_code(409);return 'central-error Server sign-in expired; reconnect';}
+    return 'central-joined '.$user['handle'];
 }

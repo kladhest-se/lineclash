@@ -1074,7 +1074,7 @@ void sdl_render_server_list(ClientCtx*c){
     if(dbtn(384,146,166,30,"Local network",c->server_tab==2?BS_ACTIVE:BS_NORMAL))action=BTN_LAN_SERVERS;
     if(dbtn(WIN_W-96,22,64,28,"Quit",BS_NORMAL))        action=BTN_QUIT;
     if(dbtn(WIN_W-166,22,62,28,"About",BS_NORMAL))      action=BTN_SRV_ABOUT;
-    if(dbtn(WIN_W-498,22,104,28,c->central_profile[0]?c->central_profile:"Account",BS_NORMAL))sdl_open_account_code("");
+    if(dbtn(WIN_W-498,22,104,28,c->central_profile[0]?c->central_profile:"Accounts",BS_NORMAL))client_accounts_open(c,0);
     if(dbtn(WIN_W-238,22,64,28,"Settings",BS_NORMAL))     action=BTN_KEYMAP_POPUP;
     {BtnStyle ss=c->sound_enabled?BS_TOGON:BS_NORMAL;
      if(dbtn(WIN_W-310,22,64,28,"SFX",ss))              action=BTN_TOGGLE_SOUND;}
@@ -1425,13 +1425,11 @@ void sdl_render_connect(ClientCtx*c){
     surface(PX-12,PY-4,PW+24,PH+12,0x181f31ff,0x39445eff);
 
     if(is_authing && c->central_mode){
-        dtc(cx,PY+48,"Sign in to LineClash",COL_WHITE,2);
-        dtc(cx,PY+110,"Approve this connection in your browser.",COL_LTGRAY,1);
-        dtc(cx,PY+150,c->central_code[0]?c->central_code:"Requesting a code…",0xbba5f4ff,3);
-        dtc(cx,PY+220,"lineclash.kladhest.se/account/",COL_GRAY,1);
-        dtc(cx,PY+246,"You can also use a browser on another device.",COL_GRAY,1);
-        if(dbtn(lx,PY+290,fw,34,"Open sign-in page",BS_NORMAL))sdl_open_account_code(c->central_code);
-        if(dbtn(lx,PY+336,fw,34,"Back to servers",BS_NORMAL))action=BTN_BACK_CONNECT;
+        dtc(cx,PY+48,"Signing in",COL_WHITE,2);
+        dtc(cx,PY+120,c->central_profile,COL_HOSTGOLD,2);
+        dtc(cx,PY+180,"Authorizing this server over HTTPS...",COL_LTGRAY,1);
+        dtc(cx,PY+218,"Your password stays with the central service.",COL_GRAY,1);
+        if(dbtn(lx,PY+290,fw,34,"Back to servers",BS_NORMAL))action=BTN_BACK_CONNECT;
     } else if (is_authing) {
         dtc(cx, PY+PH/2-10, "Authenticating...", COL_HOSTGOLD, 1);
         dtc(cx, PY+PH/2+10, "Please wait", COL_GRAY, 1);
@@ -2842,4 +2840,33 @@ const char *sdl_get_res_dir(void) {
 
 void sdl_text_start(void) {
     SDL_StartTextInput();
+}
+
+void sdl_render_accounts(ClientCtx *c){
+    SDL_SetRenderDrawColor(g_rend,0x0d,0x0d,0x1a,0xff);SDL_RenderClear(g_rend);
+    fr(0,0,WIN_W,108,0x161d2dff);dt(48,28,"Your accounts",COL_WHITE,3);
+    dt(48,80,"Choose an identity for public servers.",COL_LTGRAY,1);
+    int busy=account_https_busy();
+    dt(48,142,"Saved profiles",COL_LTGRAY,1);
+    for(int i=0;i<c->account_count;i++){
+        char label[64];snprintf(label,sizeof(label),"%s@%s%s",i==c->account_active?"Active: ":"",c->accounts[i].handle,c->accounts[i].token[0] && c->accounts[i].expires>time(NULL)?"  / signed in":"");
+        if(dbtn(48,174+i*40,360,32,label,busy?BS_DISABLED:i==c->account_cursor?BS_ACTIVE:BS_NORMAL) && !busy)client_accounts_select(c,i);
+    }
+    if(!c->account_count)dt(48,182,"Add your first account on the right.",COL_GRAY,1);
+    const int x=460,w=540;
+    dt(x,142,"Sign in or add an account",COL_WHITE,2);
+    dt(x,194,"Username",COL_LTGRAY,1);
+    if(draw_textfield(x,218,w,32,&c->tf_account_handle,"Your central account") && !busy){c->tf_account_handle.focused=1;c->tf_account_password.focused=0;}
+    dt(x,272,"Password",COL_LTGRAY,1);
+    if(draw_passfield(x,296,w,32,&c->tf_account_password,"Password") && !busy){c->tf_account_handle.focused=0;c->tf_account_password.focused=1;}
+    if(dbtn(x,354,w,36,busy?"Working securely...":"Sign in over HTTPS",busy?BS_DISABLED:BS_ACTIVE) && !busy)client_accounts_action(c,ACCOUNT_SIGNIN);
+    dt(x,410,"Passwords and login tokens are never saved to disk.",COL_GRAY,1);
+    dt(x,436,"Sign in once each time you open the client.",COL_GRAY,1);
+    if(dbtn(x,484,w,32,"Create an account / recover password",BS_NORMAL))sdl_open_account_code("");
+    if(dbtn(48,538,174,34,"Use account",busy?BS_DISABLED:BS_ACTIVE) && !busy)client_accounts_action(c,ACCOUNT_USE);
+    if(dbtn(234,538,174,34,"Sign out",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_LOGOUT);
+    if(dbtn(48,586,360,32,"Remove saved profile",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_REMOVE);
+    char message[88];snprintf(message,sizeof(message),"%.87s",c->account_message);dt(48,666,message,COL_HOSTGOLD,1);
+    if(dbtn(48,714,180,36,"Back",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_BACK);
+    SDL_RenderPresent(g_rend);
 }

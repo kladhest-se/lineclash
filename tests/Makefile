@@ -56,7 +56,7 @@ test_auth: test_auth.c ../server/src/auth.c ../server/src/config.c $(SHARED)
 .PHONY: gui
 gui:
 	$(MAKE) -C ../clients/gui
-	$(CC) $(CFLAGS) test_gui.c ../clients/gui/src/client.o ../clients/gui/src/directory.o ../clients/gui/src/render_sdl.o ../clients/gui/src/sound.o ../clients/gui/src/music.o ../clients/gui/src/music_decoder.o ../clients/gui/src/mod.o ../clients/gui/build/*.o -o test_gui $(LDFLAGS) $(TEST_SDL_LIBS) $(WEB_LIBS) -lm
+	$(CC) $(CFLAGS) test_gui.c ../clients/gui/src/client.o ../clients/gui/src/directory.o ../clients/gui/src/accounts.o ../clients/gui/src/account_https.o ../clients/gui/src/render_sdl.o ../clients/gui/src/sound.o ../clients/gui/src/music.o ../clients/gui/src/music_decoder.o ../clients/gui/src/mod.o ../clients/gui/build/*.o -o test_gui $(LDFLAGS) $(TEST_SDL_LIBS) $(WEB_LIBS) -lm
 	./test_gui
 
 .PHONY: music
@@ -69,7 +69,7 @@ music:
 .PHONY: music-ui
 music-ui:
 	$(MAKE) -C ../clients/gui
-	$(CC) $(CFLAGS) $(VERSION_CFLAGS) $$(sdl2-config --cflags) test_music_ui.c ../clients/gui/src/client.o ../clients/gui/src/directory.o ../clients/gui/src/sound.o ../clients/gui/src/music.o ../clients/gui/src/music_decoder.o ../clients/gui/src/mod.o ../clients/gui/build/*.o -o test_music_ui $(LDFLAGS) $(TEST_SDL_LIBS) $(WEB_LIBS) -lm
+	$(CC) $(CFLAGS) $(VERSION_CFLAGS) $$(sdl2-config --cflags) test_music_ui.c ../clients/gui/src/client.o ../clients/gui/src/directory.o ../clients/gui/src/accounts.o ../clients/gui/src/account_https.o ../clients/gui/src/sound.o ../clients/gui/src/music.o ../clients/gui/src/music_decoder.o ../clients/gui/src/mod.o ../clients/gui/build/*.o -o test_music_ui $(LDFLAGS) $(TEST_SDL_LIBS) $(WEB_LIBS) -lm
 	./test_music_ui
 
 .PHONY: decoder-sanitize
@@ -80,5 +80,5 @@ decoder-sanitize:
 .PHONY: discovery
 discovery:
 	$(MAKE) -C ../clients/gui
-	$(CC) $(CFLAGS) $$(sdl2-config --cflags) test_discovery.c ../clients/gui/src/directory.o ../clients/gui/build/net.o -o test_discovery $(LDFLAGS) $(TEST_SDL_LIBS) $(WEB_LIBS)
+	$(CC) $(CFLAGS) $$(sdl2-config --cflags) test_discovery.c ../clients/gui/src/directory.o ../clients/gui/src/accounts.o ../clients/gui/src/account_https.o ../clients/gui/build/net.o -o test_discovery $(LDFLAGS) $(TEST_SDL_LIBS) $(WEB_LIBS)
 	$(PYTHON) test_discovery.py

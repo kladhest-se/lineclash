@@ -17,6 +17,7 @@ typedef struct {
     int    nick_is_new;
     int    is_tool;        /* 1 = admin tool session, not a game client */
     int    input_capable;
+    int central_direct;
     int central_state;
     time_t central_next;
     char central_nonce[65];
@@ -75,4 +76,4 @@ void server_lan_start(void);
 void server_lan_tick(void);
 void server_lan_stop(void);
 
-void server_central_begin(Pending *pending);
+void server_central_begin(Pending *pending,int direct);
