@@ -3,6 +3,8 @@
 // LINECLASH_WEB_CONFIG is an optional override, useful for isolated tests.
 return ['dsn'=>'mysql:host=127.0.0.1;dbname=lineclash;charset=utf8mb4',
         'user'=>'lineclash', 'password'=>'CHANGE-ME', 'ttl'=>180,
+        // Exact proxy IPs allowed to supply X-Forwarded-For; empty for direct access.
+        'trusted_proxies'=>[],
         // For a remote MariaDB host: CA certificate matching its server certificate.
         // 'ssl_ca'=>'/etc/lineclash/mariadb-ca.pem'
 ];

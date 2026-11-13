@@ -22,11 +22,18 @@ static int busy,reported;
 static time_t next_announce;
 static char payload[1024],token[AUTH_NONCE_LEN];
 static long response;
+static char response_body[512];
+static size_t response_used;
 #ifndef PLATFORM_WINDOWS
-static size_t discard(char *ptr,size_t size,size_t count,void *unused){(void)ptr;(void)unused;return size*count;}
+static size_t response_read(char *ptr,size_t size,size_t count,void *unused){
+    (void)unused;size_t bytes=size*count,keep=bytes;
+    if(keep>sizeof(response_body)-1-response_used)keep=sizeof(response_body)-1-response_used;
+    memcpy(response_body+response_used,ptr,keep);response_used+=keep;response_body[response_used]=0;
+    return bytes;
+}
 #endif
 static void post(void){
-    response=0;
+    response=0;response_used=0;response_body[0]=0;
 #ifdef PLATFORM_WINDOWS
     HINTERNET session=WinHttpOpen(L"LineClash/1.0",WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0);
     HINTERNET connection=NULL,request=NULL;
@@ -35,6 +42,8 @@ static void post(void){
     if(request){DWORD redirects=WINHTTP_OPTION_REDIRECT_POLICY_NEVER;WinHttpSetOption(request,WINHTTP_OPTION_REDIRECT_POLICY,&redirects,sizeof(redirects));
         if(WinHttpSendRequest(request,L"Content-Type: application/json\r\n",(DWORD)-1,payload,(DWORD)strlen(payload),(DWORD)strlen(payload),0)&&WinHttpReceiveResponse(request,NULL)){
             DWORD code=0,size=sizeof(code);if(WinHttpQueryHeaders(request,WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,NULL,&code,&size,NULL))response=code;
+            DWORD got=0;
+            if(WinHttpReadData(request,response_body,sizeof(response_body)-1,&got)){response_used=got;response_body[got]=0;}
         }
     }
     if(request)WinHttpCloseHandle(request);
@@ -46,7 +55,7 @@ static void post(void){
     if(curl){struct curl_slist *headers=NULL;headers=curl_slist_append(headers,"Content-Type: application/json");
         curl_easy_setopt(curl,CURLOPT_URL,"https://lineclash.kladhest.se/api/");curl_easy_setopt(curl,CURLOPT_HTTPHEADER,headers);
         curl_easy_setopt(curl,CURLOPT_POSTFIELDS,payload);curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT,3L);curl_easy_setopt(curl,CURLOPT_TIMEOUT,8L);
-        curl_easy_setopt(curl,CURLOPT_NOSIGNAL,1L);curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,discard);
+        curl_easy_setopt(curl,CURLOPT_NOSIGNAL,1L);curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,response_read);
         if(curl_easy_perform(curl)==CURLE_OK)curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&response);
         curl_slist_free_all(headers);curl_easy_cleanup(curl);
     }
@@ -101,6 +110,12 @@ void server_directory_tick(void){
 #endif
         join_worker();
         if(!reported || response!=200)log_info("Public directory announcement: HTTP %ld%s",response,response==200?"":"; retrying in 60 seconds");
+        if(response!=200 && response_body[0]){
+            /* Never echo a registration key, even if an upstream reflects it. */
+            char *secret;while(token[0] && (secret=strstr(response_body,token)))memset(secret,'*',strlen(token));
+            for(size_t i=0;i<response_used;i++)if((unsigned char)response_body[i]<32)response_body[i]=' ';
+            log_info("Directory response: %s",response_body);
+        }
         reported=1;
     }
     time_t now=time(NULL);if(now<next_announce)return;next_announce=now+60;

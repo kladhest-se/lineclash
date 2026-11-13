@@ -115,3 +115,9 @@ Deploy the updated `public-web` API before expecting new native servers to appea
 Registration rejects non-public peer addresses by default. A disposable local test config may set `allow_local_registration => true`; keep that disabled on public hosts. Do not trust X-Forwarded-For from arbitrary requests. A reverse proxy requires deliberate trusted client-address configuration on Apache before registration can record the real game host address.
 
 The native worker uses libcurl on macOS/Linux and WinHTTP on Windows. Linux server builds therefore also need libcurl development headers. HTTP failures are logged and retried without blocking gameplay. Protect `*.directory-key` files; source and website packaging excludes them.
+
+### HAProxy client addresses
+
+When Apache is behind HAProxy, set `trusted_proxies` in the site's existing `config.inc.php` to the exact HAProxy source IP, for example `['172.16.1.1']` on the private deployment. Leave it empty for direct access. Enable HAProxy's X-Forwarded-For support (`option forwardfor`); it must append the real source address or replace an untrusted inbound header. Never configure it to preserve a caller-supplied header without appending the observed address. The API walks the chain right to left and accepts forwarded headers only from configured proxy peers.
+
+A forwarded RFC1918/LAN address remains private and is rejected for an internet listing. This is intentional: proxy trust does not make a private endpoint internet reachable. Internet clients need a publicly reachable game address and the appropriate port forwarding.

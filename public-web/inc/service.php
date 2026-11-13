@@ -38,11 +38,27 @@ function integer_value(array $a,string $key,int $min,int $max): int {
     if (!isset($a[$key]) || !is_int($a[$key]) || $a[$key]<$min || $a[$key]>$max) throw new InvalidArgumentException('Invalid '.$key);
     return $a[$key];
 }
+function directory_peer(array $server,array $config): string {
+    $peer=$server['REMOTE_ADDR']??'';
+    $trusted=$config['trusted_proxies']??[];
+    if(!is_array($trusted) || !in_array($peer,$trusted,true))return $peer;
+    $header=$server['HTTP_X_FORWARDED_FOR']??'';
+    if(!is_string($header) || strlen($header)>2048 || $header==='')return $peer;
+    $chain=array_map('trim',explode(',',$header));
+    foreach($chain as $ip)if(!filter_var($ip,FILTER_VALIDATE_IP))return $peer;
+    // Walk from our trusted peer back toward the client. Ignore any claimed
+    // addresses to the left of the first untrusted hop.
+    for($i=count($chain)-1;$i>=0;$i--){
+        $peer=$chain[$i];if(!in_array($peer,$trusted,true))break;
+    }
+    return $peer;
+}
+
 // Self-registration lists only the HTTP peer's own address. It never grants
 // the trusted operator credentials needed to upload game results.
 function public_register(PDO $db,array $a): array {
-    $ip=$_SERVER['REMOTE_ADDR']??'';
     $config=require web_config_path();
+    $ip=directory_peer($_SERVER,$config);
     $flags=empty($config['allow_local_registration'])?FILTER_FLAG_NO_PRIV_RANGE|FILTER_FLAG_NO_RES_RANGE:0;
     if(!filter_var($ip,FILTER_VALIDATE_IP,$flags))throw new InvalidArgumentException('A public source address is required');
     $port=integer_value($a,'port',1,65535);$name=text_value($a,'name',128);
