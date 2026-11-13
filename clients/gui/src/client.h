@@ -242,9 +242,9 @@ typedef struct {
     /* State */
     ClientState state;
 
-    /* Central profiles persist names only; sessions stay in memory. */
-    struct {char handle[15],email[255],token[65];time_t expires;} accounts[8];
-    int account_count,account_active,account_cursor,account_join_after,account_job;
+    /* One remembered identity; its session stays in memory. */
+    struct {char handle[15],email[255],token[65];time_t expires;} account;
+    int account_join_after,account_job;
     sock_t account_join_socket;
     ClientState account_return;
     TextField tf_account_handle,tf_account_email,tf_account_password,tf_account_confirm;
@@ -544,7 +544,7 @@ int directory_parse(char *body,SavedServer *rows,int capacity);
 int directory_url_valid(const char *url,int local);
 void directory_shutdown(void);
 
-enum {ACCOUNT_SIGNIN=1,ACCOUNT_USE,ACCOUNT_LOGOUT,ACCOUNT_REMOVE,ACCOUNT_BACK,ACCOUNT_CREATE_MODE,ACCOUNT_LOGIN_MODE,ACCOUNT_REGISTER,ACCOUNT_RECOVERY_DONE};
+enum {ACCOUNT_SIGNIN=1,ACCOUNT_CONTINUE,ACCOUNT_LOGOUT,ACCOUNT_BACK,ACCOUNT_CREATE_MODE,ACCOUNT_LOGIN_MODE,ACCOUNT_REGISTER,ACCOUNT_RECOVERY_DONE};
 void account_erase(void *,size_t);
 int account_https_start(const char *);
 int account_https_busy(void);
@@ -552,7 +552,6 @@ int account_https_poll(char *,int);
 void account_https_shutdown(void);
 void client_accounts_load(ClientCtx *);
 void client_accounts_open(ClientCtx *,int);
-void client_accounts_select(ClientCtx *,int);
 void client_accounts_action(ClientCtx *,int);
 void client_accounts_key(ClientCtx *,int,int,const char *);
 void client_accounts_tick(ClientCtx *);
