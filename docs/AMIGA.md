@@ -4,7 +4,7 @@ Build with `make amiga`, or `make -C clients/amiga AMIGA_TOOLS=/path/to/toolchai
 
 ## Runtime
 
-Use a 68020 and adequate Fast RAM; the test profile has 2 MB Chip plus 8 MB Fast. AmigaOS 3.x, graphics/intuition/keymap libraries and Roadshow/AmiTCP/Miami's bsdsocket.library are required. HTTPS public discovery also needs AmiSSL 4.10+ with a valid certificate store, `AmiSSL:` assigned, and AmiSSL libraries in `LIBS:`. Set the system date correctly. TLS is used for directory discovery; central account passwords are entered only in the HTTPS browser page. The game stream remains plain TCP.
+Use a 68020 and adequate Fast RAM; the test profile has 2 MB Chip plus 8 MB Fast. AmigaOS 3.x, graphics/intuition/keymap libraries and Roadshow/AmiTCP/Miami's bsdsocket.library are required. HTTPS public discovery also needs AmiSSL 4.10+ with a valid certificate store, `AmiSSL:` assigned, and AmiSSL libraries in `LIBS:`. Set the system date correctly. TLS is used for directory discovery and native account sign-in; account creation and recovery use the HTTPS website. The game stream remains plain TCP.
 
 Keep the executable named `LineClash` in its drawer. It launches itself as an asynchronous directory worker using temporary files in `T:`. Preferences and server entries are stored beside it. No account password is passed to that worker. The native frontend currently has no audio playback or modern gamepad integration. Gameplay/runtime verification is still in progress; compilation is not evidence of hardware compatibility.
 
@@ -22,3 +22,5 @@ python3 /Users/frossmant/Development/tools/amiga/bin/amiga-machine a1200-020 Lin
 This uses the custom `tools/amiga/fs-uae-3.2.35-pcap/bin/fs-uae`, the shared AmigaOS 3.2.3 machine profile, A2065, Roadshow and vmnet-helper. Close an existing machine first: the profiles share the guest system volume. `en0` is this Mac's active Wi-Fi bridge interface. For a VPN/tunnel test, the same launcher supports `--nat`, but that does not test LAN broadcast discovery.
 
 The bridge helper starts successfully in the current environment. The guest log confirms bsdsocket.library, timer.device and the Intuition window open. `Builds:LineClash/AmigaOS/LineClash.log` records native startup and discovery status. Full network gameplay, display/input review and audio remain unverified or incomplete. Do not launch the unrelated `/Applications/FS-UAE.app` when checking this build.
+
+The Accounts screen supports up to eight saved account names and password login through AmiSSL. Passwords and sessions are exchanged with a separate native worker using public-memory Exec messages; they are never written to temporary files or command-line arguments. Sessions stay in memory and are reused over HTTPS for public-server joins. TLS is used for account/directory requests, while the game stream remains ordinary TCP. This path cross-compiles; guest networking and hardware runtime checks are still required.

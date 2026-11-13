@@ -5,6 +5,7 @@
 #include <amissl/amissl.h>
 struct Library *AmiSSLBase,*AmiSSLMasterBase;
 static int transfer(const char *body,char *reply,size_t capacity){
+ char request[1400]={0};
  SSL_CTX *ctx=0;SSL *ssl=0;sock_t fd=INVALID_SOCK;int initialized=0,result=20;
  const char *host="lineclash.kladhest.se";
  if(!net_init())return 20;
@@ -19,7 +20,6 @@ static int transfer(const char *body,char *reply,size_t capacity){
  fd=socket(AF_INET,SOCK_STREAM,0);if(fd==INVALID_SOCK)goto done;
  struct timeval timeout={12,0};setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));
  if(connect(fd,(struct sockaddr*)&peer,sizeof(peer)) || !SSL_set_fd(ssl,fd) || SSL_connect(ssl)!=1)goto done;
- char request[1400];
  if(body)snprintf(request,sizeof(request),"POST /api/ HTTP/1.0\r\nHost: lineclash.kladhest.se\r\nContent-Type: application/json\r\nContent-Length: %lu\r\nConnection: close\r\n\r\n%s",(unsigned long)strlen(body),body);
  else snprintf(request,sizeof(request),"GET /api/?action=servers&format=text HTTP/1.0\r\nHost: lineclash.kladhest.se\r\nUser-Agent: LineClash-Amiga/1.0\r\nConnection: close\r\n\r\n");
  size_t sent=0;while(sent<strlen(request)){int n=SSL_write(ssl,request+sent,strlen(request)-sent);if(n<=0)goto done;sent+=n;}
@@ -29,11 +29,11 @@ static int transfer(const char *body,char *reply,size_t capacity){
  while(total<65536 && (n=SSL_read(ssl,response+total,65536-total))>0){if(memchr(response+total,0,n)){n=-1;break;}total+=n;}response[total]=0;
  char *content=strstr(response,"\r\n\r\n");int status=0;sscanf(response,"HTTP/%*s %d",&status);
  if(n==0 && content){
-  if(reply){size_t length=total-(size_t)(content+4-response);if((status==200 || status==401 || status==403 || status==409) && length<capacity){memcpy(reply,content+4,length+1);result=0;}}
+  if(reply){size_t length=total-(size_t)(content+4-response);if((status==200 || status==400 || status==401 || status==403 || status==409 || status==429) && length<capacity){memcpy(reply,content+4,length+1);result=0;}}
   else if(status==200 && fwrite(response,1,total,stdout)==total && fflush(stdout)==0)result=0;
  }
  account_erase(response,total);free(response);
- done:if(ssl)SSL_free(ssl);if(fd!=INVALID_SOCK)sock_close(fd);if(ctx)SSL_CTX_free(ctx);if(initialized)CleanupAmiSSLA(NULL);if(AmiSSLBase)CloseAmiSSL();if(AmiSSLMasterBase)CloseLibrary(AmiSSLMasterBase);net_cleanup();return result;
+ done:account_erase(request,sizeof(request));if(ssl)SSL_free(ssl);if(fd!=INVALID_SOCK)sock_close(fd);if(ctx)SSL_CTX_free(ctx);if(initialized)CleanupAmiSSLA(NULL);if(AmiSSLBase)CloseAmiSSL();if(AmiSSLMasterBase)CloseLibrary(AmiSSLMasterBase);net_cleanup();return result;
 }
 
 int amiga_directory_worker(void){return transfer(NULL,NULL,0);}

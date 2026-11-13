@@ -36,6 +36,13 @@ int main(void) {
     c.server_list[0].locally_saved=1;c.server_tab=1;c.server_sort=2;assert(client_server_order(&c,order)==2 && order[0]==1);
     c.server_cursor=0;c.have_saved_creds=1;strcpy(c.auth_pass_hash,"old password hash");strcpy(c.tf_pass.text,"old plaintext");
     client_on_button(&c,BTN_SRV_CONNECT);assert(c.state==CS_CONNECT && !c.auth_pass_hash[0] && !c.tf_pass.text[0] && !c.have_saved_creds);
+    memset(&c,0,sizeof(c));c.sock=connect_pair(&remote);c.state=CS_AUTH;c.central_mode=1;
+    strcpy(c.central_profile,"@alpha");strcpy(c.tf_pass.text,"Never-send-this-password");
+    client_handle_msg(&c,"authmethods central-profile-v1 central-v1 local-v1");
+    client_handle_msg(&c,"lobbylistend");
+    char authbuf[RECV_BUF_SIZE]="",authline[MAX_MSG_LEN];int authlen=0,authreceived=0;
+    for(int i=0;i<100 && !authreceived;i++){net_flush_all();int n=net_recv(remote,authbuf,&authlen,authline,sizeof(authline));if(n==1){assert(!strcmp(authline,"centralauth profiles-v1"));authreceived=1;}SLEEP_MS(1);}assert(authreceived);
+    client_handle_msg(&c,"centralidentity @other");assert(c.sock==INVALID_SOCK && c.state==CS_CONNECT && strstr(c.connect_error,"different account"));sock_close(remote);
     memset(&c,0,sizeof(c));
     c.sock=connect_pair(&remote); c.state=CS_PLAYING; c.room_id=1; c.slot=1;
     c.reconnect_window=3; c.reconnect_round=7; c.running=1;

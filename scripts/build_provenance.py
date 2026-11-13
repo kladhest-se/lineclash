@@ -12,7 +12,7 @@ SOURCE_ROOTS = ('version.mk', 'get-version.sh', 'Makefile', '.gitignore',
 REQUIRED = ('version.mk', 'get-version.sh', 'Makefile', 'LICENSE.md', 'clients', 'server',
             'shared', 'tests', 'scripts', 'public-web')
 GENERATED_NAMES = {'LineClash', 'lineclash', 'lineclashd', 'lineclashd-tool', 'buildnum.h',
-                   'test_field', 'test_net', 'test_auth', 'test_integration', 'test_gui', 'test_music', 'test_music_ui', 'test_music_decoder', 'test_discovery'}
+                   'test_account_profiles', 'test_field', 'test_net', 'test_auth', 'test_integration', 'test_gui', 'test_music', 'test_music_ui', 'test_music_decoder', 'test_discovery'}
 
 
 

@@ -132,7 +132,7 @@ Run `make -j4` again from the project root. Stop running programs before replaci
  elif path=='docs/API.md':text=text.split('## Public directory API')[0]
  elif path=='docs/COMMUNITY-API.md':
   text=text.split('The directory supervisor handles')[0]+'Keep tokens private and use HTTPS.\n'
- return public_text(text)
+ return public_text(text).replace('https://lineclash.example.org/account/','https://lineclash.kladhest.se/account/')
 
 def generate(profile):
  guides=PROFILES[profile]

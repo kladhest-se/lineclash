@@ -136,8 +136,22 @@ Run `php bin/manage.php migrate` after refreshing this version: the additive `di
 
 ## Central-account deployment
 
-Refresh public-web and run `php bin/manage.php migrate` before updating servers and clients. This creates `accounts`, `account_devices` and the session-version upgrade. The website DB account needs SELECT, INSERT and UPDATE on these tables. Browser sessions require PHP's writable session directory, HTTPS, secure/HttpOnly/SameSite cookies and CSRF validation. Do not disable HTTPS to make native clients sign in: they display a browser approval code instead.
+Refresh public-web and run `php bin/manage.php migrate` before updating servers and clients. This creates `accounts`, `account_devices`, `account_sessions` and the session-version upgrade. The website DB account needs SELECT, INSERT and UPDATE on these tables. Browser sessions require PHP's writable session directory, HTTPS, secure/HttpOnly/SameSite cookies and CSRF validation. Native profile sign-in uses a fixed HTTPS API endpoint with certificate and hostname verification. Browser-code approval remains available for older clients.
 
 Only live, verified server directory keys can create/poll connection requests. Each request is bound to that server and a random connection nonce, lasts five minutes and can be redeemed once. Browser approval shows the registered server endpoint. Central signing-in does not grant a server administrative role or authorize statistics uploads. Guest/local server accounts remain separate. Keep a local administrator account for offline administration tools.
 
 Old account_devices rows can be removed periodically by an administrator after expiry. Keep the accounts table in protected backups, including its password/recovery hashes. No real central account or production database was created by the local test suite.
+
+### Client sessions and password policy
+
+Native clients receive random twelve-hour session tokens; the database stores only their SHA-256 hashes. Logout revokes the corresponding session. Password recovery increments the account version, invalidating all earlier browser and native sessions. A client uses its session only over HTTPS to approve a fresh challenge for the selected verified game endpoint. Passwords and reusable sessions never go to game servers. Login and join endpoints have per-source limits; native login also has a per-handle limit.
+
+Set the minimum length for **new and reset central passwords** in the existing site configuration:
+
+```php
+'account_password_min_length' => 6,
+```
+
+The default is 12 Unicode characters. The supported range is 1–72; invalid configuration values retain the default. The 72-byte password limit still applies. Changing the minimum does not prevent existing accounts from signing in. Website forms show the current requirement. The refresh script preserves `config.inc.php`, so add this option to your live configuration yourself.
+
+The database account needs SELECT, INSERT and UPDATE on `account_sessions`; logout does not require DELETE. Administrators may periodically delete expired/revoked sessions and expired `account_devices` rows. Back up account records privately. Deploy the website and run migrations first, then update dedicated servers and clients. No real production accounts are created by the local tests.

@@ -662,7 +662,7 @@ void client_handle_msg(ClientCtx *c, const char *line) {
     if(!strcmp(cmd,"authmethods")){c->central_supported=strstr(line,"central-profile-v1")?2:strstr(line,"central-v1")?1:0;return;}
     if(!strcmp(cmd,"centralchallenge") && n==2){client_account_challenge(c,args[0]);return;}
     if(!strcmp(cmd,"centralcode") && n==2 && strlen(args[0])==8 && strspn(args[0],"0123456789ABCDEF")==8){snprintf(c->central_code,sizeof(c->central_code),"%s",args[0]);sdl_open_account_code(c->central_code);return;}
-    if(!strcmp(cmd,"centralidentity") && n==2 && args[0][0]=='@' && strlen(args[0])<=15){snprintf(c->auth_nick,sizeof(c->auth_nick),"%s",args[0]);snprintf(c->nick,sizeof(c->nick),"%s",args[0]);snprintf(c->central_profile,sizeof(c->central_profile),"%s",args[0]);return;}
+    if(!strcmp(cmd,"centralidentity") && n==2 && args[0][0]=='@' && strlen(args[0])<=15){if(c->central_mode && c->central_profile[0] && strcmp(c->central_profile,args[0])){snprintf(c->connect_error,sizeof(c->connect_error),"Server returned a different account identity");if(c->sock!=INVALID_SOCK)sock_close(c->sock);c->sock=INVALID_SOCK;c->state=CS_CONNECT;net_reconnect_stop(&c->reconnect);return;}snprintf(c->auth_nick,sizeof(c->auth_nick),"%s",args[0]);snprintf(c->nick,sizeof(c->nick),"%s",args[0]);snprintf(c->central_profile,sizeof(c->central_profile),"%s",args[0]);return;}
     if(!strcmp(cmd,"centralresume") && n==2 && strlen(args[0])==64){snprintf(c->central_resume,sizeof(c->central_resume),"%s",args[0]);return;}
     /* ---- AUTH RESPONSES (received while in CS_AUTH state) ---- */
     if (!strcmp(cmd,"authok") && n>=2) {

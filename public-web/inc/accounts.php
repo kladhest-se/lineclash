@@ -19,12 +19,24 @@ function account_csrf(): void {
 function account_handle(string $handle): string {
     $handle=strtolower(trim($handle));if(!preg_match('/^[a-z][a-z0-9_]{2,13}$/D',$handle))throw new InvalidArgumentException('Use 3–14 letters, digits or underscores, starting with a letter.');return $handle;
 }
-function account_password(string $password): void {
-    if(strlen($password)<12)throw new InvalidArgumentException('Password is too short. Use at least 12 characters.');
-    if(strlen($password)>72)throw new InvalidArgumentException('Password is too long. Use no more than 72 bytes; some characters use more than one byte.');
+function account_password_min_length(): int {
+    $config=require web_config_path();$minimum=$config['account_password_min_length']??12;
+    return is_int($minimum) && $minimum>=1 && $minimum<=72?$minimum:12;
 }
+function account_password_hint(): string {
+    $minimum=account_password_min_length();return 'Use at least '.$minimum.' '.($minimum===1?'character':'characters').'.';
+}
+function account_password(string $password): void {
+    if(strlen($password)>72)throw new InvalidArgumentException('Password is too long. Use no more than 72 bytes; some characters use more than one byte.');
+    $length=preg_match_all('/./us',$password);
+    if($length===false || $length<account_password_min_length())throw new InvalidArgumentException('Password is too short. '.account_password_hint());
+}
+
 function account_limit(PDO $db,string $scope,int $max=15): void {
-    $source=hash('sha256',$scope.':'.directory_peer($_SERVER,require web_config_path()));$now=time();
+    account_limit_identity($db,$scope,directory_peer($_SERVER,require web_config_path()),$max);
+}
+function account_limit_identity(PDO $db,string $scope,string $identity,int $max): void {
+    $source=hash('sha256',$scope.':'.$identity);$now=time();
     $q=$db->prepare('INSERT INTO directory_registration_limits(source_hash,window_start,requests) VALUES(?,?,1) ON DUPLICATE KEY UPDATE requests=IF(window_start<? ,1,requests+1),window_start=IF(window_start<? ,VALUES(window_start),window_start)');$q->execute([$source,$now,$now-60,$now-60]);
     $q=$db->prepare('SELECT requests FROM directory_registration_limits WHERE source_hash=?');$q->execute([$source]);if((int)$q->fetchColumn()>$max)throw new InvalidArgumentException('Too many attempts. Try again in a minute.');
 }
@@ -55,10 +67,11 @@ function account_client_api(PDO $db,array $a): string {
     if($action==='account-client-login') {
         account_limit($db,'account-client-login');
         $handle=account_handle(is_string($a['handle']??null)?$a['handle']:'');
+        account_limit_identity($db,'account-client-user',$handle,30);
         $password=is_string($a['password']??null)?$a['password']:'';
         $q=$db->prepare('SELECT id,handle,password_hash,auth_version FROM accounts WHERE handle=? AND active=1');$q->execute([$handle]);$user=$q->fetch();
         $hash=$user['password_hash']??'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
-        $valid=strlen($password)<=72 && password_verify($password,$hash);
+        $valid=strlen($password)<=72 && !str_contains($password,"\0") && password_verify($password,$hash);
         if(!$user || !$valid){http_response_code(401);return 'central-error Incorrect username or password';}
         $token=bin2hex(random_bytes(32));$expires=time()+43200;
         $q=$db->prepare('INSERT INTO account_sessions(token_hash,account_id,auth_version,expires) VALUES(?,?,?,?)');$q->execute([hash('sha256',$token),$user['id'],$user['auth_version'],$expires]);

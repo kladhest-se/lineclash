@@ -7,7 +7,7 @@ try {
         account_csrf();$action=$_POST['action']??'';
         if($action==='logout'){$_SESSION=[];session_destroy();header('Location: ./');exit;}
         if(in_array($action,['login','register','recover'],true)){
-            account_limit($db,'account-login');$handle=account_handle((string)($_POST['handle']??''));$password=(string)($_POST['password']??'');account_password($password);
+            account_limit($db,'account-login');$handle=account_handle((string)($_POST['handle']??''));$password=(string)($_POST['password']??'');if($action!=='login')account_password($password);elseif(strlen($password)>72 || str_contains($password,"\0"))throw new InvalidArgumentException('Sign-in details did not match.');
             if($action==='register'){
                 $recovery=bin2hex(random_bytes(24));$id=bin2hex(random_bytes(16));
                 $q=$db->prepare('INSERT INTO accounts(id,handle,password_hash,recovery_hash,created_at) VALUES(?,?,?,?,?)');$q->execute([$id,$handle,password_hash($password,PASSWORD_DEFAULT),hash('sha256',$recovery),time()]);session_regenerate_id(true);$_SESSION['account_id']=$id;$_SESSION['auth_version']=1;
@@ -41,8 +41,8 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <input id="account-handle" name="handle" required minlength="3" maxlength="14" autocomplete="username" pattern="[A-Za-z][A-Za-z0-9_]{2,13}" aria-describedby="account-handle-help" value="<?=site_h(is_string($_POST['handle']??null)?$_POST['handle']:'')?>">
 <small id="account-handle-help">3–14 letters, numbers or underscores. Start with a letter.</small>
 <label for="account-password">Password</label>
-<input id="account-password" type="password" name="password" required minlength="12" maxlength="72" autocomplete="current-password" aria-describedby="account-password-help">
-<small id="account-password-help">Use at least 12 characters. Maximum 72 bytes.</small>
+<input id="account-password" type="password" name="password" required minlength="<?=account_password_min_length()?>" maxlength="72" autocomplete="current-password" aria-describedby="account-password-help">
+<small id="account-password-help"><?=site_h(account_password_hint())?> Maximum 72 bytes.</small>
 <button name="action" value="login">Sign in</button><button name="action" value="register">Create account</button>
 </form></section>
 <details><summary>Recover an account</summary><form method="post" class="account-form" novalidate>
@@ -50,8 +50,8 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <label>Handle<input name="handle" required autocomplete="username"></label>
 <label>Recovery code<input name="recovery" required autocomplete="off"></label>
 <label for="recovery-password">New password</label>
-<input id="recovery-password" name="password" type="password" required minlength="12" maxlength="72" autocomplete="new-password" aria-describedby="recovery-password-help">
-<small id="recovery-password-help">Use at least 12 characters. Maximum 72 bytes.</small>
+<input id="recovery-password" name="password" type="password" required minlength="<?=account_password_min_length()?>" maxlength="72" autocomplete="new-password" aria-describedby="recovery-password-help">
+<small id="recovery-password-help"><?=site_h(account_password_hint())?> Maximum 72 bytes.</small>
 <button name="action" value="recover">Reset password</button>
 </form></details>
 <?php else:?>

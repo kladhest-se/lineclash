@@ -54,6 +54,36 @@
 curl --fail 'https://lineclash.example.org/api/?action=matches&amp;mode=ranked&amp;offset=0'
 curl --fail 'https://lineclash.example.org/api/?action=statistics'
 </code></pre>
+<h3 id="community-api-native-account-profiles">Native account profiles</h3>
+<p>These POST JSON actions return plain text and require HTTPS. Do not put credentials or sessions in URL parameters. Password login is independent of browser cookies.</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Body fields</th>
+<th>Success response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>account-client-login</td>
+<td><code>handle</code>, <code>password</code></td>
+<td><code>central-session TOKEN HANDLE EXPIRES</code> (12 hours)</td>
+</tr>
+<tr>
+<td>account-client-join</td>
+<td><code>session</code>, <code>challenge</code>, <code>host</code>, <code>port</code></td>
+<td><code>central-joined HANDLE</code></td>
+</tr>
+<tr>
+<td>account-client-logout</td>
+<td><code>session</code></td>
+<td><code>central-signed-out</code></td>
+</tr>
+</tbody>
+</table>
+<p>The game server creates a connection-bound request with <code>account-begin</code> and <code>direct=true</code>, authenticating with its own directory key and random nonce. It gives the client the returned 64-character challenge. The client authorizes that challenge through <code>account-client-join</code>; its target host and port must match the request's live verified directory entry. The server polls its own request using <code>account-poll</code> and consumes the approved identity once. Replays, expired requests and mismatched targets are rejected. Client passwords and session tokens are not part of the game protocol.</p>
+<p>Client-account errors return plain text starting with <code>central-error</code> or <code>central-expired</code>. Failed credentials/sessions return 401, wrong targets return 403, concurrent approval conflicts return 409 and rate limits return 429. Password recovery invalidates existing sessions. Browser-code approval remains compatible with older clients.</p>
 <h3 id="community-api-errors-and-announcements">Errors and announcements</h3>
 <p>Invalid requests return 400; failed server authentication returns 403; missing matches return 404; unsupported methods return 405; service failures return 503. Responses include a JSON <code>error</code> message. Do not treat unavailable services as an empty successful result.</p>
 <p>Operators send announcements using POST JSON with provisioned <code>server_id</code> and <code>token</code> values. Announcements have a 2 MiB request limit. Keep tokens private and use HTTPS.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>

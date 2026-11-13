@@ -245,6 +245,7 @@ typedef struct {
     /* Central profiles persist names only; sessions stay in memory. */
     struct {char handle[15],token[65];time_t expires;} accounts[8];
     int account_count,account_active,account_cursor,account_join_after,account_job;
+    sock_t account_join_socket;
     ClientState account_return;
     TextField tf_account_handle,tf_account_password;
     char account_message[256];

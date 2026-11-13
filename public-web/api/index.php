@@ -11,7 +11,7 @@ try {
         if(strlen($body)>2097152) { http_response_code(413); echo '{"error":"Payload too large"}'; exit; }
         $a=json_decode($body,true,32,JSON_THROW_ON_ERROR);
         if(!is_array($a)) throw new InvalidArgumentException('Expected object');
-        if(in_array($a['action']??'',['account-client-login','account-client-join','account-client-logout'],true)){require_once __DIR__.'/../inc/accounts.php';header('Content-Type: text/plain; charset=utf-8');echo account_client_api($db,$a);exit;}
+        if(in_array($a['action']??'',['account-client-login','account-client-join','account-client-logout'],true)){require_once __DIR__.'/../inc/accounts.php';header('Content-Type: text/plain; charset=utf-8');try{echo account_client_api($db,$a);}catch(InvalidArgumentException $e){http_response_code(str_starts_with($e->getMessage(),'Too many')?429:400);echo 'central-error '.$e->getMessage();}exit;}
         if(in_array($a['action']??'',['account-begin','account-poll'],true)){require_once __DIR__.'/../inc/accounts.php';header('Content-Type: text/plain; charset=utf-8');echo account_api($db,$a);exit;}
         $result=($a['action']??'')==='public-register'?public_register($db,$a):announce($db,$a);
     } elseif($_SERVER['REQUEST_METHOD']==='GET') {

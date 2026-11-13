@@ -1,10 +1,10 @@
 /* auth.c — SQLite3 user auth + team + persistent leaderboard */
 #include "auth.h"
+#include "config.h"
+#include "../../shared/include/lineclash.h"
 #ifdef PLATFORM_WINDOWS
 #include <bcrypt.h>
 #endif
-#include "config.h"
-#include "../../shared/include/lineclash.h"
 #include <sqlite3.h>
 #include <stdio.h>
 #include <string.h>

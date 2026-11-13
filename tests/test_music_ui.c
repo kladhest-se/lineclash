@@ -73,5 +73,11 @@ int main(void) {
     c.settings_tab=1;sdl_render_server_list(&c);capture("lineclash-settings-controls.bmp");
     c.settings_tab=2;sdl_render_server_list(&c);capture("lineclash-settings-audio.bmp");
     client_on_key(&c,41,0,0,"");assert(!c.keymap_popup_open);
+    c.state=CS_SERVER_LIST;client_accounts_open(&c,0);assert(c.state==CS_ACCOUNT);
+    client_on_key(&c,0,0,1,"alpha");assert(!strcmp(c.tf_account_handle.text,"alpha"));
+    client_on_key(&c,43,0,0,NULL);client_on_key(&c,0,0,1,"å-password");assert(!strcmp(c.tf_account_password.text,"å-password"));
+    c.account_count=2;c.account_cursor=0;c.account_active=0;strcpy(c.accounts[0].handle,"alpha");strcpy(c.accounts[1].handle,"beta");strcpy(c.accounts[0].token,"test-session-not-real");c.accounts[0].expires=time(NULL)+600;
+    sdl_render_accounts(&c);capture("lineclash-account-profiles.bmp");
+    client_on_key(&c,41,0,0,NULL);assert(c.state==CS_SERVER_LIST && !c.tf_account_password.text[0]);
     sound_shutdown(); sdl_shutdown(); return 0;
 }

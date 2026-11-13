@@ -55,6 +55,7 @@ directory-test:
 web-test: server
 	$(PYTHON) tests/test_web_offline.py
 	$(PYTHON) tests/test_web_mariadb.py
+	$(PYTHON) tests/test_account_policy.py
 	$(PYTHON) tests/test_web_accounts.py
 	$(PYTHON) tests/test_directory_e2e.py
 

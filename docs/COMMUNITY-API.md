@@ -22,6 +22,20 @@ curl --fail 'https://lineclash.example.org/api/?action=matches&mode=ranked&offse
 curl --fail 'https://lineclash.example.org/api/?action=statistics'
 ```
 
+## Native account profiles
+
+These POST JSON actions return plain text and require HTTPS. Do not put credentials or sessions in URL parameters. Password login is independent of browser cookies.
+
+| Action | Body fields | Success response |
+| --- | --- | --- |
+| account-client-login | `handle`, `password` | `central-session TOKEN HANDLE EXPIRES` (12 hours) |
+| account-client-join | `session`, `challenge`, `host`, `port` | `central-joined HANDLE` |
+| account-client-logout | `session` | `central-signed-out` |
+
+The game server creates a connection-bound request with `account-begin` and `direct=true`, authenticating with its own directory key and random nonce. It gives the client the returned 64-character challenge. The client authorizes that challenge through `account-client-join`; its target host and port must match the request's live verified directory entry. The server polls its own request using `account-poll` and consumes the approved identity once. Replays, expired requests and mismatched targets are rejected. Client passwords and session tokens are not part of the game protocol.
+
+Client-account errors return plain text starting with `central-error` or `central-expired`. Failed credentials/sessions return 401, wrong targets return 403, concurrent approval conflicts return 409 and rate limits return 429. Password recovery invalidates existing sessions. Browser-code approval remains compatible with older clients.
+
 ## Errors and announcements
 
 Invalid requests return 400; failed server authentication returns 403; missing matches return 404; unsupported methods return 405; service failures return 503. Responses include a JSON `error` message. Do not treat unavailable services as an empty successful result.

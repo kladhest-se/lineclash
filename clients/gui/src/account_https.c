@@ -20,7 +20,7 @@ static int auth_work(void *unused){
     if(r){DWORD policy=WINHTTP_OPTION_REDIRECT_POLICY_NEVER;WinHttpSetOption(r,WINHTTP_OPTION_REDIRECT_POLICY,&policy,sizeof(policy));
         if(WinHttpSendRequest(r,L"Content-Type: application/json\r\n",(DWORD)-1,auth.body,(DWORD)strlen(auth.body),(DWORD)strlen(auth.body),0) && WinHttpReceiveResponse(r,NULL)){
             DWORD status=0,size=sizeof(status);WinHttpQueryHeaders(r,WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,NULL,&status,&size,NULL);
-            auth.ok=status==200 || status==401 || status==403 || status==409;
+            auth.ok=status==200 || status==400 || status==401 || status==403 || status==409 || status==429;
             for(;;){DWORD n=0;char buffer[512];if(!WinHttpReadData(r,buffer,sizeof(buffer),&n)){auth.ok=0;break;}if(!n)break;if(n>=sizeof(auth.reply)-auth.used || memchr(buffer,0,n)){auth.ok=0;break;}memcpy(auth.reply+auth.used,buffer,n);auth.used+=n;auth.reply[auth.used]=0;}
         }
     }
@@ -31,7 +31,7 @@ static int auth_work(void *unused){
         curl_easy_setopt(c,CURLOPT_URL,"https://lineclash.kladhest.se/api/");curl_easy_setopt(c,CURLOPT_POSTFIELDS,auth.body);curl_easy_setopt(c,CURLOPT_HTTPHEADER,headers);
         curl_easy_setopt(c,CURLOPT_SSL_VERIFYPEER,1L);curl_easy_setopt(c,CURLOPT_SSL_VERIFYHOST,2L);curl_easy_setopt(c,CURLOPT_FOLLOWLOCATION,0L);
         curl_easy_setopt(c,CURLOPT_NOSIGNAL,1L);curl_easy_setopt(c,CURLOPT_CONNECTTIMEOUT,5L);curl_easy_setopt(c,CURLOPT_TIMEOUT,15L);curl_easy_setopt(c,CURLOPT_WRITEFUNCTION,auth_read);
-        CURLcode result=curl_easy_perform(c);long status=0;curl_easy_getinfo(c,CURLINFO_RESPONSE_CODE,&status);auth.ok=result==CURLE_OK && (status==200 || status==401 || status==403 || status==409);
+        CURLcode result=curl_easy_perform(c);long status=0;curl_easy_getinfo(c,CURLINFO_RESPONSE_CODE,&status);auth.ok=result==CURLE_OK && (status==200 || status==400 || status==401 || status==403 || status==409 || status==429);
         curl_easy_cleanup(c);curl_slist_free_all(headers);
     }
 #endif

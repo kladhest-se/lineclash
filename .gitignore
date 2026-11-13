@@ -67,3 +67,6 @@ LineClash.servers
 LineClash.settings
 
 clients/amiga/build/
+
+tests/test_account_profiles
+LineClash.accounts

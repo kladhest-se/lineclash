@@ -31,7 +31,7 @@ static void profiles_save(ClientCtx *c){
 void client_accounts_load(ClientCtx *c){
     c->account_active=-1;c->account_cursor=-1;
     FILE *f=fopen(profiles_path(),"r");if(!f)return;char line[128];
-    while(fgets(line,sizeof(line),f) && c->account_count<8){line[strcspn(line,"\r\n")]=0;if(!handle_valid(line))continue;int duplicate=0;for(int i=0;i<c->account_count;i++)if(!strcmp(c->accounts[i].handle,line))duplicate=1;if(!duplicate)snprintf(c->accounts[c->account_count++].handle,15,"%s",line);}
+    while(fgets(line,sizeof(line),f) && c->account_count<8){line[strcspn(line,"\r\n")]=0;if(!handle_valid(line))continue;int duplicate=0;for(int i=0;i<c->account_count;i++)if(!strcmp(c->accounts[i].handle,line))duplicate=1;if(!duplicate)snprintf(c->accounts[c->account_count++].handle,15,"%.14s",line);}
     fclose(f);
 }
 static void json_string(char *out,size_t size,const char *in){
@@ -97,7 +97,7 @@ void client_account_challenge(ClientCtx *c,const char *challenge){
     if(!client_account_ready(c)){snprintf(c->connect_error,sizeof(c->connect_error),"Sign in to your account again");client_on_button(c,BTN_BACK_CONNECT);client_accounts_open(c,1);return;}
     char host[768],body[1024];json_string(host,sizeof(host),c->tf_host.text);
     snprintf(body,sizeof(body),"{\"action\":\"account-client-join\",\"session\":\"%s\",\"challenge\":\"%s\",\"host\":\"%.500s\",\"port\":%d}",c->accounts[c->account_active].token,challenge,host,atoi(c->tf_port.text));
-    if(account_https_start(body))c->account_job=2;else snprintf(c->connect_error,sizeof(c->connect_error),"Secure sign-in is busy; reconnect");account_erase(body,sizeof(body));
+    if(account_https_start(body)){c->account_job=2;c->account_join_socket=c->sock;}else snprintf(c->connect_error,sizeof(c->connect_error),"Secure sign-in is busy; reconnect");account_erase(body,sizeof(body));
 }
 void client_accounts_tick(ClientCtx *c){
     char reply[512];int result=account_https_poll(reply,sizeof(reply));if(!result)return;
@@ -106,9 +106,9 @@ void client_accounts_tick(ClientCtx *c){
         if(result>0 && sscanf(reply,"central-session %64s %14s %lld",token,handle,&expires)==3 && hex_token(token) && handle_valid(handle) && expires>time(NULL)){
             int i;for(i=0;i<c->account_count;i++)if(!strcmp(c->accounts[i].handle,handle))break;
             if(i<8){if(i==c->account_count)c->account_count++;snprintf(c->accounts[i].handle,15,"%s",handle);snprintf(c->accounts[i].token,65,"%s",token);c->accounts[i].expires=(time_t)expires;c->account_cursor=i;profiles_save(c);snprintf(c->account_message,sizeof(c->account_message),"Signed in. Select Use account to make it active.");if(c->account_join_after)client_accounts_action(c,ACCOUNT_USE);}
-        }else snprintf(c->account_message,sizeof(c->account_message),"%s",!strncmp(reply,"central-error ",14)?reply+14:"Sign-in failed. Check your password, TLS and website status.");
+        }else snprintf(c->account_message,sizeof(c->account_message),"%.255s",!strncmp(reply,"central-error ",14)?reply+14:"Sign-in failed. Check your password, TLS and website status.");
         account_erase(token,sizeof(token));
-    }else if(kind==2 && (result<0 || strncmp(reply,"central-joined ",15))){
+    }else if(kind==2 && c->state==CS_AUTH && c->central_mode && c->sock==c->account_join_socket && (result<0 || strncmp(reply,"central-joined ",15))){
         if(!strncmp(reply,"central-expired ",16) && c->account_active>=0){account_erase(c->accounts[c->account_active].token,65);c->accounts[c->account_active].expires=0;}
         client_on_button(c,BTN_BACK_CONNECT);snprintf(c->connect_error,sizeof(c->connect_error),"%.200s",!strncmp(reply,"central-error ",14)?reply+14:!strncmp(reply,"central-expired ",16)?reply+16:"Secure server sign-in failed; try again");c->state=CS_CONNECT;
     }
