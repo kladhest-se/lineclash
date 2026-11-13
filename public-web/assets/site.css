@@ -944,3 +944,48 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 .guide-panel ol { padding-left:24px; }
 .guide-panel li + li,.guide-panel p { margin-top:14px; }
 @media(min-width:761px) { .nav-inner { max-width:1180px; } .nav-links { gap:22px; } }
+
+/* Home: open sections and typographic feature rows, with the shared palette. */
+.home-page .section { max-width:1180px; padding-top:76px; padding-bottom:76px; }
+.home-page .section-divider { max-width:1124px; opacity:.55; }
+.home-page .home-hero { max-width:1180px; margin:0 auto; padding:90px 28px 70px; min-height:640px; display:grid; grid-template-columns:1fr 1.1fr; gap:54px; overflow:visible; }
+.home-page .hero-content { text-align:left; padding:0; max-width:none; }
+.home-page .hero-title { font-size:clamp(48px,6.8vw,88px); letter-spacing:-4px; }
+.home-page .hero-sub { font-size:18px; max-width:470px; margin-left:0; }
+.home-page .hero-actions { justify-content:flex-start; }
+.hero-scene { margin:0; min-width:0; transform:rotate(-2deg); }
+.hero-scene img { display:block; width:100%; height:auto; border-radius:8px; box-shadow:0 24px 80px #0006; }
+.hero-scene figcaption { color:var(--overlay1); font-family:var(--mono); font-size:10px; padding-top:16px; }
+.home-page #about { display:grid; grid-template-columns:1fr 1fr; column-gap:70px; }
+.home-page #about .eyebrow { grid-column:1/-1; }
+.home-page #about h2 { grid-row:2/4; max-width:420px; }
+.home-page #about .section-sub { margin-bottom:18px; max-width:none; }
+.home-page #about > p:last-child { color:var(--overlay1); font-size:15px; }
+.home-page .features-grid { grid-template-columns:1fr 1fr; gap:0 64px; }
+.feature-item { position:relative; padding:25px 0 25px 44px; border-top:1px solid var(--surface0); }
+.feature-number { position:absolute; top:28px; left:0; font:12px var(--mono); color:var(--mauve); }
+.feature-item h3 { font-size:19px; font-weight:600; margin-bottom:8px; }
+.feature-item p { color:var(--overlay1); font-size:14px; line-height:1.75; max-width:430px; }
+.home-page .platform-row { margin-top:30px; gap:14px 25px; }
+.home-page .platform-chip { background:none; border:0; padding:0; border-radius:0; }
+.home-page .specials-row { gap:0 28px; }
+.home-page .special-chip { background:none; border:0; border-radius:0; padding:12px 0; min-width:155px; }
+.home-page .special-chip-key { background:none; padding:0; font-size:13px; min-width:14px; }
+.home-page .screenshot-grid { gap:32px; }
+.home-page .screenshot-grid img { border:0; border-radius:6px; box-shadow:0 16px 45px #0004; }
+.home-page #get { border-top:1px solid var(--surface0); background:linear-gradient(110deg,#ca9ee60a,transparent); }
+.home-page .download-panel { background:none; border:0; border-radius:0; padding:0; }
+.home-page #release-status { font-size:20px; font-weight:500; max-width:760px; }
+@media(max-width:900px) { .home-page .home-hero { gap:28px; } .home-page .hero-title { font-size:64px; } }
+@media(max-width:760px) {
+ .home-page .home-hero { grid-template-columns:1fr; min-height:0; padding:65px 24px 50px; gap:45px; }
+ .home-page .hero-title { font-size:clamp(48px,12vw,76px); letter-spacing:-3px; }
+ .hero-scene { transform:none; max-width:580px; }
+ .home-page .section { padding:50px 24px; }
+ .home-page #about { grid-template-columns:1fr; gap:0; }
+ .home-page #about h2 { grid-row:auto; }
+ .home-page .features-grid { grid-template-columns:1fr; }
+ .home-page .section-sub { margin-bottom:30px; }
+ .feature-item { padding-top:22px; padding-bottom:22px; }
+ .feature-number { top:26px; }
+}
