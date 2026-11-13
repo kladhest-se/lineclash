@@ -85,8 +85,10 @@ int str_split(const char *s, char delim, char parts[][MAX_MSG_LEN], int max) {
  * ============================================================ */
 int net_init(void) {
 #ifdef PLATFORM_AMIGA
+    log_info("Opening bsdsocket.library");
     SocketBase=OpenLibrary("bsdsocket.library",4);
     if(!SocketBase){log_error("Start Roadshow, AmiTCP or Miami first");return 0;}
+    log_info("Opening timer.device");
     if(!amiga_clock_init()){amiga_clock_close();CloseLibrary(SocketBase);SocketBase=NULL;return 0;}
 #endif
 #ifdef PLATFORM_WINDOWS

@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/service.php';
 function site_h(mixed $value): string { return htmlspecialchars((string)$value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'); }
 function site_header(string $title,string $active='home',string $base='../'): void {
-    $links=['home'=>'Home','servers'=>'Servers','statistics'=>'Statistics','documentation'=>'Documentation','source'=>'Source'];
+    $links=['home'=>'Home','servers'=>'Servers','statistics'=>'Statistics','documentation'=>'Documentation','source'=>'Source','account'=>'Account'];
     if(in_array($active,['leaderboards','matches','directory'],true))$active='statistics';
 ?><!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">

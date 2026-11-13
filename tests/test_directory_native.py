@@ -11,7 +11,7 @@ with tempfile.TemporaryDirectory() as folder:
  cfg=folder/'server.cfg';cfg.write_text(f'port = {port}\ndb_file = {db}\nlog_file = {folder}/server.log\nstatus_api = off\npublic_server = on\nlan_discovery = on\n')
  env=dict(os.environ,LINECLASH_DIRECTORY_DISABLE='1')
  with (folder/'output.log').open('w') as log:
-  p=subprocess.Popen([str(root/'server/lineclashd'),'--config',str(cfg)],env=env,stdout=log,stderr=log)
+  p=subprocess.Popen([str(root/('server/lineclashd.exe' if os.name=='nt' else 'server/lineclashd')),'--config',str(cfg)],env=env,stdout=log,stderr=log)
   try:
    for _ in range(100):
     try:connection=socket.create_connection(('127.0.0.1',port),.2);break

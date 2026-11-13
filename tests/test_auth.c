@@ -15,6 +15,14 @@ int main(void) {
     const char *bad="0000000000000000000000000000000000000000000000000000000000000000";
     unsigned char key[32]; memset(key,0xaa,sizeof(key)); char response[65];
     assert(auth_open(":memory:"));
+    char central_nick[16];
+    assert(auth_central_identity("11111111111111111111111111111111","globaluser",central_nick));
+    assert(!strcmp(central_nick,"@globaluser"));
+    assert(auth_central_identity("11111111111111111111111111111111","globaluser",central_nick));
+    assert(!auth_central_identity("22222222222222222222222222222222","globaluser",central_nick));
+    assert(auth_register("@collision",hash)==AUTH_NEW_USER);
+    assert(!auth_central_identity("33333333333333333333333333333333","collision",central_nick));
+    sqlite3_exec(auth_get_db(),"DELETE FROM central_identities; DELETE FROM users;",NULL,NULL,NULL);
     assert(auth_register("tester",hash)==AUTH_NEW_USER);
     FILE *log=tmpfile(); assert(log); log_set_file(log);
     for(int debug=0;debug<=1;debug++) {

@@ -1,0 +1,24 @@
+# AmigaOS 3.x client — experimental
+
+Build with `make amiga`, or `make -C clients/amiga AMIGA_TOOLS=/path/to/toolchain CPU=68020`. The default shared compiler is `/Users/frossmant/Development/tools/amiga/m68k-amigaos-gcc-16.2/bin/m68k-amigaos-gcc`. No extra utilities were needed. The executable is `clients/amiga/LineClash` (Amiga Hunk, libnix, no ixemul, no FPU).
+
+## Runtime
+
+Use a 68020 and adequate Fast RAM; the test profile has 2 MB Chip plus 8 MB Fast. AmigaOS 3.x, graphics/intuition/keymap libraries and Roadshow/AmiTCP/Miami's bsdsocket.library are required. HTTPS public discovery also needs AmiSSL 4.10+ with a valid certificate store, `AmiSSL:` assigned, and AmiSSL libraries in `LIBS:`. Set the system date correctly. TLS is used for directory discovery; central account passwords are entered only in the HTTPS browser page. The game stream remains plain TCP.
+
+Keep the executable named `LineClash` in its drawer. It launches itself as an asynchronous directory worker using temporary files in `T:`. Preferences and server entries are stored beside it. No account password is passed to that worker. The native frontend currently has no audio playback or modern gamepad integration. Gameplay/runtime verification is still in progress; compilation is not evidence of hardware compatibility.
+
+## Shared OpenFP emulator workflow
+
+Build into the shared `Builds:` drawer:
+
+```sh
+make amiga
+mkdir -p /Users/frossmant/Development/builds/LineClash/AmigaOS
+cp clients/amiga/LineClash /Users/frossmant/Development/builds/LineClash/AmigaOS/LineClash
+python3 /Users/frossmant/Development/tools/amiga/bin/amiga-machine a1200-020 LineClash/AmigaOS/LineClash --bridge en0
+```
+
+This uses the custom `tools/amiga/fs-uae-3.2.35-pcap/bin/fs-uae`, the shared AmigaOS 3.2.3 machine profile, A2065, Roadshow and vmnet-helper. Close an existing machine first: the profiles share the guest system volume. `en0` is this Mac's active Wi-Fi bridge interface. For a VPN/tunnel test, the same launcher supports `--nat`, but that does not test LAN broadcast discovery.
+
+The bridge helper starts successfully in the current environment. The guest log confirms bsdsocket.library, timer.device and the Intuition window open. `Builds:LineClash/AmigaOS/LineClash.log` records native startup and discovery status. Full network gameplay, display/input review and audio remain unverified or incomplete. Do not launch the unrelated `/Applications/FS-UAE.app` when checking this build.

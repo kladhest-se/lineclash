@@ -38,6 +38,9 @@ with tempfile.TemporaryFile() as log:
   device=body.split()[1];assert len(device)==8
   assert call('/api/',dict(request,action='account-poll'),True)[1]=='central-pending'
   assert 'Account test server' in call('/account/?code='+device)[1]
+  csrf='0'*64
+  assert 'This form expired' in call(data=dict(action='approve',code=device))[1]
+  assert call('/api/',dict(request,action='account-poll'),True)[1]=='central-pending'
   assert 'Approved. Return to the game.' in call(data=dict(action='approve',code=device))[1]
   body=call('/api/',dict(request,action='account-poll'),True)[1];assert body.startswith('central-approved ') and body.endswith(' '+handle),body
   assert call('/api/',dict(request,action='account-poll'),True)[1].startswith('central-error')

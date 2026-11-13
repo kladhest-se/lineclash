@@ -2696,7 +2696,11 @@ void client_network_tick(ClientCtx *c) {
  * Main run loop
  * ============================================================ */
 void client_run_gui(void) {
+#ifdef PLATFORM_AMIGA
+    static ClientCtx c; /* Keep the large UI context off the classic Amiga stack. */
+#else
     ClientCtx c;
+#endif
 
     srand((unsigned)time(NULL));
     if(!net_init())return;

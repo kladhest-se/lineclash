@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__.'/../inc/accounts.php';require_once __DIR__.'/../inc/site.php';account_session();
-$error='';$notice='';$recovery='';$code=strtoupper(trim((string)($_POST['code']??$_GET['code']??'')));
+$error='';$notice='';$recovery='';$user=null;$device=null;$code=strtoupper(trim((string)($_POST['code']??$_GET['code']??'')));
 try {
     $db=database();account_current($db);
     if($_SERVER['REQUEST_METHOD']==='POST'){
