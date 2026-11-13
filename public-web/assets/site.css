@@ -941,3 +941,8 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 @media(max-width:760px) { .screenshot-grid,.community-destinations { grid-template-columns:1fr; } .download-panel { padding:20px; } }
 
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+
+.guide-panel { padding:24px; background:var(--mantle); border:1px solid var(--surface0); border-radius:14px; }
+.guide-panel ol { padding-left:24px; }
+.guide-panel li + li,.guide-panel p { margin-top:14px; }
+@media(min-width:761px) { .nav-inner { max-width:1180px; } .nav-links { gap:22px; } }

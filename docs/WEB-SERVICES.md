@@ -87,3 +87,5 @@ The browser checks the public GitHub `kladhest-se/lineclash` latest-release API 
 After publishing a tagged GitHub release with package assets, the page picks it up on the next load. No website configuration, access token, database migration, or rebuild is required. Deploy these website changes with the normal refresh script; existing `config.inc.php` is preserved.
 
 Run `node tests/test_web_downloads.js` for release lookup and asset validation checks, and `make web-test` for website/database integration.
+
+The main navigation is **Home, Servers, Statistics, Documentation, Source**. Screenshots and **Get the game** are sections on Home (`/#screenshots` and `/#get`), not separate pages. The persistent Get the game button returns there from every page. `/documentation/` provides a quick start, desktop controls and links to maintained repository guides; `/source/` groups repositories, contributions, source checkout, licensing and credits. These public pages work without a configured database and use the shared block animation.

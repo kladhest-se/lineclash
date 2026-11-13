@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__.'/inc/site.php';
-$github_url='https://github.com/kladhest-se/lineclash'; $kofi_url='https://ko-fi.com/frossmant';
 
 site_header('Multiplayer falling blocks','home','./');
 ?>
@@ -155,38 +154,7 @@ site_header('Multiplayer falling blocks','home','./');
 
 <div class="section-divider"></div>
 
-<!-- Source / Sponsor -->
-<div class="section" id="source">
-  <p class="eyebrow">Open source</p>
-  <h2 class="section-title">Free software. Make it yours.</h2>
-  <p class="section-sub">Built by <a href="https://github.com/frossmant">Tommy Frössman</a>. Source on GitHub, issues welcome.</p>
-
-  <div class="kofi-wrap">
-    <a href="<?= htmlspecialchars($kofi_url) ?>" target="_blank" rel="noopener">
-      <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support on Ko-fi" height="36">
-    </a>
-  </div>
-
-  <div class="source-grid">
-    <div class="source-card">
-      <h3>GitHub</h3>
-      <p>Source, issues, and releases. Pull requests welcome.</p>
-      <a class="source-link" href="<?= htmlspecialchars($github_url) ?>">github.com/kladhest-se/lineclash</a>
-    </div>
-    <div class="source-card">
-      <h3>Issues</h3>
-      <p>Bug reports and feature requests.</p>
-      <a class="source-link" href="<?= htmlspecialchars($github_url) ?>/issues">github.com/kladhest-se/lineclash/issues</a>
-    </div>
-    <div class="source-card">
-      <h3>License</h3>
-      <p>GPL version 3 or later — free to use, modify, and redistribute under its terms. Music and fonts carry their own licenses; see the credits.</p>
-      <a class="source-link" href="<?= htmlspecialchars($github_url) ?>/blob/main/LICENSE.md">Read the license</a><br><a class="source-link" href="<?= htmlspecialchars($github_url) ?>/blob/main/CREDITS.md">Music and font credits</a>
-    </div>
-  </div>
-</div>
-
-
+<section class="section" id="license"><p class="eyebrow">Open source</p><h2 class="section-title">Free software. Make it yours.</h2><p class="section-sub">GPL version 3 or later — free to use, modify, and redistribute under its terms. Music and fonts carry their own licenses.</p><div class="hero-actions"><a class="btn btn-outline" href="source/">Source, license &amp; credits →</a><a class="btn btn-outline" href="documentation/">Read the documentation →</a></div></section>
 
 <script>
 /* ── Tab switching ─────────────────────────────────────── */
