@@ -35,7 +35,7 @@ typedef struct {
     char name[MAX_SERVER_NAME];
     char host[128];
     int  port;
-    int favourite, discovered, capacity, ping_ms;
+    int favourite, discovered, locally_saved, capacity, ping_ms;
     long long last_used;
     char nick[MAX_NICK_LEN];
     char pw_hash[65];             /* sha256(password) — stored in servers file */
@@ -164,6 +164,7 @@ typedef enum {
     BTN_SRV_RENAME_OK,    /* confirm rename          */
     BTN_SRV_CONNECT,      /* connect to selected     */
     BTN_SRV_ABOUT,        /* show about popup        */
+    BTN_PUBLIC_SERVERS, BTN_SAVED_SERVERS,
     BTN_KEYMAP_POPUP,     /* show keymap editor popup */
     BTN_SRV_REFRESH,      /* force-refresh one server status */
     BTN_DISCOVER, BTN_FAVOURITE, BTN_SERVER_FILTER, BTN_SERVER_SORT,
@@ -377,6 +378,7 @@ typedef struct {
     SavedServer server_list[MAX_SAVED_SERVERS];
     int         server_count;
     int         server_cursor;     /* selected entry in the list */
+    int server_tab; /* 0 public, 1 saved */
     int server_filter, server_sort;
     uint64_t probe_started;
     char directory_message[128];
@@ -384,6 +386,9 @@ typedef struct {
     int         server_popup_open; /* 0=none 1=add 2=unused 3=rename */
     int         server_edit_idx;
     int         music_scroll, music_last_index, about_music_page;
+    float credits_offset;
+    uint32_t credits_tick;
+    int credits_paused;
     int         music_player_open;
     int         about_popup_open;
     TextField   tf_srv_rename;     /* popup 3: new alias only */
@@ -411,7 +416,9 @@ typedef struct {
     int       team_popup_open;
     int       game_options_popup_open; /* 0=closed 1=open */
     int       ai_players_popup_open;   /* 0=closed 1=open */
-    int       keymap_popup_open;       /* 0=closed 1=open */
+    int controller_enabled;
+    int         settings_tab; /* display, controls, audio */
+    int         keymap_popup_open;       /* 0=closed 1=open */
     int       keymap_capture_idx;      /* -1=none, 0-10=capturing that row */
     int       license_popup_open;      /* 0=closed 1=open */
     int       license_scroll;          /* scroll offset in lines */
@@ -514,6 +521,7 @@ void music_tick(void);
 void music_set_res_prefix(const char *prefix); /* macOS bundle resource dir */
 
 int client_server_order(ClientCtx *c,int visible[MAX_SAVED_SERVERS]);
+int directory_busy(void);
 int directory_start(const char *url,char *message,int length);
 int directory_poll(SavedServer *rows,int capacity,char *message,int length);
 int directory_parse(char *body,SavedServer *rows,int capacity);

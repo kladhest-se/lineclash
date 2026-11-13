@@ -1,3 +1,4 @@
+export LINECLASH_DIRECTORY_DISABLE=1
 CC      = cc
 CFLAGS  = -Wall -Wextra -O2 -I../shared/include
 SHARED  = ../shared/src/field.c ../shared/src/piece.c \

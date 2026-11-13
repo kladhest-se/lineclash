@@ -17,6 +17,7 @@ One `key = value` per line. `#` starts a comment; values are unquoted. Missing k
 
 | Key | Default | Meaning / accepted range |
 | --- | --- | --- |
+| public_server | on | Announce this server to the official public directory; off keeps it private |
 | server_name | LineClash | Name in discovery/status |
 | port | 31457 | Game TCP port, 1–65535 |
 | db_file | platform path above | SQLite data, including accounts and room settings |

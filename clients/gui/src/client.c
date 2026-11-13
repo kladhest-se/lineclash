@@ -177,6 +177,7 @@ static void settings_save(ClientCtx *c) {
     FILE *f = fopen(settings_path(), "w");
     if (!f) return;
     fprintf(f, "# LineClash client settings\n");
+    fprintf(f,"controller = %d\n",c->controller_enabled);
     fprintf(f,"ui_scale = %d\npiece_patterns = %d\nhigh_contrast = %d\n",c->ui_scale,c->piece_patterns,c->high_contrast);
     fprintf(f, "sfx = %d\n",    c->sound_enabled);
     fprintf(f, "music = %d\n",  music_get_enabled());
@@ -232,6 +233,7 @@ static void settings_load(ClientCtx *c) {
         if (*p == '#' || *p == '\n' || *p == '\r' || *p == '\0') continue;
         char key[64] = "", val[64] = "";
         if (sscanf(p, "%63[^= \t] = %63s", key, val) < 2) continue;
+        if(!strcmp(key,"controller"))c->controller_enabled=atoi(val)?1:0;
         if(!strcmp(key,"ui_scale")){int size=atoi(val);if(size==75||size==100||size==125||size==150)c->ui_scale=size;}
         if(!strcmp(key,"piece_patterns"))c->piece_patterns=atoi(val)?1:0;
         if(!strcmp(key,"high_contrast"))c->high_contrast=atoi(val)?1:0;
@@ -262,6 +264,7 @@ int client_server_order(ClientCtx *c,int visible[MAX_SAVED_SERVERS]) {
     int count=0;
     for(int n=0;n<c->server_count;n++) {
         SavedServer *ss=&c->server_list[n];
+        if(c->server_tab==0?!ss->discovered:!(ss->locally_saved||!ss->discovered))continue;
         if(c->server_filter==1 && !ss->favourite)continue;
         if(c->server_filter==2 && !ss->last_used)continue;
         if(c->server_filter==4 && (ss->online!=1 || ss->ping_ms<=0 || ss->ping_ms>100))continue;
@@ -282,7 +285,7 @@ static void server_list_save(ClientCtx *c) {
     int i;
     for (i = 0; i < c->server_count; i++) {
         SavedServer *s = &c->server_list[i];
-        if(s->discovered && !s->favourite && !s->last_used) continue;
+        if(s->discovered && !s->locally_saved && !s->favourite && !s->last_used) continue;
         fprintf(f, "[server]\nname=%s\nhost=%s\nport=%d\nnick=%s\nhash=%s\nfavourite=%d\nlast_used=%lld\n\n",
                 s->name, s->host, s->port, s->nick,
                 s->pw_hash[0] ? s->pw_hash : "",s->favourite,s->last_used);
@@ -307,7 +310,7 @@ static void server_list_load(ClientCtx *c) {
                 if (!cur.name[0]) strncpy(cur.name, cur.host, MAX_SERVER_NAME-1);
                 c->server_list[c->server_count++] = cur;
             }
-            memset(&cur,0,sizeof(cur)); cur.port=DEFAULT_PORT; in_block=1;
+            memset(&cur,0,sizeof(cur)); cur.port=DEFAULT_PORT;cur.locally_saved=1; in_block=1;
         } else if (in_block) {
             char *eq=strchr(line,'='); if(!eq) continue;
             *eq='\0'; char *k=line, *v=eq+1;
@@ -808,7 +811,7 @@ void client_handle_msg(ClientCtx *c, const char *line) {
     if (!strcmp(cmd,"servername") && n>=2) {
         int si;
         for (si=0;si<c->server_count;si++){
-            if(!strcasecmp(c->server_list[si].host,c->tf_host.text)){
+            if(!strcasecmp(c->server_list[si].host,c->tf_host.text)&&c->server_list[si].port==atoi(c->tf_port.text)){
                 /* Always update name from server — only keep user alias if explicitly set */
                 if(!strcmp(c->server_list[si].name,c->server_list[si].host))
                     strncpy(c->server_list[si].name,args[0],MAX_SERVER_NAME-1);
@@ -820,7 +823,7 @@ void client_handle_msg(ClientCtx *c, const char *line) {
     if (!strcmp(cmd,"usercount") && n>=2) {
         int si;
         for (si=0;si<c->server_count;si++){
-            if(!strcasecmp(c->server_list[si].host,c->tf_host.text)){
+            if(!strcasecmp(c->server_list[si].host,c->tf_host.text)&&c->server_list[si].port==atoi(c->tf_port.text)){
                 c->server_list[si].users_registered=atoi(args[0]);
                 break;
             }
@@ -831,7 +834,7 @@ void client_handle_msg(ClientCtx *c, const char *line) {
         /* Total connected users: idle = conncount - playing */
         int si, connected=atoi(args[0]);
         for (si=0;si<c->server_count;si++){
-            if(!strcasecmp(c->server_list[si].host,c->tf_host.text)){
+            if(!strcasecmp(c->server_list[si].host,c->tf_host.text)&&c->server_list[si].port==atoi(c->tf_port.text)){
                 int playing=c->server_list[si].users_playing;
                 c->server_list[si].users_idle = connected > playing
                                                 ? connected - playing : 0;
@@ -1142,6 +1145,7 @@ void client_handle_msg(ClientCtx *c, const char *line) {
         ctx_chat(c,"=== GAME OVER ===",COL_LTGRAY);
         sound_play(c,SFX_ROUND_END);
         music_start_menu();
+    client_on_button(&c,BTN_DISCOVER);
         return;
     }
     if (!strcmp(cmd,"playerlost") && n>=2) {
@@ -1943,7 +1947,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
 
     case BTN_MUSIC_PLAYER: if(c->state!=CS_PLAYING && c->state!=CS_GAMEOVER) break; c->music_player_open=1; c->about_popup_open=0; break;
     case BTN_SRV_ABOUT:
-        c->music_player_open=0; c->about_popup_open=1;
+        c->music_player_open=0; c->about_popup_open=1;c->credits_offset=0;c->credits_tick=0;c->credits_paused=0;
         break;
     case BTN_SRV_REFRESH:
         if (c->server_cursor>=0&&c->server_cursor<c->server_count) {
@@ -1970,11 +1974,14 @@ void client_on_button(ClientCtx *c, BtnId btn) {
             }
         }
         break;
+    case BTN_PUBLIC_SERVERS:c->server_tab=0;c->srv_page=0;client_on_button(c,BTN_DISCOVER);break;
+    case BTN_SAVED_SERVERS:c->server_tab=1;c->srv_page=0;break;
     case BTN_DISCOVER:
-        directory_start(getenv("LINECLASH_DIRECTORY_API"),c->directory_message,sizeof(c->directory_message));
+        directory_start(getenv("LINECLASH_DIRECTORY_API")?getenv("LINECLASH_DIRECTORY_API"):"https://lineclash.kladhest.se/api/?action=servers&format=text",c->directory_message,sizeof(c->directory_message));
         break;
     case BTN_FAVOURITE:
         if(c->server_cursor>=0 && c->server_cursor<c->server_count) {
+            c->server_list[c->server_cursor].locally_saved=1;
             c->server_list[c->server_cursor].favourite=!c->server_list[c->server_cursor].favourite; server_list_save(c);
         }
         break;
@@ -1995,15 +2002,12 @@ void client_on_button(ClientCtx *c, BtnId btn) {
         break;
 
     case BTN_SRV_EDIT:
-        /* Rename only — single alias field popup */
-        if (c->server_cursor>=0&&c->server_cursor<c->server_count) {
-            c->server_popup_open=3;
-            c->server_edit_idx=c->server_cursor;
-            memset(&c->tf_srv_rename,0,sizeof(c->tf_srv_rename));
-            strncpy(c->tf_srv_rename.text,c->server_list[c->server_cursor].name,
-                    sizeof(c->tf_srv_rename.text)-1);
-            c->tf_srv_rename.len=(int)strlen(c->tf_srv_rename.text);
-            c->tf_srv_rename.focused=1;
+        if(c->server_cursor>=0 && c->server_cursor<c->server_count){
+            int index=c->server_cursor;SavedServer saved=c->server_list[index];
+            client_on_button(c,BTN_SRV_ADD);c->server_edit_idx=index;
+            snprintf(c->tf_srv_host.text,sizeof(c->tf_srv_host.text),"%s",saved.host);c->tf_srv_host.len=(int)strlen(c->tf_srv_host.text);
+            snprintf(c->tf_srv_port.text,sizeof(c->tf_srv_port.text),"%d",saved.port);c->tf_srv_port.len=(int)strlen(c->tf_srv_port.text);
+            snprintf(c->tf_srv_nick.text,sizeof(c->tf_srv_nick.text),"%s",saved.nick);c->tf_srv_nick.len=(int)strlen(c->tf_srv_nick.text);
         }
         break;
 
@@ -2018,38 +2022,34 @@ void client_on_button(ClientCtx *c, BtnId btn) {
         break;
 
     case BTN_SRV_ADD_OK:
-        /* Start async test-connect — does NOT block the render loop */
-        if(c->tf_srv_host.len>0&&c->tf_srv_nick.len>0&&c->tf_srv_pass.len>0){
-            if(c->srv_test_sock!=INVALID_SOCK){sock_close(c->srv_test_sock);c->srv_test_sock=INVALID_SOCK;}
-            c->srv_test_state=1;   /* state 1 = TCP connecting in progress */
-            c->srv_test_ticks=0;
-            c->srv_test_recv_len=0;
-            c->srv_test_timeout = 60*3; /* ~3 seconds at 60fps */
-            client_sha256_hex(c->tf_srv_pass.text,c->srv_test_hash);
-            strncpy(c->srv_test_msg,"Connecting...",sizeof(c->srv_test_msg)-1);
-            {int port=c->tf_srv_port.len>0?atoi(c->tf_srv_port.text):DEFAULT_PORT;
-             /* net_connect_nb: DNS (fast for IPs) + non-blocking connect() */
-             c->srv_test_sock=net_connect_nb(c->tf_srv_host.text,port);
-             if(c->srv_test_sock==INVALID_SOCK){
-                 c->srv_test_state=-1;
-                 strncpy(c->srv_test_msg,"Host not found",sizeof(c->srv_test_msg)-1);
-             }}
-        } else {
-            c->srv_test_state=-1;
-            strncpy(c->srv_test_msg,
-                c->tf_srv_host.len==0?"Host / IP required":
-                c->tf_srv_nick.len==0?"Username required":"Password required",
-                sizeof(c->srv_test_msg)-1);
+        {char *end=NULL;long port=strtol(c->tf_srv_port.text,&end,10);
+         if(!c->tf_srv_host.len || strpbrk(c->tf_srv_host.text," \t\r\n") || !end || *end || port<1 || port>65535){c->srv_test_state=-1;snprintf(c->srv_test_msg,sizeof(c->srv_test_msg),"Enter a host and a port from 1 to 65535");break;}
+         int edit=c->server_edit_idx,index=-1;
+         for(int j=0;j<c->server_count;j++)if(!strcasecmp(c->server_list[j].host,c->tf_srv_host.text)&&c->server_list[j].port==port){index=j;break;}
+         int same=edit>=0 && edit<c->server_count && !strcasecmp(c->server_list[edit].host,c->tf_srv_host.text)&&c->server_list[edit].port==port&&!strcmp(c->server_list[edit].nick,c->tf_srv_nick.text);
+         if(index<0 && edit>=0 && edit<c->server_count && !c->server_list[edit].discovered)index=edit;
+         if(index<0){if(c->server_count>=MAX_SAVED_SERVERS){c->srv_test_state=-1;snprintf(c->srv_test_msg,sizeof(c->srv_test_msg),"Saved server list is full");break;}index=c->server_count++;memset(&c->server_list[index],0,sizeof(SavedServer));}
+         if(edit>=0 && edit<c->server_count && edit!=index){c->server_list[edit].locally_saved=0;c->server_list[edit].favourite=0;c->server_list[edit].last_used=0;}
+         SavedServer *entry=&c->server_list[index];
+         if(!same)entry->pw_hash[0]=0;
+         snprintf(entry->host,sizeof(entry->host),"%s",c->tf_srv_host.text);entry->port=(int)port;
+         if(!entry->name[0] || !same)snprintf(entry->name,sizeof(entry->name),"%.63s",entry->host);
+         snprintf(entry->nick,sizeof(entry->nick),"%s",c->tf_srv_nick.text);
+         if(c->tf_srv_pass.len)client_sha256_hex(c->tf_srv_pass.text,entry->pw_hash);
+         entry->locally_saved=1;c->server_tab=1;c->server_cursor=index;c->srv_page=0;
+         c->server_popup_open=0;c->server_edit_idx=-1;c->srv_test_state=0;c->srvlist_probe_timer=1;server_list_save(c);
         }
         break;
 
     case BTN_SRV_DEL:
         if (c->server_cursor>=0&&c->server_cursor<c->server_count) {
-            int i;
-            for(i=c->server_cursor;i<c->server_count-1;i++)
-                c->server_list[i]=c->server_list[i+1];
-            c->server_count--;
-            if(c->server_cursor>=c->server_count) c->server_cursor=c->server_count-1;
+            SavedServer *entry=&c->server_list[c->server_cursor];
+            if(entry->discovered){entry->locally_saved=0;entry->favourite=0;entry->last_used=0;entry->nick[0]=0;entry->pw_hash[0]=0;entry->password[0]=0;}
+            else {
+                for(int i=c->server_cursor;i<c->server_count-1;i++)c->server_list[i]=c->server_list[i+1];
+                c->server_count--;
+                if(c->server_cursor>=c->server_count)c->server_cursor=c->server_count-1;
+            }
             server_list_save(c);
         }
         break;
@@ -2095,6 +2095,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
         c->state = CS_SERVER_LIST;
         c->lobby_list_count=0;
         music_start_menu();
+    client_on_button(&c,BTN_DISCOVER);
         break;
     case BTN_LOBBY_JOIN:
         if (c->lobby_list_count>0) ctx_join_lobby(c,c->lobby_list[c->lobby_cursor].id);
@@ -2124,6 +2125,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
         net_send(c->sock,"listlobbies"); /* explicit request in case server auto-send missed */
         net_send(c->sock,"reqleaderboard");
         music_start_menu();
+    client_on_button(&c,BTN_DISCOVER);
         break;
     case BTN_ADD_BOT_EASY:
     case BTN_ADD_BOT_MEDIUM:
@@ -2369,13 +2371,13 @@ void client_tick(ClientCtx *c) {
         if(c->srv_test_state==10 && c->srv_test_sock!=INVALID_SOCK) {sock_close(c->srv_test_sock);c->srv_test_sock=INVALID_SOCK;c->srv_test_state=0;}
         for(int n=0;n<c->server_count;) {
             SavedServer *old=&c->server_list[n];
-            if(old->discovered && !old->favourite && !old->last_used) {memmove(old,old+1,(c->server_count-n-1)*sizeof(*old));c->server_count--;}
-            else n++;
+            if(old->discovered && !old->locally_saved && !old->favourite && !old->last_used) {memmove(old,old+1,(c->server_count-n-1)*sizeof(*old));c->server_count--;}
+            else {old->discovered=0;n++;}
         }
         for(int n=0;n<discovered;n++) {
             int match=-1;
             for(int j=0;j<c->server_count;j++) if(!strcasecmp(c->server_list[j].host,found[n].host) && c->server_list[j].port==found[n].port) {match=j;break;}
-            if(match>=0) c->server_list[match].capacity=found[n].capacity;
+            if(match>=0){c->server_list[match].capacity=found[n].capacity;c->server_list[match].discovered=1;}
             else if(c->server_count<MAX_SAVED_SERVERS) c->server_list[c->server_count++]=found[n];
         }
         c->server_cursor=c->server_count?0:-1;c->srv_page=0;c->srvlist_probe_idx=0;c->srvlist_probe_timer=1;
@@ -2454,6 +2456,7 @@ void client_tick(ClientCtx *c) {
                         int index=existing>=0?existing:c->server_count++;
                         SavedServer *ns=&c->server_list[index];
                         if(existing<0)memset(ns,0,sizeof(*ns));
+                        ns->locally_saved=1;c->server_tab=1;
                         ns->last_used=(long long)time(NULL);
                         strncpy(ns->host,c->tf_srv_host.text,127);
                         ns->port=port;
@@ -2691,7 +2694,7 @@ void client_run_gui(void) {
     c.km.hold       =  6;  /* C     */ c.km.hold2      = 225; /* LShift*/
     c.km.chat       = 43;  /* Tab   */ c.km.pause      = 62;  /* F5    */
     c.km.ready      = 21;  /* R     */
-    c.ui_scale=100;c.piece_patterns=1;
+    c.ui_scale=100;c.piece_patterns=1;c.controller_enabled=1;
     settings_load(&c);  /* load sfx/music prefs and keymap — before sound_init */
     strncpy(c.tf_host.text,"localhost",sizeof(c.tf_host.text)-1);
     c.tf_host.len=(int)strlen(c.tf_host.text);
@@ -2727,6 +2730,7 @@ void client_run_gui(void) {
     /* Apply saved music preference now that audio device is open */
     if (c.have_saved_music) music_set_enabled(c.saved_music_enabled);
     music_start_menu();
+    client_on_button(&c,BTN_DISCOVER);
 
     while (c.running) {
         net_flush_all();

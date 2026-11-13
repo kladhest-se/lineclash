@@ -60,3 +60,7 @@ void authority_send(Lobby *lb,Player *p);
 void authority_input(Lobby *lb,Player *p,const char *sequence,const char *action);
 void authority_tick(Lobby *lb,Player *p);
 void lobby_handle_message(Lobby *lb,Player *p,const char *message);
+
+void server_directory_start(void);
+void server_directory_tick(void);
+void server_directory_stop(void);

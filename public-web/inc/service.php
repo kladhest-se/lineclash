@@ -38,11 +38,43 @@ function integer_value(array $a,string $key,int $min,int $max): int {
     if (!isset($a[$key]) || !is_int($a[$key]) || $a[$key]<$min || $a[$key]>$max) throw new InvalidArgumentException('Invalid '.$key);
     return $a[$key];
 }
+// Self-registration lists only the HTTP peer's own address. It never grants
+// the trusted operator credentials needed to upload game results.
+function public_register(PDO $db,array $a): array {
+    $ip=$_SERVER['REMOTE_ADDR']??'';
+    $config=require web_config_path();
+    $flags=empty($config['allow_local_registration'])?FILTER_FLAG_NO_PRIV_RANGE|FILTER_FLAG_NO_RES_RANGE:0;
+    if(!filter_var($ip,FILTER_VALIDATE_IP,$flags))throw new InvalidArgumentException('A public source address is required');
+    $port=integer_value($a,'port',1,65535);$name=text_value($a,'name',128);
+    if(trim($name)==='')throw new InvalidArgumentException('Server name required');
+    $token=text_value($a,'token',64);
+    if(!preg_match('/^[a-f0-9]{64}$/D',$token))throw new InvalidArgumentException('Invalid token');
+    $players=integer_value($a,'players',0,80);$capacity=integer_value($a,'capacity',1,80);
+    if($players>$capacity)throw new InvalidArgumentException('Invalid player count');
+    $id='auto-'.substr(hash('sha256',$ip.':'.$port),0,32);
+    $lock='lc-register-'.substr(hash('sha256',$ip),0,40);
+    $q=$db->prepare('SELECT GET_LOCK(?,2)');$q->execute([$lock]);
+    if((int)$q->fetchColumn()!==1){http_response_code(429);return ['error'=>'Try again later'];}
+    try {
+        $q=$db->prepare('SELECT token_hash FROM directory_servers WHERE id=?');$q->execute([$id]);$row=$q->fetch();
+        if($row && !hash_equals($row['token_hash'],hash('sha256',$token))){http_response_code(403);return ['error'=>'Directory key does not match; retain the original key or contact the directory operator'];}
+        if(!$row){
+            $q=$db->prepare("SELECT COUNT(*) FROM directory_servers WHERE host=? AND id LIKE 'auto-%'");$q->execute([$ip]);
+            if((int)$q->fetchColumn()>=8){http_response_code(429);return ['error'=>'Public registration limit reached'];}
+        }
+        $status=json_encode(['players'=>$players,'capacity'=>$capacity],JSON_THROW_ON_ERROR);
+        $q=$db->prepare('INSERT INTO directory_servers(id,name,host,port,token_hash,last_seen,status_json) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name),last_seen=VALUES(last_seen),status_json=VALUES(status_json)');
+        $q->execute([$id,$name,$ip,$port,hash('sha256',$token),time(),$status]);
+        return ['ok'=>true,'server_id'=>$id];
+    } finally {$q=$db->prepare('SELECT RELEASE_LOCK(?)');$q->execute([$lock]);}
+}
+
 function announce(PDO $db,array $a): array {
     $id=text_value($a,'server_id',64);
     $token=text_value($a,'token',256);
     $q=$db->prepare('SELECT token_hash FROM directory_servers WHERE id=?'); $q->execute([$id]); $s=$q->fetch();
     if (!$s || !hash_equals($s['token_hash'],hash('sha256',$token))) { http_response_code(403); return ['error'=>'Authentication failed']; }
+    if(str_starts_with($id,'auto-')){http_response_code(403);return ['error'=>'Game reporting requires operator approval'];}
     $database=text_value($a,'database_id',32);
     if (!preg_match('/^[a-f0-9]{32}$/D',$database)) throw new InvalidArgumentException('Invalid database_id');
     $games=$a['games'] ?? null;

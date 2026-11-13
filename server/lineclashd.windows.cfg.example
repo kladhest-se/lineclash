@@ -8,3 +8,6 @@ allow_bots = 1
 require_registered = 0
 status_api = 1
 status_port = 31458
+
+# Announce to the public directory; set off for a private server.
+public_server = on

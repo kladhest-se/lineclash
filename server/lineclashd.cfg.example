@@ -17,3 +17,6 @@ garbage_system = 0
 garbage_targeting = 0
 hold_enabled = 1
 # See docs/CONFIGURATION.md for all options and deployment guidance.
+
+# Announce to the public directory; set off for a private server.
+public_server = on

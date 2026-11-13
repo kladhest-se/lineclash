@@ -81,6 +81,7 @@ int directory_parse(char *body,SavedServer *rows,int capacity) {
     }
     return count;
 }
+int directory_busy(void){return job.thread!=NULL;}
 int directory_start(const char *url,char *message,int length) {
     if(job.thread){snprintf(message,length,"Discovery already running");return 0;}
     const char *allow=SDL_getenv("LINECLASH_DIRECTORY_ALLOW_LOCAL");

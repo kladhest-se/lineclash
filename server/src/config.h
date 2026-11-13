@@ -33,6 +33,7 @@ typedef struct {
     int  num_lobbies;
     int  global_taunts;
     int  status_port;    /* HTTP JSON status API port */
+    int public_server; /* announce to the public directory by default */
     int  status_api;     /* 1=enabled, 0=disabled */
     int  debug_auth;     /* legacy diagnostic toggle; secrets are never logged */
     int  debug_ingame;   /* 1=log in-game events: specials, attacks, taunts, levels */

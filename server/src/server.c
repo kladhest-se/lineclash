@@ -2136,8 +2136,10 @@ void server_run(int port, const char *cfg_path) {
     log_info("%d lobbies available", g_server.lobby_count);
     log_info("Press Ctrl+C to stop. Type 'help' for console commands.");
     server_api_init();
+    g_cfg.port=port;server_directory_start();
 
     while (g_server.running) {
+        server_directory_tick();
         for(int al=0;al<g_server.lobby_count;al++)for(int ap=0;ap<MAX_PLAYERS;ap++)authority_tick(&g_server.lobbies[al],&g_server.lobbies[al].players[ap]);
         net_flush_all();
         server_api_poll();
@@ -2806,6 +2808,7 @@ void server_run(int port, const char *cfg_path) {
                 sock_close(lb->players[j].sock);
     }
     sock_close(g_server.listen_sock);
+    server_directory_stop();
     server_api_shutdown();
     auth_close();
     net_cleanup();

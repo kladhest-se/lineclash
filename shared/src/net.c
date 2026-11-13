@@ -132,7 +132,14 @@ sock_t net_listen(int port) {
     addr.sin_port = htons((uint16)port);
 
     if (bind(s, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        log_error("bind() failed: %d", sock_error());
+        int error=sock_error();
+#if defined(PLATFORM_WINDOWS)
+        int occupied=(error==WSAEADDRINUSE);
+#else
+        int occupied=(error==EADDRINUSE);
+#endif
+        if(occupied)log_error("TCP port %d is already in use. Stop the existing listener or select another port (--port PORT for the game server).",port);
+        else log_error("bind() failed on TCP port %d: %d",port,error);
         sock_close(s);
         return INVALID_SOCK;
     }

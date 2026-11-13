@@ -18,6 +18,9 @@ static void capture(const char *name) {
 
 int main(void) {
     SDL_setenv("SDL_VIDEODRIVER","dummy",1); SDL_setenv("SDL_AUDIODRIVER","dummy",1);
+    assert(logo_phase(0,0)==logo_phase(500,0));
+    assert(logo_phase(0,1)!=logo_phase(180,1));
+    assert(logo_phase(0,1)==logo_phase(540,1));
     assert(sdl_init()); assert(sound_init()); music_set_res_prefix("../"); music_select(16);
     MusicPlayback p;
     for(int i=0;i<500;i++) { music_tick(); music_snapshot(&p); if(p.duration>0 && p.position>1)break; SDL_Delay(5); }
@@ -51,9 +54,24 @@ int main(void) {
     c.server_count=8;c.server_cursor=0;c.server_filter=0;c.server_sort=1;
     strcpy(c.directory_message,"Found 8 public servers");
     for(int i=0;i<c.server_count;i++) {
-        SavedServer *s=&c.server_list[i];snprintf(s->name,sizeof(s->name),"Public server %d",i+1);strcpy(s->host,"game.example.org");s->port=31457+i;s->online=1;s->ping_ms=20+i*13;s->capacity=8;s->users_idle=i;s->favourite=i%2;s->last_used=100+i;
+        SavedServer *s=&c.server_list[i];snprintf(s->name,sizeof(s->name),"Public server %d",i+1);strcpy(s->host,"game.example.org");s->port=31457+i;s->discovered=1;s->online=1;s->ping_ms=20+i*13;s->capacity=8;s->users_idle=i;s->favourite=i%2;s->last_used=100+i;
     }
     sdl_render_server_list(&c);capture("lineclash-native-directory.bmp");
     c.server_filter=1;sdl_render_server_list(&c);capture("lineclash-favourites.bmp");
+    assert(controller_key(&c,SDL_CONTROLLER_BUTTON_A)==c.km.rotate_cw);
+    assert(controller_key(&c,SDL_CONTROLLER_BUTTON_Y)==c.km.hard_drop);
+#if SDL_VERSION_ATLEAST(2,0,14)
+    int virtual_pad=SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_GAMECONTROLLER,SDL_CONTROLLER_AXIS_MAX,SDL_CONTROLLER_BUTTON_MAX,0);
+    assert(virtual_pad>=0);controller_open();assert(g_controller);
+    SDL_Joystick *virtual_joystick=SDL_GameControllerGetJoystick(g_controller);
+    assert(SDL_JoystickSetVirtualButton(virtual_joystick,SDL_CONTROLLER_BUTTON_A,1)==0);
+    SDL_GameControllerUpdate();assert(SDL_GameControllerGetButton(g_controller,SDL_CONTROLLER_BUTTON_A));
+    assert(SDL_JoystickDetachVirtual(virtual_pad)==0);controller_open();assert(!g_controller);
+#endif
+    c.keymap_popup_open=1;c.keymap_capture_idx=-1;c.settings_tab=0;
+    sdl_render_server_list(&c);capture("lineclash-settings-display.bmp");
+    c.settings_tab=1;sdl_render_server_list(&c);capture("lineclash-settings-controls.bmp");
+    c.settings_tab=2;sdl_render_server_list(&c);capture("lineclash-settings-audio.bmp");
+    client_on_key(&c,41,0,0,"");assert(!c.keymap_popup_open);
     sound_shutdown(); sdl_shutdown(); return 0;
 }

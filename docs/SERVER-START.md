@@ -56,3 +56,11 @@ server shutdown cancel
 The first command schedules a shutdown in five minutes; the second cancels a pending countdown. Wait for the process to exit before replacing binaries or restoring a database. An active round cannot resume after a server restart.
 
 To restart, start the same executable with the same configuration and working directory. For a service-managed installation, stop and start the configured service rather than launching a second copy. Read configuration changes at startup; editing the file does not reload a running process. Keep writable database/log directories and avoid running the server as root.
+
+## Public discovery or a private server
+
+Servers announce themselves to `https://lineclash.kladhest.se/api/` by default. Announcements run on a background worker and retry every 60 seconds. The website lists the connection's source IP and configured game port; allow inbound TCP on that port and forward it when hosting behind NAT. Registration does not configure your firewall or router. The separate HTTP status listener is not needed for registration.
+
+For a private server, set `public_server = off` and restart. Clients can add it under **Saved servers**. The old public entry expires after the directory TTL, normally three minutes.
+
+A private registration key is stored beside the SQLite database as `DATABASE.directory-key`. Keep it with protected backups and do not publish it. Directory downtime does not stop the game server. Self-registration provides discovery; approved operator credentials are still required by the separate statistics uploader. Registration uses the HTTP peer's public address, ignores client-supplied hosts and forwarded-address headers, and limits each source address to eight registrations.

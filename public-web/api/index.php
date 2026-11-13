@@ -11,7 +11,7 @@ try {
         if(strlen($body)>2097152) { http_response_code(413); echo '{"error":"Payload too large"}'; exit; }
         $a=json_decode($body,true,32,JSON_THROW_ON_ERROR);
         if(!is_array($a)) throw new InvalidArgumentException('Expected object');
-        $result=announce($db,$a);
+        $result=($a['action']??'')==='public-register'?public_register($db,$a):announce($db,$a);
     } elseif($_SERVER['REQUEST_METHOD']==='GET') {
         header('Access-Control-Allow-Origin: *');
         $action=$_GET['action']??'servers';

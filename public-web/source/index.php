@@ -26,7 +26,7 @@ cp server/lineclashd.cfg.example ./lineclashd.cfg
 ./server/lineclashd --config ./lineclashd.cfg</pre>
 </div>
 <div id="tab-server-linux" class="tab-panel" role="tabpanel">
-<pre class="code-block">sudo zypper install -y gcc make git sqlite3-devel
+<pre class="code-block">sudo zypper install -y gcc make git sqlite3-devel libcurl-devel
 
 git clone https://github.com/kladhest-se/lineclash.git
 cd lineclash

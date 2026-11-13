@@ -56,7 +56,7 @@ def source_files(root=ROOT):
             if (set(rel.parts) & {'__pycache__', '.git', 'build', 'dist', 'outputs'} or
                 any(part.endswith('.dSYM') for part in rel.parts) or
                 path.name in GENERATED_NAMES or path.suffix in {'.o', '.ao', '.d', '.exe', '.pyc'} or
-                path.name in {'config.php', 'config.inc.php', '.env'} or path.name.endswith('.local.php') or path.suffix in {'.sqlite3', '.sqlite', '.db'} or path.name.endswith(('.health.json','.sqlite3-wal','.sqlite3-shm','.sqlite-wal','.sqlite-shm')) or path.name == '.DS_Store' or path.name.startswith('._')):
+                path.name in {'config.php', 'config.inc.php', '.env'} or path.name.endswith('.local.php') or path.suffix in {'.sqlite3', '.sqlite', '.db'} or path.name.endswith(('.directory-key','.health.json','.sqlite3-wal','.sqlite3-shm','.sqlite-wal','.sqlite-shm')) or path.name == '.DS_Store' or path.name.startswith('._')):
                 continue
             require(not path.is_symlink(), 'Symlinked source input: ' + str(rel))
             if path.is_file():

@@ -125,56 +125,6 @@ else
     warn "No signing identity — users will see Gatekeeper warning on first launch."
 fi
 
-# ── lineclashd.app ────────────────────────────────────────────
-header "Creating lineclashd.app (server)"
-SRV_BUNDLE="$DIST_DIR/lineclashd.app"
-rm -rf "$SRV_BUNDLE"
-mkdir -p "$SRV_BUNDLE/Contents/MacOS" "$SRV_BUNDLE/Contents/Resources"
-
-cat > "$SRV_BUNDLE/Contents/MacOS/lineclashd-launch" << 'LAUNCH'
-#!/bin/bash
-DIR="$(cd "$(dirname "$0")" && pwd)"
-exec "$DIR/lineclashd" "$@"
-LAUNCH
-chmod +x "$SRV_BUNDLE/Contents/MacOS/lineclashd-launch"
-
-cp "$SERVER_DIR/lineclashd" "$SRV_BUNDLE/Contents/MacOS/"
-chmod +x "$SRV_BUNDLE/Contents/MacOS/lineclashd"
-ok "lineclashd bundled"
-
-[[ -f "$SERVER_DIR/lineclashd-tool" ]] && {
-    cp "$SERVER_DIR/lineclashd-tool" "$SRV_BUNDLE/Contents/MacOS/"
-    chmod +x "$SRV_BUNDLE/Contents/MacOS/lineclashd-tool"
-    ok "lineclashd-tool bundled"
-}
-
-cat > "$SRV_BUNDLE/Contents/Info.plist" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-    <key>CFBundleDisplayName</key>    <string>LineClash Server</string>
-    <key>CFBundleExecutable</key>     <string>lineclashd-launch</string>
-    <key>CFBundleIdentifier</key>     <string>com.lineclash.server</string>
-    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-    <key>CFBundleName</key>           <string>lineclashd</string>
-    <key>CFBundlePackageType</key>    <string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>$VER_NUM</string>
-    <key>CFBundleVersion</key>        <string>$VERSION</string>
-    <key>LSMinimumSystemVersion</key> <string>10.13</string>
-    <key>LSUIElement</key>            <true/>
-    <key>NSHumanReadableCopyright</key><string>Copyright © 2024 frossmant</string>
-</dict></plist>
-EOF
-ok "lineclashd.app created"
-
-if [[ -n "$SIGN_IDENTITY" ]]; then
-    for binary in "$SRV_BUNDLE/Contents/MacOS/lineclashd" "$SRV_BUNDLE/Contents/MacOS/lineclashd-tool"; do
-        [[ ! -f "$binary" ]] || codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$binary"
-    done
-    codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$SRV_BUNDLE"
-    codesign --verify --deep --strict "$SRV_BUNDLE"
-fi
-
 # ── DMG ────────────────────────────────────────────────────────
 header "Packaging LineClash-$VERSION-macos-$MAC_ARCH.dmg"
 DMG_OUT="$DIST_DIR/LineClash-$VERSION-macos-$MAC_ARCH.dmg"
@@ -182,7 +132,8 @@ ST="$DIST_DIR/macos-staging"
 rm -rf "$ST"; mkdir -p "$ST/LineClash"
 
 cp -r "$BUNDLE"     "$ST/LineClash/LineClash.app"
-cp -r "$SRV_BUNDLE" "$ST/LineClash/lineclashd.app"
+cp "$SERVER_DIR/lineclashd" "$ST/LineClash/lineclashd"
+chmod +x "$ST/LineClash/lineclashd"
 
 [[ -f "$CLI_DIR/lineclash-cli" ]] && {
     cp "$CLI_DIR/lineclash-cli" "$ST/LineClash/lineclash-cli"
@@ -206,8 +157,7 @@ LineClash v$VERSION — Multiplayer Falling Blocks (macOS $MAC_ARCH)
 CLIENT:  Double-click LineClash.app — or drag to Applications.
          First launch: right-click → Open to bypass Gatekeeper.
 
-SERVER:  Double-click lineclashd.app to start the server (port 31457).
-         Or run from Terminal: ./lineclashd.app/Contents/MacOS/lineclashd
+SERVER:  Run from Terminal: ./lineclashd (port 31457).
          Admin tool: ./lineclashd-tool --help
 
 CLI:     ./lineclash-cli <server>
@@ -230,7 +180,7 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
     codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG_OUT"
     codesign --verify --strict "$DMG_OUT"
 fi
-rm -rf "$ST" "$SRV_BUNDLE" "$BUNDLE"
+rm -rf "$ST" "$BUNDLE"
 hr
 ok "macOS packaging complete — dist/"
 ls -lh "$DIST_DIR"/LineClash-"$VERSION"-macos-"$MAC_ARCH"* 2>/dev/null | sed 's/^/    /'

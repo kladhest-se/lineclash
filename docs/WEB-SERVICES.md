@@ -107,3 +107,11 @@ The footer contains only Credits, Privacy, API and GitHub. `/credits/` lists sou
 `/documentation/` is limited to playing, game-server configuration, discovery and replay usage. Build and development guides are on `/source/`; both API references are on `/api/docs/`. Website deployment, web-service operations, release workflows, verification and release notes stay in repository documentation, rather than being published as website chapters. Soundtrack attribution is on Credits.
 
 The documentation overview links to focused guides for gameplay, clients and controls, and server operations. These three guides, the Source guide and the API guide are generated from selected canonical Markdown content into `public-web/inc/*-documentation.html`. Install `scripts/requirements-docs.txt`, then run `python3 scripts/build_web_docs.py`; `--check` detects stale output. No Markdown package is needed on the web host. Repository-only operator and development material remains intact.
+
+## Native default registration
+
+Deploy the updated `public-web` API before expecting new native servers to appear. POST `action=public-register` accepts a server-generated 64-character random token, name, game port, players and capacity. The API derives an `auto-` ID from its observed source address and port; subsequent announcements require the same token. Only token hashes are stored. Automatic directory identities cannot use the trusted game-results upload endpoint. No new SQL migration is needed for this endpoint.
+
+Registration rejects non-public peer addresses by default. A disposable local test config may set `allow_local_registration => true`; keep that disabled on public hosts. Do not trust X-Forwarded-For from arbitrary requests. A reverse proxy requires deliberate trusted client-address configuration on Apache before registration can record the real game host address.
+
+The native worker uses libcurl on macOS/Linux and WinHTTP on Windows. Linux server builds therefore also need libcurl development headers. HTTP failures are logged and retried without blocking gameplay. Protect `*.directory-key` files; source and website packaging excludes them.

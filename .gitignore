@@ -62,3 +62,5 @@ tests/test_discovery
 
 # Native Windows executable outputs
 *.exe
+
+*.directory-key

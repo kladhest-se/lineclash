@@ -2,7 +2,7 @@
 
 ## Finding a server
 
-Select **Find servers** in the native server browser, or copy an address from the website’s Servers page. Add the host and port, enter your nickname and password, and connect. Credentials are local to each server; do not assume the same nickname is the same person on different servers.
+Open **Public servers** in the native server browser, or copy an address from the website’s Servers page. Add the host and port, enter your nickname and password, and connect. Credentials are local to each server; do not assume the same nickname is the same person on different servers.
 
 Use All, Favourites, Recent, Open slots or Ping ≤100 ms to narrow the native list. You can sort by latency or recent play. Unknown latency sorts last; an unknown capacity is not a promise of free slots. Favourite servers are saved locally, and recent entries are recorded after a successful connection.
 

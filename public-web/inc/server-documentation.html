@@ -31,7 +31,11 @@ make -j4 server
 server shutdown cancel
 </code></pre>
 <p>The first command schedules a shutdown in five minutes; the second cancels a pending countdown. Wait for the process to exit before replacing binaries or restoring a database. An active round cannot resume after a server restart.</p>
-<p>To restart, start the same executable with the same configuration and working directory. For a service-managed installation, stop and start the configured service rather than launching a second copy. Read configuration changes at startup; editing the file does not reload a running process. Keep writable database/log directories and avoid running the server as root.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>
+<p>To restart, start the same executable with the same configuration and working directory. For a service-managed installation, stop and start the configured service rather than launching a second copy. Read configuration changes at startup; editing the file does not reload a running process. Keep writable database/log directories and avoid running the server as root.</p>
+<h3 id="server-start-public-discovery-or-a-private-server">Public discovery or a private server</h3>
+<p>Servers announce themselves to <code>https://lineclash.example.org/api/</code> by default. Announcements run on a background worker and retry every 60 seconds. The website lists the connection's source IP and configured game port; allow inbound TCP on that port and forward it when hosting behind NAT. Registration does not configure your firewall or router. The separate HTTP status listener is not needed for registration.</p>
+<p>For a private server, set <code>public_server = off</code> and restart. Clients can add it under <strong>Saved servers</strong>. The old public entry expires after the directory TTL, normally three minutes.</p>
+<p>A private registration key is stored beside the SQLite database as <code>DATABASE.directory-key</code>. Keep it with protected backups and do not publish it. Directory downtime does not stop the game server. Self-registration provides discovery; approved operator credentials are still required by the separate statistics uploader. Registration uses the HTTP peer's public address, ignores client-supplied hosts and forwarded-address headers, and limits each source address to eight registrations.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>
 <section class="documentation-chapter" id="configuration"><h2 id="configuration-configure-a-game-server">Configure a game server</h2>
 <p>Settings are read at startup. Restart after editing the configuration. Room settings saved in SQLite can override initial defaults; use room controls to update an existing room.</p>
 <h3 id="configuration-file-format-and-options">File format and options</h3>
@@ -45,6 +49,11 @@ server shutdown cancel
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>public_server</td>
+<td>on</td>
+<td>Announce this server to the official public directory; off keeps it private</td>
+</tr>
 <tr>
 <td>server_name</td>
 <td>LineClash</td>

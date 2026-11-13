@@ -3,10 +3,10 @@
 <section class="documentation-chapter" id="clients"><h2 id="clients-run-and-configure-the-clients">Run and configure the clients</h2>
 <h3 id="clients-desktop-client">Desktop client</h3>
 <p>Download a package for your platform from <strong>Get the game</strong> on the home page and extract the complete archive. Keep the executable with its bundled libraries and music directory. From an extracted native package, run <code>bin/lineclash</code> on macOS or Linux, or <code>bin/lineclash.exe</code> on Windows. From a source build, run <code>./clients/gui/lineclash</code> (<code>clients/gui/lineclash.exe</code> on Windows). Build instructions are on <a href="../../source/#development">Source</a>.</p>
-<p>In the main menu, select <strong>Find servers</strong>, choose a saved server, or add a host and port manually. The default game port is <strong>31457</strong>. For a server on this computer, use <code>localhost</code>. Enter your nickname and password, then connect. New names register when the server allows registration; existing names require their original password. Accounts belong to each server.</p>
+<p>In the main menu, <strong>Public servers</strong> loads the official directory from <code>https://lineclash.example.org/api/</code>. <strong>Saved servers</strong> contains your locally stored endpoints and offers Add, Edit and Remove controls. Use Saved servers for private hosts and ports. You can save or edit an endpoint while it is offline; account credentials are optional until connecting. Public entries cannot be renamed or removed from the directory by a client. Favourite a public endpoint to keep a local copy. The default game port is <strong>31457</strong>. For a server on this computer, use <code>localhost</code>. Enter your nickname and password, then connect. New names register when the server allows registration; existing names require their original password. Accounts belong to each server.</p>
 <p>Select a room, choose a team if wanted, and ready up. The room host controls rules, bots and starting the round. Leave the room to return to the lobby; disconnect before choosing another server. Use <strong>Quit</strong> in the main menu or close the window to stop the desktop client.</p>
 <h3 id="clients-desktop-preferences-and-saved-servers">Desktop preferences and saved servers</h3>
-<p>Use <strong>Keymap</strong> to change gameplay bindings and display preferences. Music and SFX controls set their respective volume and enabled state. The menu plays the title theme; during a round, <strong>Music Player</strong> provides track selection, pause, seek and shuffle. Track attribution is available in the player, About and the website Credits page.</p>
+<p>Use <strong>Settings → Controls</strong> to change gameplay bindings and display preferences. Music and SFX controls set their respective volume and enabled state. The menu plays the title theme; during a round, <strong>Music Player</strong> provides track selection, pause, seek and shuffle. Track attribution is available in the player, About and the website Credits page.</p>
 <p>Preferences and saved server entries are stored locally:</p>
 <table>
 <thead>
@@ -97,13 +97,54 @@
 </tr>
 </tbody>
 </table>
-<p>Change gameplay bindings in <strong>Keymap</strong>. The room host starts rounds from the room controls. Spectators can use arrows to switch the watched player.</p>
+<p>Change gameplay bindings in <strong>Settings → Controls</strong>. The room host starts rounds from the room controls. Spectators can use arrows to switch the watched player.</p>
 <h3 id="controls-make-the-game-easier-to-read">Make the game easier to read</h3>
-<p>Press <strong>F2</strong> to open or close Keymap. It includes display size, piece-pattern and high-contrast controls. These preferences are saved locally.</p>
+<p>Press <strong>F2</strong> to open or close Settings. Its Display tab includes window size, piece patterns and high contrast; Audio contains music and effects preferences. These preferences are saved locally.</p>
 <ul>
 <li><strong>F6</strong> cycles 75%, 100%, 125% and 150% window sizes, bounded by the available display. You can also resize the window.</li>
 <li><strong>F7</strong> toggles distinct piece markers, so piece types can be identified without relying on color alone.</li>
 <li><strong>F4</strong> toggles higher-contrast text.</li>
 </ul>
-<p>F2, F4, F6 and F7 are reserved for those options and cannot be assigned to gameplay actions. Website controls also have visible keyboard-focus outlines, and the background respects reduced-motion preferences.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>
+<p>F2, F4, F6 and F7 are reserved for those options and cannot be assigned to gameplay actions. Website controls also have visible keyboard-focus outlines, and the background respects reduced-motion preferences.</p>
+<h3 id="controls-xbox-and-playstation-controllers">Xbox and PlayStation controllers</h3>
+<p>The desktop client uses SDL's controller mappings for supported Xbox and PlayStation pads over USB or Bluetooth. Enable <strong>Controller input</strong> in Settings → Display. Support depends on the operating system, connection and SDL mapping for the specific model. The terminal client does not use controllers.</p>
+<table>
+<thead>
+<tr>
+<th>Xbox / PlayStation</th>
+<th>In-game action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D-pad left/right or left stick</td>
+<td>Move</td>
+</tr>
+<tr>
+<td>D-pad down or left stick down</td>
+<td>Soft drop</td>
+</tr>
+<tr>
+<td>A / Cross</td>
+<td>Rotate clockwise</td>
+</tr>
+<tr>
+<td>B / Circle</td>
+<td>Rotate counterclockwise</td>
+</tr>
+<tr>
+<td>X / Square or LB / L1</td>
+<td>Hold</td>
+</tr>
+<tr>
+<td>Y / Triangle or D-pad up</td>
+<td>Hard drop</td>
+</tr>
+<tr>
+<td>Start / Options</td>
+<td>Pause, subject to room permissions</td>
+</tr>
+</tbody>
+</table>
+<p>Movement repeats while held. A stick dead zone prevents slight drift from moving pieces. Pads may connect or disconnect while the game runs. Input is ignored when the game loses focus or a dialog is open. Controllers follow the configured gameplay key bindings; keyboard and mouse remain available for menus, chat and special targeting. Full controller-only menu navigation is not provided.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>
 </div></div>

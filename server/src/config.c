@@ -69,6 +69,7 @@ static void cfg_defaults(ServerConfig *c) {
     c->max_players_per_room= MAX_PLAYERS;
     c->num_lobbies         = 3;
     c->global_taunts       = 1;
+    c->public_server=1;
     c->status_port         = 31458;
     c->status_api          = 1;
     c->debug_auth          = 0;
@@ -144,6 +145,8 @@ int config_load(ServerConfig *cfg, const char *path) {
             strncpy(cfg->db_file, val, CFG_MAX_PATH-1);
         else if (!strcmp(key, "server_name"))
             strncpy(cfg->server_name, val, sizeof(cfg->server_name)-1);
+        else if (!strcmp(key,"public_server"))
+            cfg->public_server=(!strcmp(val,"1")||!strcasecmp(val,"on")||!strcasecmp(val,"yes"));
         else if (!strcmp(key, "status_port"))
             cfg->status_port = atoi(val);
         else if (!strcmp(key, "status_api"))
@@ -302,6 +305,7 @@ int config_write_default(const char *path) {
         "# status_port       — TCP port for the API endpoint\n"
         "status_api = on\n"
         "status_port = 31458\n"
+        "public_server = on\n"
         "\n"
         "# AI Bots — allow hosts/admins to add AI bots to rooms\n"
         "# To change at runtime: set allow_bots in this file and restart.\n"

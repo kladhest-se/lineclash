@@ -62,12 +62,22 @@ ifeq ($(PLATFORM),amiga)
     ADMIN       = lineclashd-tool
 endif
 
+ifneq ($(filter Windows,$(UNAME)),)
+DIRECTORY_LIBS = -lwinhttp -lbcrypt
+else
+DIRECTORY_LIBS = -lcurl -lpthread
+endif
+ifeq ($(PLATFORM),win32)
+DIRECTORY_LIBS = -lwinhttp -lbcrypt
+endif
+
 SHARED = ../shared/src
 INC    = -I../shared/include -Isrc
 
 # Server sources (own files)
 SERVER_OWN_SRCS = src/lineclashd.c \
                   src/authority.c \
+                  src/directory.c \
                   src/ai.c \
                   src/server.c      \
                   src/server_cmd.c  \
@@ -106,7 +116,7 @@ build:
 	mkdir -p build
 
 $(SERVER): $(SERVER_OBJS)
-	$(CC) $(SERVER_OBJS) -o $@ $(LDFLAGS) $(SQLITE_LIBS)
+	$(CC) $(SERVER_OBJS) -o $@ $(LDFLAGS) $(SQLITE_LIBS) $(DIRECTORY_LIBS)
 
 $(ADMIN): $(ADMIN_OBJS)
 	$(CC) $(ADMIN_OBJS) -o $@ $(LDFLAGS) $(SQLITE_LIBS)

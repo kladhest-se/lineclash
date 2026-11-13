@@ -9,6 +9,9 @@
 #  include <shellapi.h>  /* ShellExecuteA */
 #endif
 
+static SDL_GameController *g_controller=NULL;
+static Uint32 g_pad_buttons=0,g_pad_repeat[3]={0};
+static int g_pad_context=-1;
 static int g_patterns=0,g_high_contrast=0,g_ui_scale=100;
 static SDL_Window   *g_win  = NULL;
 static SDL_Renderer *g_rend = NULL;
@@ -120,6 +123,13 @@ static void surface(int x,int y,int w,int h,uint32_t fill,uint32_t border) {
     round_fill(x,y+2,w,h,9,0x080b14ff);
     round_fill(x,y,w,h,9,border);round_fill(x+1,y+1,w-2,h-2,8,fill);
 }
+/* One bright brick travels around the logo only while work is pending. */
+static int logo_phase(Uint32 tick,int busy){return busy?(int)((tick/180)%3):1;}
+static void brick_logo(int x,int y,int size,int gap,int busy) {
+    int phase=logo_phase(SDL_GetTicks(),busy);
+    const int dx[]={0,1,1},dy[]={0,0,1};
+    for(int i=0;i<3;i++)round_fill(x+dx[i]*(size+gap),y+dy[i]*(size+gap),size,size,size/4,i==phase?0x8bedceff:0x285e56ff);
+}
 static unsigned int text_next(const char **text) {
     const unsigned char *s=(const unsigned char*)*text;unsigned int c=*s++;
     if(c>=0xc2 && c<=0xdf && (*s&0xc0)==0x80){c=((c&31)<<6)|(*s++&63);}
@@ -137,8 +147,11 @@ static void draw_glyph(float x,int y,unsigned int cp,uint32_t color,int sc) {
     if(g_ui_font && m[2]>0 && m[3]>0) {
         color=theme_color(color);
         SDL_SetTextureColorMod(g_ui_font,color>>24,(color>>16)&255,(color>>8)&255);SDL_SetTextureAlphaMod(g_ui_font,color&255);
-        SDL_Rect from={m[0],m[1],m[2],m[3]},to={(int)lroundf(x+m[4]*sc/4.0f),y+12*sc+(int)lroundf(m[5]*sc/4.0f),(m[2]*sc+3)/4,(m[3]*sc+3)/4};
-        SDL_RenderCopy(g_rend,g_ui_font,&from,&to);
+        SDL_Rect from={m[0],m[1],m[2],m[3]};
+        /* Preserve fractional glyph bearings and dimensions: rounding every
+         * glyph separately stretches strokes and makes spacing uneven. */
+        SDL_FRect to={x+m[4]*sc/4.0f,y+12*sc+m[5]*sc/4.0f,m[2]*sc/4.0f,m[3]*sc/4.0f};
+        SDL_RenderCopyF(g_rend,g_ui_font,&from,&to);
     } else if(!g_ui_font) {
         int ch=cp<256?(int)cp:'?';
         for(int row=0;row<FH;row++)for(int bit=0;bit<FW;bit++)if(FONT[ch][row]&(0x40>>bit))fr((int)x+bit*sc,y+row*sc,sc,sc,color);
@@ -165,7 +178,12 @@ static int ui_font_init(void) {
         for(int n=0;n<UI_FONT_RLE[i] && at<UI_ATLAS_W*UI_ATLAS_H;n++)pixels[at++]=pixel;
     }
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"1");g_ui_font=SDL_CreateTextureFromSurface(g_rend,image);SDL_FreeSurface(image);
-    if(g_ui_font)SDL_SetTextureBlendMode(g_ui_font,SDL_BLENDMODE_BLEND);
+    if(g_ui_font){
+        SDL_SetTextureBlendMode(g_ui_font,SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2,0,12)
+        SDL_SetTextureScaleMode(g_ui_font,SDL_ScaleModeLinear);
+#endif
+    }
     return g_ui_font!=NULL;
 }
 
@@ -665,7 +683,7 @@ static void render_keymap_popup(ClientCtx *c, int saved_click) {
     };
     const int NKEYS = 11;
     const int ROW_H = 30, ROW_PAD = 4;
-    int pw=460, ph=30+NKEYS*(ROW_H+ROW_PAD)+112;
+    int pw=500, ph=560;
     int px=(WIN_W-pw)/2, py=(WIN_H-ph)/2;
     int capturing = (c->keymap_capture_idx >= 0);
 
@@ -684,11 +702,15 @@ static void render_keymap_popup(ClientCtx *c, int saved_click) {
     g_popup_blocked = 0;
     g_mouse.clicked = saved_click;
 
-    fr(px,py,pw,ph,0x10102aff); dr(px,py,pw,ph,COL_PIECE_I);
-    dtc(px+pw/2,py+10,"Controls & display",COL_LTGRAY,2);
+    surface(px,py,pw,ph,0x181f31ff,0x55637fff);
+    dt(px+20,py+16,"Settings",COL_WHITE,2);
+    dt(px+20,py+47,"Preferences for this client",COL_GRAY,1);
+    const char *tabs[]={"Display","Controls","Audio"};
+    for(int tab=0;tab<3;tab++)if(dbtn(px+20+tab*156,py+76,148,30,tabs[tab],c->settings_tab==tab?BS_ACTIVE:BS_NORMAL)&&!capturing)c->settings_tab=tab;
+    if(c->settings_tab==1) {
 
     for(int i=0;i<NKEYS;i++){
-        int bx=px+12, by=py+28+i*(ROW_H+ROW_PAD);
+        int bx=px+20, by=py+120+i*(ROW_H+ROW_PAD);
         int bw=pw-24, bh=ROW_H;
         int is_cap=(c->keymap_capture_idx==i);
         int hv=(!capturing||is_cap)&&pt_in(g_mouse.x,g_mouse.y,bx,by,bw,bh);
@@ -708,11 +730,39 @@ static void render_keymap_popup(ClientCtx *c, int saved_click) {
             c->keymap_capture_idx=i; g_mouse.clicked=0;
         }
     }
-    {int y=py+30+NKEYS*(ROW_H+ROW_PAD)+8,w=(pw-32)/3;char label[64];
-     snprintf(label,sizeof(label),"Scale %d%%",c->ui_scale?c->ui_scale:100);
-     if(dbtn(px+12,y,w,30,label,BS_NORMAL))client_cycle_ui_scale(c);
-     if(dbtn(px+16+w,y,w,30,c->piece_patterns?"Patterns: on":"Patterns: off",BS_NORMAL)){c->piece_patterns=!c->piece_patterns;sdl_set_ui_options(c->ui_scale,c->piece_patterns,c->high_contrast);client_save_settings(c);}
-     if(dbtn(px+20+w*2,y,w,30,c->high_contrast?"Contrast: on":"Contrast: off",BS_NORMAL)){c->high_contrast=!c->high_contrast;sdl_set_ui_options(c->ui_scale,c->piece_patterns,c->high_contrast);client_save_settings(c);}}
+    }
+    if(c->settings_tab==0){
+        char label[64];
+        dt(px+20,py+132,"Window size",COL_WHITE,1);
+        snprintf(label,sizeof(label),"%d%%",c->ui_scale?c->ui_scale:100);
+        if(dbtn(px+310,py+122,170,34,label,BS_NORMAL))client_cycle_ui_scale(c);
+        dt(px+20,py+190,"Piece patterns",COL_WHITE,1);
+        if(dtog(px+310,py+180,170,34,"Off","On",c->piece_patterns)){c->piece_patterns=!c->piece_patterns;sdl_set_ui_options(c->ui_scale,c->piece_patterns,c->high_contrast);client_save_settings(c);}
+        dt(px+20,py+248,"High contrast text",COL_WHITE,1);
+        if(dtog(px+310,py+238,170,34,"Off","On",c->high_contrast)){c->high_contrast=!c->high_contrast;sdl_set_ui_options(c->ui_scale,c->piece_patterns,c->high_contrast);client_save_settings(c);}
+        dt(px+20,py+306,"Controller input",COL_WHITE,1);
+        if(dtog(px+310,py+296,170,34,"Off","On",c->controller_enabled)){c->controller_enabled=!c->controller_enabled;client_save_settings(c);}
+        dt(px+20,py+358,g_controller?SDL_GameControllerName(g_controller):"Connect an Xbox or PlayStation controller.",COL_GRAY,1);
+        dt(px+20,py+390,"A / Cross: rotate   B / Circle: reverse",COL_GRAY,1);
+        dt(px+20,py+416,"X / Square: hold   Y / Triangle: hard drop",COL_GRAY,1);
+
+    }
+    if(c->settings_tab==2){
+        dt(px+20,py+132,"Music",COL_WHITE,1);
+        if(dtog(px+310,py+122,170,34,"Off","On",music_get_enabled())){music_set_enabled(!music_get_enabled());client_save_settings(c);}
+        dt(px+20,py+190,"Sound effects",COL_WHITE,1);
+        if(dtog(px+310,py+180,170,34,"Off","On",c->sound_enabled)){c->sound_enabled=!c->sound_enabled;client_save_settings(c);}
+        for(int audio=0;audio<2;audio++){
+            int y=py+248+audio*58;float value=audio?sound_get_sfx_volume():music_get_volume();char label[24];
+            dt(px+20,y+10,audio?"Effects volume":"Music volume",COL_WHITE,1);
+            snprintf(label,sizeof(label),"%d%%",(int)lroundf(value*100));dtc(px+394,y+10,label,COL_LTGRAY,1);
+            int change=0;
+            if(dbtn(px+310,y,42,34,"-",BS_NORMAL))change=-1;
+            if(dbtn(px+438,y,42,34,"+",BS_NORMAL))change=1;
+            if(change){value+=change*.1f;if(value<0)value=0;if(value>1)value=1;if(audio)sound_set_sfx_volume(value);else music_set_volume(value);client_save_settings(c);}
+        }
+        dt(px+20,py+392,"Music selection is available during a game.",COL_GRAY,1);
+    }
     if(dbtn(px+12,py+ph-44,pw-24,32,"Close",BS_NORMAL)){
         c->keymap_popup_open=0; c->keymap_capture_idx=-1;
     }
@@ -846,95 +896,44 @@ static void render_about_popup(ClientCtx *c, int saved_click) {
     g_popup_blocked=0;
     g_mouse.clicked=saved_click;
 
-    fr(px,py,pw,ph,0x10102aff);
-    fr(px,py,pw,30,0x1a1a40ff);
-    dr(px,py,pw,ph,COL_PIECE_I);
-    {char hdr[32]; snprintf(hdr,sizeof(hdr),"LineClash v%s",TETRINETZ_VERSION);
-     dtc(px+pw/2,py+9,hdr,COL_PIECE_I,1);}
-
-    int ty=py+42;
-    dt(px+22,ty,"A multiplayer falling blocks clone in the style of LineClash.",COL_LTGRAY,1); ty+=16;
-    dt(px+22,ty,"Stack blocks, clear lines, and send specials to your opponents.",0x7070a0ff,1); ty+=24;
-    dt(px+22,ty,"Developer  :",0x5050a0ff,1);
-    dt(px+130,ty,"Tommy Frössman  (frossmant / styrbjorn)",COL_LTGRAY,1); ty+=16;
-    dt(px+22,ty,"License    :",0x5050a0ff,1);
-    /* License link — clickable */
-    {const char *lic="GNU General Public License v3 (GPLv3)";
-     int lw=tw(lic,1);
-     int lhov=pt_in(g_mouse.x,g_mouse.y,px+130,ty-2,lw,FH+4);
-     uint32_t lcol=lhov?0xffffffff:0x70c070ff;
-     dt(px+130,ty,lic,lcol,1);
-     fr(px+130,ty+FH+1,lw,1,lcol);
-     if(lhov&&g_mouse.clicked){ c->license_popup_open=1; g_mouse.clicked=0; }
-    } ty+=24;
-    /* Source code link */
-    {const char *url="https://github.com/kladhest-se/lineclash";
-     int uw=tw(url,1);
-     int uhov=pt_in(g_mouse.x,g_mouse.y,px+130,ty-2,uw,FH+4);
-     uint32_t ucol=uhov?0xffffffff:COL_OPEN_GREEN;
-     dt(px+22,ty,"Source code:",0x5050a0ff,1);
-     dt(px+130,ty,url,ucol,1);
-     fr(px+130,ty+FH+1,uw,1,ucol);
-     if(uhov&&g_mouse.clicked){
-#if defined(PLATFORM_WINDOWS)
-         ShellExecuteA(NULL,"open",url,NULL,NULL,SW_SHOWNORMAL);
-#elif defined(SDL_OpenURL)
-         SDL_OpenURL(url);
-#elif defined(__APPLE__)
-         {char cmd[256];snprintf(cmd,sizeof(cmd),"open \"%s\"",url);system(cmd);}
-#else
-         {char cmd[256];snprintf(cmd,sizeof(cmd),"xdg-open \"%s\"",url);system(cmd);}
-#endif
-         g_mouse.clicked=0;
-     }
-     ty+=16;}
-    /* Issues link */
-    {const char *iurl="https://github.com/kladhest-se/lineclash/issues";
-     int iw=tw(iurl,1);
-     int ihov=pt_in(g_mouse.x,g_mouse.y,px+130,ty-2,iw,FH+4);
-     uint32_t icol=ihov?0xffffffff:COL_OPEN_GREEN;
-     dt(px+22,ty,"Issues     :",0x5050a0ff,1);
-     dt(px+130,ty,iurl,icol,1);
-     fr(px+130,ty+FH+1,iw,1,icol);
-     if(ihov&&g_mouse.clicked){
-#if defined(PLATFORM_WINDOWS)
-         ShellExecuteA(NULL,"open",iurl,NULL,NULL,SW_SHOWNORMAL);
-#elif defined(SDL_OpenURL)
-         SDL_OpenURL(iurl);
-#elif defined(__APPLE__)
-         {char cmd[256];snprintf(cmd,sizeof(cmd),"open \"%s\"",iurl);system(cmd);}
-#else
-         {char cmd[256];snprintf(cmd,sizeof(cmd),"xdg-open \"%s\"",iurl);system(cmd);}
-#endif
-         g_mouse.clicked=0;
-     }
-     ty+=24;}
-    dt(px+22,ty,"Controls:",0x5050a0ff,1); ty+=15;
-    dt(px+32,ty,"Arrow keys = move / rotate       Space = hard drop",0x6060a0ff,1); ty+=13;
-    dt(px+32,ty,"C / Shift = hold piece           Z = rotate CCW",0x6060a0ff,1); ty+=13;
-    dt(px+32,ty,"1 = send special to self         2-8 = send to opponents",0x6060a0ff,1); ty+=13;
-    dt(px+32,ty,"Tab = open chat                  R = ready   Esc = leave room",0x6060a0ff,1);
-    ty+=26; dt(px+22,ty,"SOUNDTRACK CREDITS / OpenGameArt.org",COL_PIECE_I,1);
-    int pages=(music_track_count()+5)/6;
-    if(c->about_music_page<0)c->about_music_page=0; if(c->about_music_page>=pages)c->about_music_page=pages-1;
-    {char page[24]; snprintf(page,sizeof(page),"%d/%d",c->about_music_page+1,pages); dt(px+420,ty,page,COL_GRAY,1);}
-    if(dbtn(px+466,ty-5,52,22,"Prev",c->about_music_page?BS_NORMAL:BS_DISABLED)) c->about_music_page--;
-    if(dbtn(px+526,ty-5,64,22,"Next",c->about_music_page+1<pages?BS_NORMAL:BS_DISABLED)) c->about_music_page++;
-    ty+=21;
-    for(int row=0;row<6;row++) {
-        int mi=c->about_music_page*6+row;
-        if(mi>=music_track_count()) { ty+=18; continue; }
-        const MusicTrack *track=music_track(mi); char credit[180];
-        snprintf(credit,sizeof(credit),"%s / %s / %s",track->title,track->artist,track->license);
-        dt(px+22,ty,credit,COL_LTGRAY,1);
-        if(g_mouse.clicked && pt_in(g_mouse.x,g_mouse.y,px+22,ty,pw-44,16)) { music_link(track->source_url); g_mouse.clicked=0; }
-        ty+=18;
+    surface(px,py,pw,ph,0x111827ff,0x42516bff);
+    dtc(px+pw/2,py+20,"LineClash",COL_WHITE,2);
+    {char version[64];snprintf(version,sizeof(version),"v%s  /  CREDITS",TETRINETZ_VERSION);dtc(px+pw/2,py+54,version,0xbba5f4ff,1);}
+    Uint32 now=SDL_GetTicks();
+    if(c->credits_tick && !c->credits_paused && !c->license_popup_open){Uint32 elapsed=now-c->credits_tick;if(elapsed>100)elapsed=100;c->credits_offset+=elapsed*.026f;}
+    c->credits_tick=now;
+    SDL_Rect clip={px+20,py+86,pw-40,ph-158};SDL_RenderSetClipRect(g_rend,&clip);
+    int cy=py+115-(int)c->credits_offset,center=px+pw/2;
+    dtc(center,cy,"CREATED BY",0xbba5f4ff,1);cy+=30;
+    dtc(center,cy,"Tommy Frössman",COL_WHITE,2);cy+=42;
+    dtc(center,cy,"frossmant / styrbjorn",COL_GRAY,1);cy+=60;
+    dtc(center,cy,"Stack blocks. Clear lines. Challenge your friends.",COL_LTGRAY,1);cy+=64;
+    dtc(center,cy,"SOUNDTRACK",0xbba5f4ff,1);cy+=40;
+    for(int i=0;i<music_track_count();i++){
+        const MusicTrack *track=music_track(i);
+        dtc(center,cy,track->title,COL_WHITE,1);cy+=23;
+        dtc(center,cy,track->artist,0x9af0d2ff,1);cy+=21;
+        dtc(center,cy,track->license,COL_GRAY,1);
+        if(g_mouse.clicked && g_mouse.y>=clip.y && g_mouse.y<clip.y+clip.h && pt_in(g_mouse.x,g_mouse.y,px+20,cy-44,pw-40,64)){music_link(track->source_url);g_mouse.clicked=0;}
+        cy+=48;
     }
-    dt(px+22,ty+3,"Alexandr Zhelanov: https://soundcloud.com/alexandr-zhelanov",COL_GRAY,1);
-    dt(px+22,ty+20,"Music licenses are separate from code. See CREDITS.md.",COL_GRAY,1);
-    if(dbtn(px+pw/2-54,py+ph-46,108,34,"Close",BS_ACTIVE)){
-        c->about_popup_open=0; c->license_popup_open=0;
-    }
+    dtc(center,cy,"Alexandr Zhelanov",COL_WHITE,1);cy+=24;
+    dtc(center,cy,"soundcloud.com/alexandr-zhelanov",COL_GRAY,1);cy+=58;
+    dtc(center,cy,"TYPOGRAPHY",0xbba5f4ff,1);cy+=30;
+    dtc(center,cy,"Roboto / SIL Open Font License 1.1",COL_WHITE,1);cy+=60;
+    dtc(center,cy,"FREE & OPEN SOURCE",0xbba5f4ff,1);cy+=30;
+    dtc(center,cy,"GNU General Public License v3 or later",COL_WHITE,1);cy+=26;
+    dtc(center,cy,"Music and fonts retain their own licenses.",COL_GRAY,1);cy+=66;
+    dtc(center,cy,"Thank you for playing.",COL_WHITE,2);cy+=60;
+    SDL_RenderSetClipRect(g_rend,NULL);
+    if(cy<clip.y)c->credits_offset=-(float)clip.h;
+    fr(px+20,py+80,pw-40,1,0x303c54ff);
+    fr(px+20,py+ph-64,pw-40,1,0x303c54ff);
+    if(dbtn(px+20,py+ph-48,106,32,c->credits_paused?"Resume":"Pause",BS_NORMAL))c->credits_paused=!c->credits_paused;
+    if(dbtn(px+134,py+ph-48,92,32,"Restart",BS_NORMAL))c->credits_offset=0;
+    if(dbtn(px+234,py+ph-48,90,32,"License",BS_NORMAL))c->license_popup_open=1;
+    if(dbtn(px+332,py+ph-48,90,32,"Source",BS_NORMAL))music_link("https://github.com/kladhest-se/lineclash");
+    if(dbtn(px+pw-118,py+ph-48,98,32,"Close",BS_ACTIVE)){c->about_popup_open=0;c->license_popup_open=0;}
     g_mouse.clicked=0; /* consume remaining click */
 
     /* ── LICENSE sub-popup ── */
@@ -1061,16 +1060,18 @@ void sdl_render_server_list(ClientCtx*c){
     SDL_SetRenderDrawColor(g_rend,0x0d,0x0d,0x1a,0xff);
     SDL_RenderClear(g_rend);
 
+    int loading=directory_busy() || ((c->srv_test_state>=1 && c->srv_test_state<=3)||c->srv_test_state==10);
     /* Brand and compact audio/settings controls. */
     fr(0,0,WIN_W,88,0x111b28ff);fr(32,87,WIN_W-64,1,0x25354aff);
-    round_fill(32,26,13,13,3,0x72dfbbff);round_fill(48,26,13,13,3,0x72dfbbff);round_fill(48,42,13,13,3,0x46a98bff);
+    brick_logo(32,26,13,3,loading);
     dt(75,22,"LineClash",0xf0f5fcff,2);
     dt(76,56,"MULTIPLAYER FALLING BLOCKS",0x91a4bfff,1);
     dt(32,109,"Your next match starts here.",0xf0f5fcff,2);
-    dt(33,153,"Find a server. Join a room. Make every line count.",0x97abc5ff,1);
+    if(dbtn(32,146,166,30,"Public servers",c->server_tab==0?BS_ACTIVE:BS_NORMAL))action=BTN_PUBLIC_SERVERS;
+    if(dbtn(208,146,166,30,"Saved servers",c->server_tab==1?BS_ACTIVE:BS_NORMAL))action=BTN_SAVED_SERVERS;
     if(dbtn(WIN_W-96,22,64,28,"Quit",BS_NORMAL))        action=BTN_QUIT;
     if(dbtn(WIN_W-166,22,62,28,"About",BS_NORMAL))      action=BTN_SRV_ABOUT;
-    if(dbtn(WIN_W-238,22,64,28,"Keymap",BS_NORMAL))     action=BTN_KEYMAP_POPUP;
+    if(dbtn(WIN_W-238,22,64,28,"Settings",BS_NORMAL))     action=BTN_KEYMAP_POPUP;
     {BtnStyle ss=c->sound_enabled?BS_TOGON:BS_NORMAL;
      if(dbtn(WIN_W-310,22,64,28,"SFX",ss))              action=BTN_TOGGLE_SOUND;}
     {BtnStyle ms=music_get_enabled()?BS_TOGON:BS_NORMAL;
@@ -1108,7 +1109,7 @@ void sdl_render_server_list(ClientCtx*c){
          music_set_volume(nv); client_save_settings(c);}
     }
 
-    if(dbtn(LSX,188,144,32,"Find servers",BS_ACTIVE)) action=BTN_DISCOVER;
+    if(dbtn(LSX,188,144,32,c->server_tab?"+ Add server":"Refresh list",BS_ACTIVE)) action=c->server_tab?BTN_SRV_ADD:BTN_DISCOVER;
     {const char *labels[]={"All servers","Favourites","Recent","Open slots","Ping <=100ms"};
      if(dbtn(LSX+154,188,148,32,labels[c->server_filter%5],BS_NORMAL)) action=BTN_SERVER_FILTER;}
     {const char *labels[]={"Default order","Low latency","Last played"};
@@ -1117,7 +1118,7 @@ void sdl_render_server_list(ClientCtx*c){
     const char *directory_url=SDL_getenv("LINECLASH_DIRECTORY_URL");
     if(directory_url && directory_url_valid(directory_url,0) && dbtn(WIN_W-498,22,104,28,"Browse web",BS_NORMAL)) music_link(directory_url);
 
-    {char count[48];snprintf(count,sizeof(count),"%d SAVED SERVERS",c->server_count);
+    {char count[48];int total=0;for(int n=0;n<c->server_count;n++)if(c->server_tab?(c->server_list[n].locally_saved||!c->server_list[n].discovered):c->server_list[n].discovered)total++;snprintf(count,sizeof(count),"%d %s SERVERS",total,c->server_tab?"SAVED":"PUBLIC");
      dt(WIN_W-190,137,count,0xbba5f4ff,1);}
     /* Quiet table header lets server names carry the visual weight. */
     fr(LSX,HDR_Y,LSW,32,0x171f30ff);
@@ -1215,13 +1216,13 @@ void sdl_render_server_list(ClientCtx*c){
         }
 
         /* Per-row [Refresh] [Rename] [Remove] buttons */
-        {int bx_rem = LSX+LSW-BTN_W-4;
+        if(c->server_tab) {int bx_rem = LSX+LSW-BTN_W-4;
          int bx_ren = bx_rem-BTN_W-6;
          int bx_ref = bx_ren-BTN_W_REF-6;
          int by     = ry+(ROW_H-1-BTN_H)/2;
          if(dbtn(bx_ref,by,BTN_W_REF,BTN_H,"Refresh",BS_NORMAL))
              {c->server_cursor=i; action=BTN_SRV_REFRESH;}
-         if(dbtn(bx_ren,by,BTN_W,BTN_H,"Rename",BS_NORMAL))
+         if(dbtn(bx_ren,by,BTN_W,BTN_H,"Edit",BS_NORMAL))
              {c->server_cursor=i; action=BTN_SRV_EDIT;}
          if(dbtn(bx_rem,by,BTN_W,BTN_H,"Remove",BS_NORMAL))
              {c->server_cursor=i; action=BTN_SRV_DEL;}
@@ -1231,17 +1232,17 @@ void sdl_render_server_list(ClientCtx*c){
     if(visible_count==0) {
         surface(LSX,LIST_Y+6,LSW,ROW_H*6-10,0x111c2aff,0x25354aff);
         int icon_y=LIST_Y+65;
-        round_fill(CX-35,icon_y,30,30,7,0x225849ff);round_fill(CX+1,icon_y,30,30,7,0x72dfbbff);round_fill(CX+1,icon_y+36,30,30,7,0x2b7360ff);
-        dtc(CX,LIST_Y+160,c->server_count?"No servers match this view":"A new rivalry starts here.",0xe9f1fcff,2);
-        dtc(CX,LIST_Y+207,c->server_count?"Try a different filter to see more servers.":"Add your server or discover somewhere new to play.",0x97abc5ff,1);
-        if(dbtn(CX-176,LIST_Y+250,168,38,"+ Add a server",BS_ACTIVE))action=BTN_SRV_ADD;
-        if(dbtn(CX+8,LIST_Y+250,168,38,"Discover servers",BS_NORMAL))action=BTN_DISCOVER;
+        brick_logo(CX-33,icon_y,30,6,loading);
+        dtc(CX,LIST_Y+160,loading?"Finding your next match…":c->server_tab?"Your private server collection.":"Find a community to play with.",0xe9f1fcff,2);
+        dtc(CX,LIST_Y+207,c->server_tab?"Add a host and port to keep your own server list.":"Refresh the public list, or try another filter.",0x97abc5ff,1);
+        if(c->server_tab && dbtn(CX-176,LIST_Y+250,168,38,"+ Add a server",BS_ACTIVE))action=BTN_SRV_ADD;
+        if(!c->server_tab && dbtn(CX-84,LIST_Y+250,168,38,"Refresh list",BS_ACTIVE))action=BTN_DISCOVER;
     }
     /* Bottom actions are visible when there is a server to select. */
     if(visible_count>0) {int bot_y = LIST_Y + SRVS_PER_PAGE*ROW_H + 12;
      if(bot_y>WIN_H-56) bot_y=WIN_H-56;
      int half=(LSW-8)/3;
-     if(dbtn(LSX,      bot_y,half,38,"+ Add a server",BS_NORMAL)) action=BTN_SRV_ADD;
+     if(dbtn(LSX,bot_y,half,38,c->server_tab?"+ Add a server":"Saved servers",BS_NORMAL)) action=c->server_tab?BTN_SRV_ADD:BTN_SAVED_SERVERS;
      if(dbtn(LSX+half+4,bot_y,half,38,"Toggle favourite",BS_NORMAL)) action=BTN_FAVOURITE;
      int can_join=(c->server_cursor>=0&&c->server_cursor<c->server_count&&
                    c->server_list[c->server_cursor].online>=0&&
@@ -1272,10 +1273,10 @@ void sdl_render_server_list(ClientCtx*c){
         fr(px,py,pw,ph,0x10102aff);
         fr(px,py,pw,26,0x1a1a40ff);  /* header bar */
         dr(px,py,pw,ph,COL_PIECE_I); /* border after header — covers all edges */
-        dtc(px+pw/2,py+7,"Add game server",COL_LTGRAY,1);
+        dtc(px+pw/2,py+7,c->server_edit_idx>=0?"Edit saved server":"Add saved server",COL_LTGRAY,1);
 
         const char *lbls[4]={"Host / IP address","Port","Username","Password"};
-        const char *phs [4]={"192.168.1.10","31457","Player","(required)"};
+        const char *phs [4]={"192.168.1.10","31457","(optional)","(optional; blank keeps saved password)"};
         TextField  *tfs [4]={&c->tf_srv_host,&c->tf_srv_port,
                              &c->tf_srv_nick,&c->tf_srv_pass};
         int is_pass[4]={0,0,0,1};
@@ -1318,7 +1319,7 @@ void sdl_render_server_list(ClientCtx*c){
         /* Buttons */
         {int bby=py+ph-50; int bw2=(pw-42)/2;
          BtnStyle add_bs=testing?BS_DISABLED:BS_ACTIVE;
-         if(dbtn(px+14,    bby,bw2,34,"Test & Add",add_bs)&&!testing) action=BTN_SRV_ADD_OK;
+         if(dbtn(px+14,    bby,bw2,34,"Save server",add_bs)&&!testing) action=BTN_SRV_ADD_OK;
          if(dbtn(px+28+bw2,bby,bw2,34,"Cancel",BS_NORMAL)){
              c->server_popup_open=0;
              if(c->srv_test_sock!=INVALID_SOCK){sock_close(c->srv_test_sock);c->srv_test_sock=INVALID_SOCK;}
@@ -1571,7 +1572,7 @@ void sdl_render_lobby_select(ClientCtx*c){
     if(dbtn(WIN_W-74,4,66,22,"< Back",BS_NORMAL))  action=BTN_BACK_CONNECT;
     if(dbtn(WIN_W-146,4,66,22,"Quit",BS_NORMAL))   action=BTN_QUIT;
     if(dbtn(WIN_W-218,4,64,22,"About",BS_NORMAL))  action=BTN_SRV_ABOUT;
-    if(dbtn(WIN_W-288,4,64,22,"Keymap",BS_NORMAL)) action=BTN_KEYMAP_POPUP;
+    if(dbtn(WIN_W-288,4,64,22,"Settings",BS_NORMAL)) action=BTN_KEYMAP_POPUP;
     {BtnStyle ss=c->sound_enabled?BS_TOGON:BS_NORMAL;
      if(dbtn(WIN_W-358,4,64,22,"SFX",ss))          action=BTN_TOGGLE_SOUND;}
     {BtnStyle ms=music_get_enabled()?BS_TOGON:BS_NORMAL;
@@ -2649,6 +2650,50 @@ void sdl_render_game(ClientCtx*c){
     SDL_RenderPresent(g_rend);
 }
 
+/* SDL maps Xbox / PlayStation buttons to one portable layout. */
+static void controller_open(void){
+    if(g_controller && !SDL_GameControllerGetAttached(g_controller)){SDL_GameControllerClose(g_controller);g_controller=NULL;}
+    if(!g_controller)for(int i=0;i<SDL_NumJoysticks();i++)if(SDL_IsGameController(i)){g_controller=SDL_GameControllerOpen(i);if(g_controller)break;}
+}
+static int controller_key(ClientCtx *c,int button){
+    switch(button){
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT:return c->km.move_left;
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:return c->km.move_right;
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN:return c->km.soft_drop;
+    case SDL_CONTROLLER_BUTTON_A:return c->km.rotate_cw;
+    case SDL_CONTROLLER_BUTTON_B:return c->km.rotate_ccw;
+    case SDL_CONTROLLER_BUTTON_X:case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:return c->km.hold;
+    case SDL_CONTROLLER_BUTTON_Y:case SDL_CONTROLLER_BUTTON_DPAD_UP:return c->km.hard_drop;
+    case SDL_CONTROLLER_BUTTON_START:return c->km.pause;
+    default:return 0;
+    }
+}
+static void controller_tick(ClientCtx *c){
+    controller_open();Uint32 buttons=0,now=SDL_GetTicks();
+    if(g_controller && c->controller_enabled && SDL_GetWindowFlags(g_win)&SDL_WINDOW_INPUT_FOCUS){
+        for(int i=0;i<SDL_CONTROLLER_BUTTON_MAX;i++)if(SDL_GameControllerGetButton(g_controller,(SDL_GameControllerButton)i))buttons|=1u<<i;
+        int x=SDL_GameControllerGetAxis(g_controller,SDL_CONTROLLER_AXIS_LEFTX),y=SDL_GameControllerGetAxis(g_controller,SDL_CONTROLLER_AXIS_LEFTY);
+        if(x < -16000)buttons|=1u<<SDL_CONTROLLER_BUTTON_DPAD_LEFT;
+        if(x > 16000)buttons|=1u<<SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
+        if(y > 16000)buttons|=1u<<SDL_CONTROLLER_BUTTON_DPAD_DOWN;
+    }
+    int blocked=c->keymap_popup_open||c->about_popup_open||c->music_player_open||c->game_options_popup_open||c->ai_players_popup_open||c->team_popup_open||c->kick_popup_open;
+    int context=(int)c->state*2+blocked;
+    if(context!=g_pad_context){g_pad_buttons=buttons;memset(g_pad_repeat,0,sizeof(g_pad_repeat));g_pad_context=context;return;}
+    Uint32 pressed=buttons&~g_pad_buttons;g_pad_buttons=buttons;
+    if(blocked)return;
+    if(c->state==CS_PLAYING){
+        for(int i=0;i<SDL_CONTROLLER_BUTTON_MAX;i++)if(pressed&(1u<<i)){int key=controller_key(c,i);if(key)client_on_key(c,key,0,0,NULL);}
+        const int directions[]={SDL_CONTROLLER_BUTTON_DPAD_LEFT,SDL_CONTROLLER_BUTTON_DPAD_RIGHT,SDL_CONTROLLER_BUTTON_DPAD_DOWN};
+        for(int i=0;i<3;i++){
+            Uint32 bit=1u<<directions[i];
+            if(!(buttons&bit))g_pad_repeat[i]=0;
+            else if(pressed&bit)g_pad_repeat[i]=now+160;
+            else if(g_pad_repeat[i] && (Sint32)(now-g_pad_repeat[i])>=0){client_on_key(c,controller_key(c,directions[i]),0,0,NULL);g_pad_repeat[i]=now+(i==2?45:65);}
+        }
+    }
+}
+
 /* ============================== SDL EVENTS ============================== */
 int sdl_poll_events(ClientCtx *c) {
     SDL_Event ev;
@@ -2671,7 +2716,7 @@ int sdl_poll_events(ClientCtx *c) {
             if(amount!=0) {
                 int step=amount>0?1:-1;
                 if(c->music_player_open) c->music_scroll-=step*2;
-                else if(c->about_popup_open) c->about_music_page-=step;
+                else if(c->about_popup_open) c->credits_offset-=step*36;
             }
             break;
         }
@@ -2693,6 +2738,7 @@ int sdl_poll_events(ClientCtx *c) {
         default: break;
         }
     }
+    controller_tick(c);
     return c->running;
 }
 
@@ -2713,7 +2759,7 @@ int sdl_init(void) {
     g_ui_scale=100;
     /* The game owns its entry point on every platform, including WinMain. */
     SDL_SetMainReady();
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 0;
     }
@@ -2747,6 +2793,8 @@ int sdl_init(void) {
 }
 
 void sdl_shutdown(void) {
+    if(g_controller){SDL_GameControllerClose(g_controller);g_controller=NULL;}
+    g_pad_buttons=0;g_pad_context=-1;memset(g_pad_repeat,0,sizeof(g_pad_repeat));
     SDL_StopTextInput();
     if (g_ui_font) {SDL_DestroyTexture(g_ui_font);g_ui_font=NULL;}
     if (g_rend) { SDL_DestroyRenderer(g_rend); g_rend = NULL; }

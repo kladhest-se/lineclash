@@ -4,13 +4,13 @@
 
 Download a package for your platform from **Get the game** on the home page and extract the complete archive. Keep the executable with its bundled libraries and music directory. From an extracted native package, run `bin/lineclash` on macOS or Linux, or `bin/lineclash.exe` on Windows. From a source build, run `./clients/gui/lineclash` (`clients/gui/lineclash.exe` on Windows). Build instructions are on [Source](DEVELOPMENT.md).
 
-In the main menu, select **Find servers**, choose a saved server, or add a host and port manually. The default game port is **31457**. For a server on this computer, use `localhost`. Enter your nickname and password, then connect. New names register when the server allows registration; existing names require their original password. Accounts belong to each server.
+In the main menu, **Public servers** loads the official directory from `https://lineclash.kladhest.se/api/`. **Saved servers** contains your locally stored endpoints and offers Add, Edit and Remove controls. Use Saved servers for private hosts and ports. You can save or edit an endpoint while it is offline; account credentials are optional until connecting. Public entries cannot be renamed or removed from the directory by a client. Favourite a public endpoint to keep a local copy. The default game port is **31457**. For a server on this computer, use `localhost`. Enter your nickname and password, then connect. New names register when the server allows registration; existing names require their original password. Accounts belong to each server.
 
 Select a room, choose a team if wanted, and ready up. The room host controls rules, bots and starting the round. Leave the room to return to the lobby; disconnect before choosing another server. Use **Quit** in the main menu or close the window to stop the desktop client.
 
 ## Desktop preferences and saved servers
 
-Use **Keymap** to change gameplay bindings and display preferences. Music and SFX controls set their respective volume and enabled state. The menu plays the title theme; during a round, **Music Player** provides track selection, pause, seek and shuffle. Track attribution is available in the player, About and the website Credits page.
+Use **Settings → Controls** to change gameplay bindings and display preferences. Music and SFX controls set their respective volume and enabled state. The menu plays the title theme; during a round, **Music Player** provides track selection, pause, seek and shuffle. Track attribution is available in the player, About and the website Credits page.
 
 Preferences and saved server entries are stored locally:
 

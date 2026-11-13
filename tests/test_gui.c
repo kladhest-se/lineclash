@@ -29,10 +29,11 @@ int main(void) {
     assert(getsockname(listener,(struct sockaddr *)&addr,&al)==0); port=ntohs(addr.sin_port);
     ClientCtx c; memset(&c,0,sizeof(c)); sock_t remote;
     c.server_count=2;c.server_list[0]=rows[0];strcpy(c.server_list[1].host,"second");c.server_list[1].port=31457;c.server_list[1].favourite=1;c.server_list[1].last_used=10;
-    int order[MAX_SAVED_SERVERS];c.server_filter=1;assert(client_server_order(&c,order)==1 && order[0]==1);
+    int order[MAX_SAVED_SERVERS];c.server_tab=1;c.server_filter=1;assert(client_server_order(&c,order)==1 && order[0]==1);
     c.server_filter=2;assert(client_server_order(&c,order)==1 && order[0]==1);
     c.server_list[1].online=1;c.server_list[1].ping_ms=30;c.server_filter=4;assert(client_server_order(&c,order)==1 && order[0]==1);
-    c.server_filter=0;c.server_sort=2;assert(client_server_order(&c,order)==2 && order[0]==1);
+    c.server_tab=0;c.server_filter=0;assert(client_server_order(&c,order)==1 && order[0]==0);
+    c.server_list[0].locally_saved=1;c.server_tab=1;c.server_sort=2;assert(client_server_order(&c,order)==2 && order[0]==1);
     c.server_cursor=0;c.have_saved_creds=1;strcpy(c.auth_pass_hash,"old password hash");strcpy(c.tf_pass.text,"old plaintext");
     client_on_button(&c,BTN_SRV_CONNECT);assert(c.state==CS_CONNECT && !c.auth_pass_hash[0] && !c.tf_pass.text[0] && !c.have_saved_creds);
     memset(&c,0,sizeof(c));

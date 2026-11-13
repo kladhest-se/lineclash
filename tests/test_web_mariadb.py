@@ -16,6 +16,13 @@ import uuid
 
 root=Path(__file__).resolve().parents[1]
 assert os.environ.get('LINECLASH_WEB_CONFIG'), 'Set LINECLASH_WEB_CONFIG to an empty disposable MariaDB database config'
+# Enable loopback registration only in this disposable local API fixture.
+import atexit
+registration_config=tempfile.NamedTemporaryFile(mode='w',suffix='.php',delete=False)
+original_config=os.environ['LINECLASH_WEB_CONFIG']
+registration_config.write('<?php $c=require '+json.dumps(original_config)+"; $c['allow_local_registration']=true; return $c;")
+registration_config.close();atexit.register(lambda:Path(registration_config.name).unlink(missing_ok=True))
+os.environ['LINECLASH_WEB_CONFIG']=registration_config.name
 php=os.environ.get('PHP','php')
 subprocess.run([php,str(root/'public-web/bin/manage.php'),'migrate'],check=True)
 id='test_'+uuid.uuid4().hex
@@ -34,6 +41,15 @@ with tempfile.TemporaryFile() as log:
         for _ in range(100):
             try: call(); break
             except OSError: time.sleep(.05)
+        public=dict(action='public-register',token=uuid.uuid4().hex+uuid.uuid4().hex,name='Public fixture',port=port,players=1,capacity=8)
+        code,body=call(payload=public);assert code==200,(code,body)
+        auto_id=json.loads(body)['server_id'];assert auto_id.startswith('auto-')
+        assert call(payload=public)[0]==200
+        assert call(payload=dict(public,token='f'*64))[0]==403
+        assert call(payload=dict(public,players=9))[0]==400
+        assert call(payload=dict(server_id=auto_id,token=public['token'],database_id=uuid.uuid4().hex,games=[]))[0]==403
+        listed=json.loads(call('/api/?action=servers')[1])['servers']
+        assert any(row['id']==auto_id and row['host']=='127.0.0.1' for row in listed)
         payload=dict(server_id=id,token=token,database_id=uuid.uuid4().hex,status={'players':2,'rooms':1},games=[dict(game_id=2,room_id=1,started_at='2026-11-13 10:00:00',ended_at='2026-11-13 10:05:00',winner_nick='<Winner>',winner_team='',player_count=2)])
         g=payload['games'][0]
         g.update(started_epoch=1794564000,ended_epoch=1794564300,ranked=1,input_protocol='input-v1',end_reason='completed',players=[dict(nick='<Winner>',placement=1,won=1,lines_cleared=12,specials_sent=3,blocks_placed=50)])
