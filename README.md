@@ -81,7 +81,7 @@ cp server/lineclashd.cfg.example ./lineclashd.cfg
 - [Tests, builds, packaging and web hosting](docs/DEVELOPMENT.md)
 - [Platform verification](docs/PLATFORM-VERIFICATION.md)
 - [Client trust review](docs/TRUST-REVIEW.md)
-- [GitLab/GitHub source uploads and tagged releases](docs/RELEASING.md)
+- [GitHub source uploads and tagged releases](docs/RELEASING.md)
 
 ## License
 

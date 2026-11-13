@@ -69,7 +69,7 @@ Music-specific checks: `make -C tests music music-ui`. The UI test uses a dummy 
 
 ## Web-service checks
 
-Run `make directory-test` for offline delivery checks. With `LINECLASH_WEB_CONFIG` pointing to a disposable MariaDB database, run `make web-test` for PHP API and real dedicated-server upload/shutdown tests. The GitLab `test:web-directory` job runs these against MariaDB. See [web services](WEB-SERVICES.md).
+Run `make directory-test` for offline delivery checks. With `LINECLASH_WEB_CONFIG` pointing to a disposable MariaDB database, run `make web-test` for PHP API and real dedicated-server upload/shutdown tests. The `test:web-directory` job runs these against MariaDB. See [web services](WEB-SERVICES.md).
 
 See [discovery, ranked history, health reports, replays and music shortcuts](ENHANCEMENTS.md) for the latest controls, deployment changes and verification limits.
 

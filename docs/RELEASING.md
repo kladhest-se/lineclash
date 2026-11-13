@@ -1,6 +1,6 @@
 # LineClash releases
 
-This project adapts the release coordinator supplied in ZIFburn's Archive.zip. The credential, annotated-tag, GitLab Generic Package Registry and GitHub release flows are retained; Swift/universal-app/notarization packaging is replaced with LineClash's native verification and archives. Upstream MIT notices are retained in scripts/LICENSE-ZIFburn and scripts/LICENSE-BitSkim. LineClash remains licensed as stated in LICENSE.md.
+This project adapts the release coordinator supplied in ZIFburn's Archive.zip. The credential, annotated-tag and GitHub release flows are retained; Swift/universal-app/notarization packaging is replaced with LineClash's native verification and archives. Upstream MIT notices are retained in scripts/LICENSE-ZIFburn and scripts/LICENSE-BitSkim. LineClash remains licensed as stated in LICENSE.md.
 
 ## Local configuration
 
@@ -10,12 +10,11 @@ The default settings file is outside the source tree:
 /Users/frossmant/Development/tools/git-release/projects/lineclash.json
 ```
 
-It is installed with owner-only file permissions. `LINECLASH_RELEASE_CONFIG` or `--config PATH` selects another file. A non-secret template is in examples/release-config.json. Configured destinations are:
+It is installed with owner-only file permissions. `LINECLASH_RELEASE_CONFIG` or `--config PATH` selects another file. A non-secret template is in examples/release-config.json. The public destination is:
 
 - Public: https://github.com/kladhest-se/lineclash
-- Internal: https://gitlab.kladhest.se/kladhest/lineclash/lineclash
 
-HTTPS API URLs and SSH Git destinations must identify the same repository, including every nested GitLab group. Source pushes default to `main`. Git uses existing SSH keys or Git credential helpers. API authentication is separate: the current profile reads `GITHUB_TOKEN` and `GITLAB_TOKEN` from the environment. No token values are stored in JSON. The selected Python interpreter is configured through `env.LINECLASH_RELEASE_PYTHON`.
+HTTPS API URLs and SSH Git destinations must identify the same repository, including the repository owner and name. Source pushes default to `main`. Git uses existing SSH keys or Git credential helpers. API authentication is separate: the current profile reads `GITHUB_TOKEN` from the environment. No token values are stored in JSON. The selected Python interpreter is configured through `env.LINECLASH_RELEASE_PYTHON`.
 
 For 1Password, replace the relevant credentials object with either an actual copied secret reference:
 
@@ -23,7 +22,7 @@ For 1Password, replace the relevant credentials object with either an actual cop
 {"provider": "1password", "reference": "op://ACTUAL-VAULT/ACTUAL-ITEM/ACTUAL-SECTION/ACTUAL-FIELD"}
 ```
 
-or the exact `vault`, `item`, `field` and optional `account` values from your existing item. Do not construct LineClash credential names from another project's profile. Only publish/source actions use credentials; build and prepare do not resolve 1Password secrets. Tokens are removed from child build environments. Set up repository-scoped credentials and GitLab package/release access before publishing.
+or the exact `vault`, `item`, `field` and optional `account` values from your existing item. Do not construct LineClash credential names from another project's profile. Only publish/source actions use credentials; build and prepare do not resolve 1Password secrets. Tokens are removed from child build environments. Set up repository-scoped credentials and release access before publishing.
 
 ## Review, build and prepare
 
@@ -60,28 +59,28 @@ Move the whole outputs/ directory aside when starting another build/release; pre
 
 The current project folder was supplied without Git metadata. Preparation can inspect an uncommitted source archive, but actual publication requires a clean committed Git checkout at the project root with every selected release source tracked. Prefer cloning existing repository history and applying these changes. Do not initialize a replacement history over a populated remote.
 
-Read-only source-push preflight (contacts both Git remotes):
+Read-only source-push preflight (contacts the GitHub remote):
 
 ```sh
-python3 scripts/release.py source --to gitlab,github --dry-run
+python3 scripts/release.py source --to github --dry-run
 ```
 
 Explicitly upload the committed source branch:
 
 ```sh
-python3 scripts/release.py source --to gitlab,github --confirm-push
+python3 scripts/release.py source --to github --confirm-push
 ```
 
-For genuinely empty remotes only, `source --init --dry-run` can create an initial local repository/commit after checking both remotes are empty; this is still a local mutation. It refuses remotes with history. No source push is performed without --confirm-push. Building/preparing does not create Git repositories or tags.
+For genuinely empty remotes only, `source --init --dry-run` can create an initial local repository/commit after checking the selected remote is empty; this is still a local mutation. It refuses remotes with history. No source push is performed without --confirm-push. Building/preparing does not create Git repositories or tags.
 
 After reviewing the prepared manifest, explicitly publish:
 
 ```sh
-python3 scripts/release.py publish --to gitlab,github --confirm-publish
+python3 scripts/release.py publish --to github --confirm-publish
 ```
 
-This preflights both services and tag conflicts, creates an annotated local tag at the recorded commit, pushes that tag, uploads and verifies the exact bytes, creates a GitLab release with package links, and transitions a GitHub draft to public only after its full asset inventory matches. It never force-pushes source or tags. `--to gitlab` supports internal-only publication. `release --confirm-publish` combines prepare and publish using existing build outputs; it does not rebuild.
+This preflights GitHub and tag conflicts, creates an annotated local tag at the recorded commit, pushes that tag, uploads and verifies the exact bytes, and transitions a GitHub draft to public only after its full asset inventory matches. It never force-pushes source or tags. `release --to github --confirm-publish` combines prepare and publish using existing build outputs; it does not rebuild.
 
-Receipts are stored in outputs/release/receipt.json. If one service succeeds and the next fails, retain all outputs and rerun publish after resolving the problem. Matching remote artifacts are reused; conflicting hashes/notes/tags stop publication. The two providers cannot form one atomic transaction, so a failed attempt can leave a partial release or a GitHub draft. The tool records progress and does not blindly retry network writes.
+Receipts are stored in outputs/release/receipt.json. If publication fails, retain all outputs and rerun publish after resolving the problem. Matching remote artifacts are reused; conflicting hashes, notes or tags stop publication. A failed attempt can leave a partial upload or a GitHub draft. The tool records progress and does not blindly retry network writes.
 
-No source, tags, credentials or release assets were uploaded while integrating this workflow. Live GitHub/GitLab publication still needs an authorized run with working credentials and committed repository history.
+Live GitHub publication requires an authorized run with working credentials and committed repository history.

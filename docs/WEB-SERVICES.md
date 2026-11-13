@@ -70,7 +70,7 @@ POST JSON fields: `server_id`, `token`, 32-hex `database_id`, `games` array, opt
 
 Run `python3 tests/test_directory.py` for retry, authentication boundary, and out-of-order completion checks. Run `LINECLASH_WEB_CONFIG=/private/test-config.php python3 tests/test_web_mariadb.py` against an **empty disposable MariaDB database** for real API integration. It provisions and uses only its uniquely named test server. `make web-test` additionally builds the dedicated server and checks the complete supervisor → local SQLite → PHP → MariaDB flow and child shutdown. Run PHP lint and the existing native test suite as usual. See `public-web/config.example.php` for configuration keys.
 
-GitLab CI includes `test:web-directory` with a disposable MariaDB 10.11 service and PHP 8.3. It runs PHP lint, registrar regressions and the full real-server upload checks. Local integration was also verified with MariaDB 13.0.2 on macOS; the CI job must run on its configured Docker runner to verify the pinned Linux combination.
+CI includes `test:web-directory` with a disposable MariaDB 10.11 service and PHP 8.3. It runs PHP lint, registrar regressions and the full real-server upload checks. Local integration was also verified with MariaDB 13.0.2 on macOS; the CI job must run on its configured Docker runner to verify the pinned Linux combination.
 
 A concrete setup for web002, dbs001 and mgt001 is in [the Kladhest deployment guide](DEPLOYMENT-KLADHEST.md), including remote MariaDB TLS, Apache configuration and the protected refresh script.
 

@@ -7,7 +7,7 @@
 - Bind joins to authenticated accounts and enforce gameplay state, board shape and special inventory.
 - Add bounded automatic GUI/terminal reconnects, connection-health probes and round-specific slot recovery.
 - Add native platform gates, portable tests and Windows build/system-statistics fixes.
-- Integrate the archive's release coordinator with external GitLab/GitHub profiles, tagged releases, checksums and resumable publication.
+- Integrate the archive's release coordinator with external GitHub profiles, tagged releases, checksums and resumable publication.
 
 - Fix invalid status JSON and prevent slow HTTP clients from blocking games.
 - Remove authentication use-after-free and secret diagnostic logging.

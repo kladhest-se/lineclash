@@ -1,8 +1,8 @@
 # Platform verification
 
-Run `bash scripts/verify-platform.sh` (or `make verify`) in a clean checkout on each target OS. It runs offline release-tool tests, a clean parallel build, field/network/authentication checks, real HTTP and trust/reconnect protocol tests, and a headless GUI reconnect lifecycle test. macOS/Linux also run the actual terminal-client reconnect tests. Logs are saved under dist/verification/ and collected by GitLab CI.
+Run `bash scripts/verify-platform.sh` (or `make verify`) in a clean checkout on each target OS. It runs offline release-tool tests, a clean parallel build, field/network/authentication checks, real HTTP and trust/reconnect protocol tests, and a headless GUI reconnect lifecycle test. macOS/Linux also run the actual terminal-client reconnect tests. Logs are saved under dist/verification/ and collected by CI.
 
-GitLab jobs verify:macos, verify:ubuntu and verify:leap15 run natively. Package jobs depend on their matching verification job. Windows verification is opt-in with `LINECLASH_WINDOWS_RUNNER=1` until a Windows runner tagged `windows, msys2` is registered. It uses PowerShell to start MSYS2 UCRT64 Bash at `LINECLASH_MSYS2_ROOT` (default C:\msys64).
+CI jobs verify:macos, verify:ubuntu and verify:leap15 run natively. Package jobs depend on their matching verification job. Windows verification is opt-in with `LINECLASH_WINDOWS_RUNNER=1` until a Windows runner tagged `windows, msys2` is registered. It uses PowerShell to start MSYS2 UCRT64 Bash at `LINECLASH_MSYS2_ROOT` (default C:\msys64).
 
 Install the following on that Windows runner from its UCRT64/MSYS2 environment:
 
