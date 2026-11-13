@@ -935,10 +935,8 @@ body { isolation:isolate; }
 #release-status { font-size:22px; font-weight:600; margin-bottom:20px; }
 .release-assets,.download-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:18px; align-items:center; }
 .release-assets a { max-width:100%; overflow-wrap:anywhere; }
-.community-destinations { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
-.community-destinations a { text-decoration:none; color:inherit; }
 section[id],div[id=build] { scroll-margin-top:100px; }
-@media(max-width:760px) { .screenshot-grid,.community-destinations { grid-template-columns:1fr; } .download-panel { padding:20px; } }
+@media(max-width:760px) { .screenshot-grid { grid-template-columns:1fr; } .download-panel { padding:20px; } }
 
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
 

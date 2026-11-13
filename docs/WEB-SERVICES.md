@@ -76,7 +76,7 @@ A concrete setup for web002, dbs001 and mgt001 is in [the Kladhest deployment gu
 
 ## Main website integration
 
-The main homepage surfaces live servers, online population, match totals, ranked leaders and recent results. Top navigation and a shared responsive theme connect `/servers/`, `/leaderboards/`, `/matches/` and `/statistics/`, including player profiles and replay pages. `/directory/` remains a compatible combined view. Server search/open-slot filters, address copying, server-scoped leaderboards and paginated ranked/casual history are available without inspecting JSON. These pages use the existing database schema; no migration is added by the interface integration.
+The Home page presents the game and downloads. Server listings belong to `/servers/`; population, match totals, ranked leaders and recent results belong to `/statistics/`. Top navigation and a shared responsive theme connect these pages with filtered `/leaderboards/` and `/matches/` views, including player profiles and replay pages. `/directory/` remains a compatible combined view. Server search/open-slot filters, address copying, server-scoped leaderboards and paginated ranked/casual history are available without inspecting JSON. These pages use the existing database schema; no migration is added by the interface integration.
 
 ## Public website navigation and release downloads
 
@@ -88,6 +88,6 @@ After publishing a tagged GitHub release with package assets, the page picks it 
 
 Run `node tests/test_web_downloads.js` for release lookup and asset validation checks, and `make web-test` for website/database integration.
 
-The main navigation is **Home, Servers, Statistics, Documentation, Source**. Screenshots and **Get the game** are sections on Home (`/#screenshots` and `/#get`), not separate pages. The persistent Get the game button returns there from every page. `/documentation/` provides a quick start, desktop controls and links to maintained repository guides; `/source/` groups repositories, contributions, source checkout, licensing and credits. These public pages work without a configured database and use the shared block animation.
+The main navigation is **Home, Servers, Statistics, Documentation, Source**. Screenshots and **Get the game** are sections on Home (`/#screenshots` and `/#get`), not separate pages. The persistent Get the game button returns there from every page. `/documentation/` provides a quick start, desktop controls and links to maintained repository guides; `/source/` groups repositories, contributions, source checkout, platform build instructions (`/source/#build`), licensing and credits. These public pages work without a configured database and use the shared block animation.
 
-Home introduces the game in this order: hero, about, features, specials, screenshots, community links, licensing, Get the game, then source-build instructions. Download buttons in the header and hero jump directly to the lower download section.
+Home introduces the game in this order: hero, about, features, specials, screenshots, licensing, then Get the game. Server browsing and statistics remain on their dedicated pages; build instructions live on Source. Download buttons in the header and hero jump directly to the lower download section.

@@ -105,86 +105,14 @@ site_header('Multiplayer falling blocks','home','./');
 
 <div class="section-divider"></div>
 
-<section class="section community-destinations"><a class="feature-card" href="servers/"><h2>Find your next server →</h2><p>Browse live community servers and copy an address to join in the game.</p></a><a class="feature-card" href="statistics/"><h2>Follow the competition →</h2><p>Statistics, ranked leaderboards, match history, player profiles and replays.</p></a></section>
-
-<div class="section-divider"></div>
-
 <section class="section" id="license"><p class="eyebrow">Open source</p><h2 class="section-title">Free software. Make it yours.</h2><p class="section-sub">GPL version 3 or later — free to use, modify, and redistribute under its terms. Music and fonts carry their own licenses.</p><div class="hero-actions"><a class="btn btn-outline" href="source/">Source, license &amp; credits →</a><a class="btn btn-outline" href="documentation/">Read the documentation →</a></div></section>
 
 <div class="section-divider"></div>
 
 <section class="section" id="get" aria-labelledby="get-heading"><p class="eyebrow">Ready when you are</p><h2 class="section-title" id="get-heading">Get the game.</h2>
 <p class="section-sub">The latest published GitHub release, with downloads for the platforms available in that release. Drafts and prereleases are excluded.</p>
-<div class="download-panel"><p id="release-status" role="status">Checking the latest release…</p><div id="release-assets" class="release-assets"></div><div class="download-actions"><a class="btn btn-outline" href="https://github.com/kladhest-se/lineclash/releases">All GitHub releases ↗</a><a class="btn btn-outline" href="#build">Build from source</a><button type="button" class="copy-button" id="release-retry" hidden>Try again</button></div><noscript><p>Enable JavaScript to check downloads automatically, or visit GitHub releases. You can also build from source below.</p></noscript></div>
+<div class="download-panel"><p id="release-status" role="status">Checking the latest release…</p><div id="release-assets" class="release-assets"></div><div class="download-actions"><a class="btn btn-outline" href="https://github.com/kladhest-se/lineclash/releases">All GitHub releases ↗</a><a class="btn btn-outline" href="source/#build">Build from source</a><button type="button" class="copy-button" id="release-retry" hidden>Try again</button></div><noscript><p>Enable JavaScript to check downloads automatically, or visit GitHub releases. Build instructions are available on the Source page.</p></noscript></div>
 <p class="small muted">Native packages may require SDL2 and other runtime libraries. Check the release notes for platform and installation requirements.</p></section>
-
-<div class="section-divider"></div>
-
-<!-- Build -->
-<div class="section" id="build">
-  <p class="eyebrow">Get started</p>
-  <h2 class="section-title">Build from source.</h2>
-  <p class="section-sub">Build the native clients and dedicated server with a C compiler, make, SDL2, SQLite and libcurl.</p>
-
-  <div class="tab-bar" role="tablist">
-    <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="tab-macos"   onclick="showTab(this,'macos')">macOS</button>
-    <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="tab-opensuse" onclick="showTab(this,'opensuse')">openSUSE</button>
-    <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="tab-ubuntu"   onclick="showTab(this,'ubuntu')">Ubuntu</button>
-  </div>
-
-  <div id="tab-macos" class="tab-panel active" role="tabpanel">
-<pre class="code-block"><span class="c"># Install SDL2</span>
-<span class="s">brew</span> install sdl2
-
-<span class="c"># Clone and build</span>
-<span class="s">git</span> clone https://github.com/kladhest-se/lineclash.git
-<span class="s">cd</span> lineclash &amp;&amp; make
-
-<span class="c"># Run</span>
-<span class="s">./server/lineclashd</span> &amp;
-<span class="s">./clients/gui/lineclash</span></pre>
-  </div>
-  <div id="tab-opensuse" class="tab-panel" role="tabpanel">
-<pre class="code-block"><span class="c"># Install dependencies</span>
-<span class="s">sudo zypper</span> install -y gcc make libSDL2-devel sqlite3-devel libcurl-devel
-
-<span class="c"># Clone and build</span>
-<span class="s">git</span> clone https://github.com/kladhest-se/lineclash.git
-<span class="s">cd</span> lineclash &amp;&amp; make
-
-<span class="c"># Run</span>
-<span class="s">./server/lineclashd</span> &amp;
-<span class="s">./clients/gui/lineclash</span></pre>
-  </div>
-  <div id="tab-ubuntu" class="tab-panel" role="tabpanel">
-<pre class="code-block"><span class="c"># Install dependencies</span>
-<span class="s">sudo apt</span> install gcc make libsdl2-dev libsqlite3-dev libcurl4-openssl-dev
-
-<span class="c"># Clone and build</span>
-<span class="s">git</span> clone https://github.com/kladhest-se/lineclash.git
-<span class="s">cd</span> lineclash &amp;&amp; make
-
-<span class="c"># Run</span>
-<span class="s">./server/lineclashd</span> &amp;
-<span class="s">./clients/gui/lineclash</span></pre>
-  </div>
-</div>
-
-<script>
-/* ── Tab switching ─────────────────────────────────────── */
-function showTab(btn, id) {
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.remove('active');
-    b.setAttribute('aria-selected', 'false');
-  });
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  btn.setAttribute('aria-selected', 'true');
-  document.getElementById('tab-' + id).classList.add('active');
-}
-
-</script>
-
 
 <script src="assets/downloads.js" defer></script>
 </main>
