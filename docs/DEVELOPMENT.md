@@ -73,3 +73,5 @@ Run `make directory-test` for offline delivery checks. With `LINECLASH_WEB_CONFI
 See [discovery, ranked history, health reports, replays and music shortcuts](ENHANCEMENTS.md) for the latest controls, deployment changes and verification limits.
 
 The antialiased GUI font is compiled from `clients/gui/src/ui_font.h`; no extra font runtime is required. To regenerate it deliberately, install Pillow in a development environment and run `scripts/build_ui_font.py`. The bundled Roboto source is licensed under SIL OFL 1.1; all packages include its notice. Run `tests/test_web_refresh.py` for offline refresh-script safeguards.
+
+For destructive website-reset regression tests, set `LINECLASH_WEB_RESET_TEST_CONFIG` to a disposable MariaDB configuration with CREATE DATABASE permission and run `python3 tests/test_web_reset.py`. The test creates a random isolated schema, checks preview, rollback and successful deletion, then drops only that test schema. Without this explicit setting the reset test is skipped by `make web-test`.

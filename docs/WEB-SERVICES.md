@@ -155,3 +155,21 @@ Set the minimum length for **new and reset central passwords** in the existing s
 The default is 12 Unicode characters. The supported range is 1–72; invalid configuration values retain the default. The 72-byte password limit still applies. Changing the minimum does not prevent existing accounts from signing in. Website forms show the current requirement. The refresh script preserves `config.inc.php`, so add this option to your live configuration yourself.
 
 The database account needs SELECT, INSERT and UPDATE on `account_sessions`; logout does not require DELETE. Administrators may periodically delete expired/revoked sessions and expired `account_devices` rows. Back up account records privately. Deploy the website and run migrations first, then update dedicated servers and clients. No real production accounts are created by the local tests.
+
+## Reset all website data
+
+Preview all LineClash table counts without changing data:
+
+```sh
+php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php reset-data --dry-run
+```
+
+Erase all central accounts, browser-approval requests, native sessions, server registrations, registration limits, reported games, players and statistics:
+
+```sh
+php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php reset-data --confirm-reset
+```
+
+`reset-data` without an option also previews. The command uses the database selected by the normal site configuration and prints its name. It requires all seven known LineClash tables to be InnoDB, uses a single DELETE transaction in foreign-key order and rolls back if any deletion fails. The DB account needs SELECT and DELETE on those tables. It preserves the schema, unrelated tables and `config.inc.php`; no DROP or TRUNCATE permission is needed.
+
+This is a destructive website reset. Dedicated servers' SQLite accounts, permissions and game records are separate and are not erased. Existing central sign-ins become invalid, while already-connected games continue. Live public servers can register again at their next heartbeat, and enabled result uploaders can repopulate history. Stop announcers/uploaders and website writes during the reset if the database must remain empty. Manually provisioned server identities and their upload tokens must be provisioned again afterward.

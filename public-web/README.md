@@ -27,3 +27,7 @@ The homepage now includes live server cards, player/match totals, ranked leaders
 Data is read directly from the existing MariaDB tables; this interface change requires no new migration. If the database is unavailable, the promotional homepage remains available and displays an explicit community-data notice; full data pages return 503 with the shared navigation. Unknown population is shown as unknown, not zero. No example servers or fabricated statistics are rendered in production.
 
 Run `make web-test` with a disposable `LINECLASH_WEB_CONFIG` for real database, integration and outage checks. The test fixtures are confined to that disposable database. Refresh the website after publishing the source updates; `config.inc.php` is still preserved by the update helper.
+
+## Reset website data
+
+`php bin/manage.php reset-data --dry-run` previews the affected table counts. `php bin/manage.php reset-data --confirm-reset` deletes all LineClash website data, including central accounts and reported statistics, in one transaction. It preserves the schema, configuration and unrelated tables. The configured database account needs DELETE privileges. Dedicated-server SQLite databases are separate. See the repository web-service guide for scope and re-registration behavior.
