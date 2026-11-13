@@ -4,7 +4,7 @@ site_header('Source','source');
 ?><main id="main" class="community-shell"><p class="eyebrow">Source</p><h1>Open source. Built to be shared.</h1><p class="page-intro">Explore the native clients, dedicated server and community website. Report a bug, improve the documentation, or build your own arena.</p>
 <section class="community-section"><h2>Source repository</h2><div class="source-grid"><article class="source-card"><h3>GitHub</h3><p>Browse the code, report issues, contribute changes, and find published releases.</p><a class="source-link" href="https://github.com/kladhest-se/lineclash">Open GitHub ↗</a></article><article class="source-card"><h3>Issues & contributions</h3><p>Include your platform, steps to reproduce and relevant logs when reporting a bug. Remove passwords and tokens from logs.</p><a class="source-link" href="https://github.com/kladhest-se/lineclash/issues">Browse issues ↗</a></article></div></section>
 <section class="community-section"><h2>Get the source</h2><pre class="code-block">git clone https://github.com/kladhest-se/lineclash.git
-cd lineclash</pre><p>See <a href="#build">the build instructions below</a> for platform dependencies, or read the <a href="../documentation/#development">development guide</a>. The main branch is the development version; published release packages appear in <a href="../#get">Get the game on Home</a>.</p></section>
+cd lineclash</pre><p>See <a href="#build">the build instructions below</a> for platform dependencies, or read the <a href="#development">development guide</a>. The main branch is the development version; published release packages appear in <a href="../#get">Get the game on Home</a>.</p></section>
 <!-- Build -->
 <div class="community-section" id="build">
   <p class="eyebrow">Get started</p>
@@ -58,8 +58,7 @@ make -j4
 # Optional dedicated server (run in another terminal)
 ./server/lineclashd.exe
 
-# Verify on Windows, then create a portable ZIP
-make verify
+# Create a portable ZIP
 python scripts/package-windows.py</pre>
 <p>The server keeps its configuration, logs and database in <code>%APPDATA%\LineClash\Server</code>. The ZIP bundles the needed runtime DLLs and music; extract it and launch <code>bin/lineclash.exe</code>.</p>
 </div>
@@ -80,4 +79,5 @@ function showTab(btn, id) {
 }
 
 </script>
+<?php require __DIR__.'/../inc/source-documentation.html'; ?>
 <section class="community-section"><h2>License &amp; credits</h2><div class="guide-panel"><p>LineClash’s game code is licensed under the GNU General Public License, version 3 or any later version. You may use, modify and redistribute it under those terms. The software is provided without warranty.</p><p>Music and fonts have their own licenses and attribution requirements. Review the credits when redistributing the game or its assets.</p><p><a href="https://github.com/kladhest-se/lineclash/blob/main/LICENSE.md">Read the full license ↗</a> · <a href="https://github.com/kladhest-se/lineclash/blob/main/CREDITS.md">Music and font credits ↗</a></p><p>Created by <a href="https://github.com/frossmant">Tommy Frössman</a>. <a href="https://ko-fi.com/frossmant">Support development on Ko-fi ↗</a></p></div></section></main><?php site_footer(); ?>

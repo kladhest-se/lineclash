@@ -104,6 +104,6 @@ The footer contains only Credits, Privacy, API and GitHub. `/credits/` lists sou
 
 ## Website documentation publishing
 
-`/documentation/` contains the full guides with a contents sidebar and local chapter links, including playing, builds, Windows, server configuration, web services, API, deployment, trust, verification and release workflow. It works without MariaDB or GitHub availability. Public deployment examples use example hostnames and reserved documentation IP addresses.
+`/documentation/` is limited to playing, game-server configuration, discovery and replay usage. Build and development guides are on `/source/`; both API references are on `/api/docs/`. Website deployment, web-service operations, release workflows, verification and release notes stay in repository documentation, rather than being published as website chapters. Soundtrack attribution is on Credits.
 
-Guide content is generated from the Markdown sources into `public-web/inc/documentation.html`. Install `scripts/requirements-docs.txt`, then run `python3 scripts/build_web_docs.py`; use `--check` to verify that the checked-in page matches its sources. Rebuild it whenever a published guide changes. No Markdown package is required on the web host.
+These three public guide views are generated from selected canonical Markdown content into `public-web/inc/documentation.html`, `source-documentation.html` and `api-documentation.html`. Install `scripts/requirements-docs.txt`, then run `python3 scripts/build_web_docs.py`; `--check` detects stale output. No Markdown package is needed on the web host. Repository-only operator and development material remains intact.

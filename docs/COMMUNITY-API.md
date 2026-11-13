@@ -2,6 +2,8 @@
 
 The community website exposes `/api/?action=ACTION`. Public GET requests return JSON without authentication. This is separate from the dedicated server’s local status endpoint.
 
+## Public endpoints
+
 | Action | Parameters | Response |
 | --- | --- | --- |
 | servers | `format=text` optional | Live server listings; text format supports native discovery |
