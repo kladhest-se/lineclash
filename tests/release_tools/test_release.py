@@ -126,6 +126,14 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(archive.getmember('bin/lineclashd').mode,0o755)
             release.check(self.root)
 
+    def test_amiga_executable_is_not_source_input(self):
+        folder=self.root/'clients/amiga';folder.mkdir()
+        (folder/'LineClash').write_bytes(bytes.fromhex('000003f3'))
+        (folder/'main.c').write_text('int main(void){return 0;}')
+        inputs={str(path.relative_to(self.root)) for path in provenance.source_files(self.root)}
+        self.assertNotIn('clients/amiga/LineClash',inputs)
+        self.assertIn('clients/amiga/main.c',inputs)
+
     def test_inventory_valid(self):self.assertIn('SHA256SUMS',release.check(self.root))
     def test_plan_does_not_build_or_contact_network(self):
         with patch('release.run',side_effect=AssertionError('must not run')):
