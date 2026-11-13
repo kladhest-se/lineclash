@@ -31,12 +31,29 @@ site_header('Account','account');
 function account_fields(string $code): void {echo '<input type="hidden" name="csrf" value="'.site_h($_SESSION['csrf']).'"><input type="hidden" name="code" value="'.site_h($code).'">';}
 ?>
 <main id="main" class="community-shell"><p class="eyebrow">LineClash account</p><h1><?=!empty($user)?'@'.site_h($user['handle']):'Sign in. Play anywhere.'?></h1>
-<?php if($error):?><p role="alert"><?=site_h($error)?></p><?php endif;?>
-<?php if($notice):?><p role="status"><?=site_h($notice)?></p><?php endif;?>
+<?php if($error):?><p class="account-error" role="alert"><?=site_h($error)?></p><?php endif;?>
+<?php if($notice):?><p class="account-notice" role="status"><?=site_h($notice)?></p><?php endif;?>
 <?php if($recovery):?><section class="community-section"><h2>Save your recovery code</h2><p>This code can reset your password. Store it privately; it is shown only now.</p><code><?=site_h($recovery)?></code></section><?php endif;?>
 <?php if(empty($user)):?>
-<section class="community-section"><form method="post" class="account-form"><?php account_fields($code);?><label>Handle<input name="handle" required minlength="3" maxlength="14" autocomplete="username" pattern="[A-Za-z][A-Za-z0-9_]{2,13}"></label><label>Password<input type="password" name="password" required minlength="12" maxlength="72" autocomplete="current-password"></label><button name="action" value="login">Sign in</button><button name="action" value="register">Create account</button></form></section>
-<details><summary>Recover an account</summary><form method="post" class="account-form"><?php account_fields($code);?><label>Handle<input name="handle" required autocomplete="username"></label><label>Recovery code<input name="recovery" required autocomplete="off"></label><label>New password<input name="password" type="password" required minlength="12" maxlength="72" autocomplete="new-password"></label><button name="action" value="recover">Reset password</button></form></details>
+<section class="community-section"><form method="post" class="account-form" novalidate>
+<?php account_fields($code);?>
+<label for="account-handle">Handle</label>
+<input id="account-handle" name="handle" required minlength="3" maxlength="14" autocomplete="username" pattern="[A-Za-z][A-Za-z0-9_]{2,13}" aria-describedby="account-handle-help" value="<?=site_h(is_string($_POST['handle']??null)?$_POST['handle']:'')?>">
+<small id="account-handle-help">3–14 letters, numbers or underscores. Start with a letter.</small>
+<label for="account-password">Password</label>
+<input id="account-password" type="password" name="password" required minlength="12" maxlength="72" autocomplete="current-password" aria-describedby="account-password-help">
+<small id="account-password-help">Use at least 12 characters. Maximum 72 bytes.</small>
+<button name="action" value="login">Sign in</button><button name="action" value="register">Create account</button>
+</form></section>
+<details><summary>Recover an account</summary><form method="post" class="account-form" novalidate>
+<?php account_fields($code);?>
+<label>Handle<input name="handle" required autocomplete="username"></label>
+<label>Recovery code<input name="recovery" required autocomplete="off"></label>
+<label for="recovery-password">New password</label>
+<input id="recovery-password" name="password" type="password" required minlength="12" maxlength="72" autocomplete="new-password" aria-describedby="recovery-password-help">
+<small id="recovery-password-help">Use at least 12 characters. Maximum 72 bytes.</small>
+<button name="action" value="recover">Reset password</button>
+</form></details>
 <?php else:?>
 <p>Your central player identity is <strong>@<?=site_h($user['handle'])?></strong>. Server permissions and bans remain under each server operator's control.</p>
 <?php if($device):?><section class="community-section"><h2>Approve this connection?</h2><p>Server: <strong><?=site_h($device['name'])?></strong> — <?=site_h($device['host'])?>:<?=(int)$device['port']?></p><p>Approve only if this is the code currently shown in your game: <strong><?=site_h($code)?></strong>.</p><form method="post"><?php account_fields($code);?><button name="action" value="approve">Approve sign-in</button></form></section>

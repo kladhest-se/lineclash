@@ -30,6 +30,16 @@ with tempfile.TemporaryFile() as log:
    try:call();break
    except OSError:time.sleep(.03)
   assert csrf
+  page=call()[1]
+  assert 'novalidate' in page and 'Use at least 12 characters.' in page
+  assert 'aria-describedby="account-password-help"' in page
+  short=secrets.token_hex(5)+'x'
+  invalid=call(data=dict(action='register',handle=handle,password=short))[1]
+  assert 'Password is too short. Use at least 12 characters.' in invalid
+  assert 'role="alert"' in invalid and 'Save your recovery code' not in invalid
+  assert 'value="'+handle+'"' in invalid and short not in invalid
+  too_long=call(data=dict(action='register',handle=handle,password='é'*37))[1]
+  assert 'Password is too long.' in too_long and 'Save your recovery code' not in too_long
   assert 'Save your recovery code' in call(data=dict(action='register',handle=handle,password=password))[1]
   assert '@'+handle in call()[1]
   assert call('/api/',dict(server_id=server,token=key,database_id=secrets.token_hex(16),games=[],status={}),True)[0]==200
@@ -47,5 +57,5 @@ with tempfile.TemporaryFile() as log:
   assert call('/api/',dict(request,action='account-poll',server_key='f'*64),True)[0]==403
   call(data=dict(action='logout'));assert 'Sign in. Play anywhere.' in call()[1]
   call(data=dict(action='login',handle=handle,password=password));assert '@'+handle in call()[1]
-  print('PASS: central registration, browser session, profile, login/logout, server-bound approval and single-use redemption')
+  print('PASS: visible validation, rejected short/oversized passwords, central registration, browser session, profile, login/logout, server-bound approval and single-use redemption')
  finally:p.terminate();p.wait(timeout=5)

@@ -19,7 +19,10 @@ function account_csrf(): void {
 function account_handle(string $handle): string {
     $handle=strtolower(trim($handle));if(!preg_match('/^[a-z][a-z0-9_]{2,13}$/D',$handle))throw new InvalidArgumentException('Use 3–14 letters, digits or underscores, starting with a letter.');return $handle;
 }
-function account_password(string $password): void {if(strlen($password)<12||strlen($password)>72)throw new InvalidArgumentException('Use a password between 12 and 72 bytes.');}
+function account_password(string $password): void {
+    if(strlen($password)<12)throw new InvalidArgumentException('Password is too short. Use at least 12 characters.');
+    if(strlen($password)>72)throw new InvalidArgumentException('Password is too long. Use no more than 72 bytes; some characters use more than one byte.');
+}
 function account_limit(PDO $db,string $scope,int $max=15): void {
     $source=hash('sha256',$scope.':'.directory_peer($_SERVER,require web_config_path()));$now=time();
     $q=$db->prepare('INSERT INTO directory_registration_limits(source_hash,window_start,requests) VALUES(?,?,1) ON DUPLICATE KEY UPDATE requests=IF(window_start<? ,1,requests+1),window_start=IF(window_start<? ,VALUES(window_start),window_start)');$q->execute([$source,$now,$now-60,$now-60]);
