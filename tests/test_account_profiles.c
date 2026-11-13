@@ -30,5 +30,18 @@ int main(int argc,char **argv){
     FILE *f=fopen(argv[1],"r");assert(f);char saved[512]={0};assert(fread(saved,1,sizeof(saved)-1,f)>0);fclose(f);assert(!strcmp(saved,"beta\n"));
     ClientCtx boot;memset(&boot,0,sizeof(boot));client_accounts_load(&boot);assert(boot.account_count==1 && !boot.accounts[0].token[0] && boot.account_active==-1);
     client_accounts_select(&c,0);client_accounts_action(&c,ACCOUNT_LOGOUT);assert(!c.accounts[0].token[0] && c.account_active==-1);reply(&c,"central-signed-out");
+    client_accounts_action(&c,ACCOUNT_CREATE_MODE);assert(c.account_create_mode);
+    strcpy(c.tf_account_handle.text,"gamma");c.tf_account_handle.len=5;strcpy(c.tf_account_email.text,"gamma@example.test");c.tf_account_email.len=18;
+    strcpy(c.tf_account_password.text,"new-password-value");c.tf_account_password.len=18;
+    strcpy(c.tf_account_confirm.text,"different");c.tf_account_confirm.len=9;
+    client_accounts_action(&c,ACCOUNT_REGISTER);assert(!pending && strstr(c.account_message,"do not match"));
+    strcpy(c.tf_account_confirm.text,c.tf_account_password.text);c.tf_account_confirm.len=c.tf_account_password.len;c.account_join_after=1;
+    client_accounts_action(&c,ACCOUNT_REGISTER);assert(pending && strstr(request,"account-client-register") && strstr(request,"gamma@example.test"));assert(!c.tf_account_password.text[0] && !c.tf_account_confirm.text[0]);
+    char registered[512],token[65],recovery[49];memset(token,'d',64);token[64]=0;memset(recovery,'e',48);recovery[48]=0;
+    snprintf(registered,sizeof(registered),"central-registered %s gamma %lld %s gamma@example.test",token,(long long)time(NULL)+600,recovery);
+    int previous_connects=connects;reply(&c,registered);assert(c.account_recovery[0] && connects==previous_connects && c.state==CS_ACCOUNT);
+    f=fopen(argv[1],"r");assert(f);memset(saved,0,sizeof(saved));fread(saved,1,sizeof(saved)-1,f);fclose(f);assert(strstr(saved,"gamma\tgamma@example.test") && !strstr(saved,token) && !strstr(saved,recovery));
+    client_accounts_action(&c,ACCOUNT_BACK);assert(c.account_recovery[0] && c.state==CS_ACCOUNT);
+    client_accounts_action(&c,ACCOUNT_RECOVERY_DONE);assert(!c.account_recovery[0] && connects==previous_connects+1 && !strcmp(c.central_profile,"@gamma"));
     client_accounts_shutdown(&c);assert(!c.accounts[0].handle[0]);puts("PASS: multiple profiles, selection, UTF-8-safe credentials, secret disposal, names-only persistence and stale join protection");return 0;
 }

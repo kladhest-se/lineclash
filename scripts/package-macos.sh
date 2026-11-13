@@ -10,7 +10,7 @@ SIGN_IDENTITY=""
 [[ "${1:-}" == "--sign" ]] && SIGN_IDENTITY="$2"
 
 APP_NAME="LineClash"
-VER_NUM="$(echo "$VERSION" | sed 's/-.*//')"
+VER_NUM="$(echo "$VERSION" | sed 's/-.*//' | awk -F. '{if(NF==2) print $0 ".0"; else print $0}')"
 MAC_ARCH="$(uname -m)"   # arm64 or x86_64
 
 [[ -f "$CLIENT_DIR/lineclash" ]]      || fail "client/lineclash not found — run build-client.sh first"

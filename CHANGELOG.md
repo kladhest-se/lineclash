@@ -19,7 +19,7 @@
 - Unify build metadata and track generated-header dependencies.
 - Add regression tests, configuration/player/API/deployment guides and complete license text.
 
-## v1.0.0
+## v0.1
 
 - Multiplayer rooms with up to 8 players, spectator mode, and team play
 - Guideline garbage system with back-to-back bonus, combos, and perfect clear

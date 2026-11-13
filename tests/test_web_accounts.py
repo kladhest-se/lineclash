@@ -7,17 +7,19 @@ subprocess.run(['php',str(root/'public-web/bin/manage.php'),'migrate'],check=Tru
 server='account_test_'+secrets.token_hex(8);handle='u'+secrets.token_hex(5);password=secrets.token_hex(16)
 output=subprocess.check_output(['php',str(root/'public-web/bin/manage.php'),'server',server,'127.0.0.1','31457','Account test server'],text=True);key=output.split()[-1]
 with socket.socket() as s:s.bind(('127.0.0.1',0));port=s.getsockname()[1]
-cookie='';csrf=''
+cookie='';csrf='';test_peer='198.18.'+str(secrets.randbelow(254)+1)+'.'+str(secrets.randbelow(254)+1)
 with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_dir, tempfile.TemporaryFile() as log:
  policy_file=Path(config_dir)/'web.php'
- def policy_minimum(value):policy_file.write_text('<?php return array_replace(require getenv("LINECLASH_WEB_TEST_BASE_CONFIG"), ["account_password_min_length"=>'+str(value)+']);')
+ def policy_minimum(value):policy_file.write_text('<?php return array_replace(require getenv("LINECLASH_WEB_TEST_BASE_CONFIG"), ["trusted_proxies"=>["127.0.0.1"],"account_password_min_length"=>'+str(value)+']);')
  policy_minimum(12)
  test_env=dict(os.environ,LINECLASH_WEB_TEST_BASE_CONFIG=os.environ['LINECLASH_WEB_CONFIG'],LINECLASH_WEB_CONFIG=str(policy_file))
- p=subprocess.Popen(['php','-S',f'127.0.0.1:{port}','-t',str(root/'public-web'),str(root/'public-web/dev-router.php')],stdout=log,stderr=log,env=test_env)
+ p=subprocess.Popen(['php','-d','opcache.enable=0','-S',f'127.0.0.1:{port}','-t',str(root/'public-web'),str(root/'public-web/dev-router.php')],stdout=log,stderr=log,env=test_env)
  def call(path='/account/',data=None,api=False):
   global cookie,csrf
-  headers={'Cookie':cookie};body=None
+  headers={'Cookie':cookie,'X-Forwarded-For':test_peer};body=None
   if data is not None:
+   data=dict(data)
+   if not api and data.get('action')=='register':data.setdefault('email',data.get('handle','')+'@example.test')
    if api:headers['Content-Type']='application/json';body=json.dumps(data).encode()
    else:headers['Content-Type']='application/x-www-form-urlencoded';body=urllib.parse.urlencode(dict(csrf=csrf,**data)).encode()
   req=urllib.request.Request(f'http://127.0.0.1:{port}'+path,body,headers)
@@ -64,9 +66,9 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   # Native profiles never send a browser session or a password to the game server.
   request_login=dict(action='account-client-login',handle=handle,password=password)
   status,bad=call('/api/',dict(request_login,password='incorrect-but-long'),True)
-  assert status==401 and bad=='central-error Incorrect username or password'
+  assert status==401 and bad=='central-error Incorrect email, username or password'
   status,body=call('/api/',request_login,True);assert status==200,(status,body)
-  _,session,returned,expires=body.split();assert returned==handle and len(session)==64
+  _,session,returned,expires=body.split()[:4];assert returned==handle and len(session)==64
   def begin():
    nonce=secrets.token_hex(32);auth=dict(server_key=key,nonce=nonce)
    status,body=call('/api/',dict(auth,action='account-begin',direct=True),True)
@@ -95,8 +97,43 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   subprocess.run(['php','-r',php,handle],check=True)
   auth,challenge=begin();join.update(challenge=challenge)
   assert call('/api/',join,True)[0]==401
+  # Native registration requires a private unique email, returns recovery once,
+  # and starts a session without a browser cookie or approval code.
+  native_handle='n'+secrets.token_hex(5);native_email=native_handle+'@example.test'
+  signup=dict(action='account-client-register',handle=native_handle,email=native_email,password=password)
+  status,error=call('/api/',dict(signup,email=''),True)
+  assert status==400 and 'valid email' in error
+  status,error=call('/api/',dict(signup,password='short'),True)
+  assert status==400 and 'at least 12' in error
+  status,registered=call('/api/',signup,True);assert status==200,(status,registered)
+  prefix,native_token,nick,expiry,native_recovery,saved_email=registered.split()
+  assert prefix=='central-registered' and nick==native_handle and len(native_recovery)==48 and saved_email==native_email
+  status,error=call('/api/',dict(signup,handle='d'+secrets.token_hex(5)),True)
+  assert status==400 and 'already registered' in error
+  status,error=call('/api/',dict(signup,email='other_'+native_email),True)
+  assert status==400 and 'already registered' in error
+  assert call('/api/',dict(signup,handle='z'+secrets.token_hex(5)),True)[0]==429
+  status,by_email=call('/api/',dict(action='account-client-login',login=native_email.upper(),password=password),True)
+  assert status==200 and by_email.split()[2]==native_handle and by_email.split()[4]==native_email
+  assert call('/api/',dict(action='account-client-login',handle=native_handle,password=password),True)[0]==200
+  auth,challenge=begin()
+  assert call('/api/',dict(action='account-client-join',session=native_token,challenge=challenge,host='127.0.0.1',port=31457),True)==(200,'central-joined '+native_handle)
+  identity=call('/api/',dict(auth,action='account-poll'),True)[1]
+  assert identity.endswith(' '+native_handle) and native_email not in identity
+  assert native_email not in call('/api/?action=servers')[1]
+  page=call(data=dict(action='recover',email=native_email,recovery=native_recovery,password=secrets.token_hex(16)))[1]
+  assert 'Save your recovery code' in page
+  assert call('/api/',dict(action='account-client-logout',session=native_token),True)[0]==401
+  call(data=dict(action='logout'))
+  # Existing migrated accounts with NULL email retain username sign-in.
+  legacy='l'+secrets.token_hex(5)
+  php='require '+json.dumps(str(root/'public-web/inc/service.php'))+'; $q=database()->prepare("INSERT INTO accounts(id,handle,password_hash,recovery_hash,created_at) VALUES(?,?,?,?,?)");$q->execute([bin2hex(random_bytes(16)),$argv[1],password_hash($argv[2],PASSWORD_DEFAULT),str_repeat("0",64),time()]);'
+  subprocess.run(['php','-r',php,legacy,password],check=True)
+  status,legacy_session=call('/api/',dict(action='account-client-login',handle=legacy,password=password),True)
+  assert status==200 and legacy_session.endswith(' -')
   policy_minimum(6)
-  assert 'minlength="6"' in call()[1] and 'Use at least 6 characters.' in call()[1]
+  page=call()[1]
+  assert 'minlength="6"' in page and 'Use at least 6 characters.' in page, re.findall(r'<h1>.*?</h1>|minlength="[^"]*"|role="alert">[^<]*',page)
   short_handle='v'+secrets.token_hex(5);short_password=secrets.token_hex(3)
   assert 'Use at least 6 characters.' in call(data=dict(action='register',handle=short_handle,password=short_password[:5]))[1]
   page=call(data=dict(action='register',handle=short_handle,password=short_password))[1]
@@ -111,5 +148,5 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   assert 'Use at least 20 characters.' in call(data=dict(action='recover',handle=short_handle,password=short_password,recovery=recovery))[1]
   assert 'Save your recovery code' in call(data=dict(action='recover',handle=short_handle,password=secrets.token_hex(16),recovery=recovery))[1]
   assert call('/api/',dict(action='account-client-logout',session=native_session),True)[0]==401
-  print('PASS: visible validation, rejected short/oversized passwords, central registration, browser sessions, native profile sessions, target-bound HTTPS joins, logout/recovery revocation, single-use redemption and configurable password policy with existing-account login')
+  print('PASS: visible validation, rejected short/oversized passwords, central registration, browser sessions, native profile sessions, target-bound HTTPS joins, logout/recovery revocation, single-use redemption and configurable password policy with existing-account login, native registration, unique email login and legacy compatibility')
  finally:p.terminate();p.wait(timeout=5)

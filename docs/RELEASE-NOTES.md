@@ -1,4 +1,4 @@
-# LineClash 1.0.0
+# LineClash 0.1
 
 - Repair HTTP status JSON and slow-client handling.
 - Harden authenticated identity, gameplay state and special inventory checks.

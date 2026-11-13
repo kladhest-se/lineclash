@@ -11,7 +11,7 @@ SOURCE_ROOTS = ('version.mk', 'get-version.sh', 'Makefile', '.gitignore',
                 'shared', 'tests', 'docker', 'music', 'public-web', 'scripts', 'examples', 'docs', '.github')
 REQUIRED = ('version.mk', 'get-version.sh', 'Makefile', 'LICENSE.md', 'clients', 'server',
             'shared', 'tests', 'scripts', 'public-web')
-GENERATED_NAMES = {'LineClash', 'lineclash', 'lineclashd', 'lineclashd-tool', 'buildnum.h',
+GENERATED_NAMES = {'LineClash', 'LineClash.accounts', 'LineClash.servers', 'LineClash.settings', 'LineClash.log', 'lineclash', 'lineclashd', 'lineclashd-tool', 'buildnum.h',
                    'test_account_profiles', 'test_field', 'test_net', 'test_auth', 'test_integration', 'test_gui', 'test_music', 'test_music_ui', 'test_music_decoder', 'test_discovery'}
 
 
@@ -30,8 +30,8 @@ def run(args, root=ROOT, capture=False, env=None):
 
 def version(root=ROOT):
     text = (root / 'version.mk').read_text()
-    values = re.findall(r'^VERSION\s*\?=\s*(\d+\.\d+\.\d+)\s*$', text, re.M)
-    require(len(values) == 1, 'version.mk must contain exactly one VERSION ?= MAJOR.MINOR.PATCH')
+    values = re.findall(r'^VERSION\s*\?=\s*(\d+\.\d+(?:\.\d+)?)\s*$', text, re.M)
+    require(len(values) == 1, 'version.mk must contain exactly one VERSION ?= MAJOR.MINOR[.PATCH]')
     return values[0]
 
 

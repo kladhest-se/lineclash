@@ -28,9 +28,12 @@ These POST JSON actions return plain text and require HTTPS. Do not put credenti
 
 | Action | Body fields | Success response |
 | --- | --- | --- |
-| account-client-login | `handle`, `password` | `central-session TOKEN HANDLE EXPIRES` (12 hours) |
+| account-client-register | `handle`, `email`, `password` | `central-registered TOKEN HANDLE EXPIRES RECOVERY EMAIL` |
+| account-client-login | `login` (email or existing username), `password` | `central-session TOKEN HANDLE EXPIRES EMAIL` (12 hours) |
 | account-client-join | `session`, `challenge`, `host`, `port` | `central-joined HANDLE` |
 | account-client-logout | `session` | `central-signed-out` |
+
+Registration enforces unique usernames/emails and the configured password policy. Account creation and session issuance are atomic. Save the recovery code once; it is never returned by login. Email is private and is not a verified ownership claim; email-based recovery is not implemented yet. Existing clients may still send `handle` for username login. A missing email on an older account is represented by `-` in the login response.
 
 The game server creates a connection-bound request with `account-begin` and `direct=true`, authenticating with its own directory key and random nonce. It gives the client the returned 64-character challenge. The client authorizes that challenge through `account-client-join`; its target host and port must match the request's live verified directory entry. The server polls its own request using `account-poll` and consumes the approved identity once. Replays, expired requests and mismatched targets are rejected. Client passwords and session tokens are not part of the game protocol.
 

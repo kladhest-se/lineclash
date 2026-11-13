@@ -7,12 +7,11 @@ try {
         account_csrf();$action=$_POST['action']??'';
         if($action==='logout'){$_SESSION=[];session_destroy();header('Location: ./');exit;}
         if(in_array($action,['login','register','recover'],true)){
-            account_limit($db,'account-login');$handle=account_handle((string)($_POST['handle']??''));$password=(string)($_POST['password']??'');if($action!=='login')account_password($password);elseif(strlen($password)>72 || str_contains($password,"\0"))throw new InvalidArgumentException('Sign-in details did not match.');
+            account_limit($db,'account-login');$handle=(string)($_POST['handle']??'');$email=(string)($_POST['email']??'');$password=(string)($_POST['password']??'');if($action!=='login')account_password($password);elseif(strlen($password)>72 || str_contains($password,"\0"))throw new InvalidArgumentException('Sign-in details did not match.');
             if($action==='register'){
-                $recovery=bin2hex(random_bytes(24));$id=bin2hex(random_bytes(16));
-                $q=$db->prepare('INSERT INTO accounts(id,handle,password_hash,recovery_hash,created_at) VALUES(?,?,?,?,?)');$q->execute([$id,$handle,password_hash($password,PASSWORD_DEFAULT),hash('sha256',$recovery),time()]);session_regenerate_id(true);$_SESSION['account_id']=$id;$_SESSION['auth_version']=1;
+                $user=account_register($db,$handle,$email,$password);$recovery=$user['recovery'];session_regenerate_id(true);$_SESSION['account_id']=$user['id'];$_SESSION['auth_version']=1;
             }else{
-                $q=$db->prepare('SELECT * FROM accounts WHERE handle=? AND active=1');$q->execute([$handle]);$user=$q->fetch();
+                $user=account_lookup($db,$email!==''?$email:$handle);
                 $valid=$user && ($action==='recover'?hash_equals($user['recovery_hash'],hash('sha256',(string)($_POST['recovery']??''))):password_verify($password,$user['password_hash']));
                 if(!$valid){password_verify($password,'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.');throw new InvalidArgumentException('Sign-in details did not match.');}
                 if($action==='recover'){$recovery=bin2hex(random_bytes(24));$q=$db->prepare('UPDATE accounts SET password_hash=?,recovery_hash=?,auth_version=auth_version+1 WHERE id=?');$q->execute([password_hash($password,PASSWORD_DEFAULT),hash('sha256',$recovery),$user['id']]);$user['auth_version']++;}
@@ -37,9 +36,12 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <?php if(empty($user)):?>
 <section class="community-section"><form method="post" class="account-form" novalidate>
 <?php account_fields($code);?>
-<label for="account-handle">Handle</label>
-<input id="account-handle" name="handle" required minlength="3" maxlength="14" autocomplete="username" pattern="[A-Za-z][A-Za-z0-9_]{2,13}" aria-describedby="account-handle-help" value="<?=site_h(is_string($_POST['handle']??null)?$_POST['handle']:'')?>">
-<small id="account-handle-help">3–14 letters, numbers or underscores. Start with a letter.</small>
+<label for="account-email">Email</label>
+<input id="account-email" name="email" type="email" maxlength="254" autocomplete="email" aria-describedby="account-email-help" value="<?=site_h(is_string($_POST['email']??null)?$_POST['email']:'')?>">
+<small id="account-email-help">Required for new accounts. Use your email to sign in.</small>
+<label for="account-handle">Username (new accounts)</label>
+<input id="account-handle" name="handle" minlength="3" maxlength="14" autocomplete="username" pattern="[A-Za-z][A-Za-z0-9_]{2,13}" aria-describedby="account-handle-help" value="<?=site_h(is_string($_POST['handle']??null)?$_POST['handle']:'')?>">
+<small id="account-handle-help">Public game identity: 3–14 letters, numbers or underscores. Start with a letter. Existing accounts can still sign in by username.</small>
 <label for="account-password">Password</label>
 <input id="account-password" type="password" name="password" required minlength="<?=account_password_min_length()?>" maxlength="72" autocomplete="current-password" aria-describedby="account-password-help">
 <small id="account-password-help"><?=site_h(account_password_hint())?> Maximum 72 bytes.</small>
@@ -47,7 +49,7 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 </form></section>
 <details><summary>Recover an account</summary><form method="post" class="account-form" novalidate>
 <?php account_fields($code);?>
-<label>Handle<input name="handle" required autocomplete="username"></label>
+<label>Email or username<input name="email" required autocomplete="username"></label>
 <label>Recovery code<input name="recovery" required autocomplete="off"></label>
 <label for="recovery-password">New password</label>
 <input id="recovery-password" name="password" type="password" required minlength="<?=account_password_min_length()?>" maxlength="72" autocomplete="new-password" aria-describedby="recovery-password-help">

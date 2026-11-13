@@ -66,3 +66,7 @@ CREATE TABLE IF NOT EXISTS account_sessions (
  auth_version INT NOT NULL, expires BIGINT NOT NULL, revoked TINYINT NOT NULL DEFAULT 0,
  FOREIGN KEY(account_id) REFERENCES accounts(id), INDEX expiry(expires)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Existing accounts keep username sign-in until an email is added.
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email VARCHAR(254) CHARACTER SET ascii COLLATE ascii_general_ci NULL;
+ALTER TABLE accounts ADD UNIQUE INDEX IF NOT EXISTS accounts_email(email);

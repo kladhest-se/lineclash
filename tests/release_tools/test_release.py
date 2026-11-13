@@ -130,9 +130,15 @@ class ReleaseTests(unittest.TestCase):
         folder=self.root/'clients/amiga';folder.mkdir()
         (folder/'LineClash').write_bytes(bytes.fromhex('000003f3'))
         (folder/'main.c').write_text('int main(void){return 0;}')
+        (folder/'LineClash.accounts').write_text('private-user\tprivate@example.test\n')
         inputs={str(path.relative_to(self.root)) for path in provenance.source_files(self.root)}
         self.assertNotIn('clients/amiga/LineClash',inputs)
+        self.assertNotIn('clients/amiga/LineClash.accounts',inputs)
         self.assertIn('clients/amiga/main.c',inputs)
+
+    def test_two_part_project_version(self):
+        (self.root/'version.mk').write_text('VERSION ?= 0.1\n')
+        self.assertEqual(provenance.version(self.root),'0.1')
 
     def test_inventory_valid(self):self.assertIn('SHA256SUMS',release.check(self.root))
     def test_plan_does_not_build_or_contact_network(self):

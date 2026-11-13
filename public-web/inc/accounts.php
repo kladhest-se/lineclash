@@ -9,7 +9,7 @@ function account_session(): void {
 }
 function account_current(PDO $db): ?array {
     if(empty($_SESSION['account_id']))return null;
-    $q=$db->prepare('SELECT id,handle,created_at,auth_version FROM accounts WHERE id=? AND active=1');$q->execute([$_SESSION['account_id']]);$user=$q->fetch();
+    $q=$db->prepare('SELECT id,handle,email,created_at,auth_version FROM accounts WHERE id=? AND active=1');$q->execute([$_SESSION['account_id']]);$user=$q->fetch();
     if(!$user || (int)$user['auth_version']!==(int)($_SESSION['auth_version']??0)){unset($_SESSION['account_id'],$_SESSION['auth_version']);return null;}
     return $user;
 }
@@ -27,6 +27,7 @@ function account_password_hint(): string {
     $minimum=account_password_min_length();return 'Use at least '.$minimum.' '.($minimum===1?'character':'characters').'.';
 }
 function account_password(string $password): void {
+    if(str_contains($password,"\0"))throw new InvalidArgumentException('Password contains an unsupported character.');
     if(strlen($password)>72)throw new InvalidArgumentException('Password is too long. Use no more than 72 bytes; some characters use more than one byte.');
     $length=preg_match_all('/./us',$password);
     if($length===false || $length<account_password_min_length())throw new InvalidArgumentException('Password is too short. '.account_password_hint());
@@ -62,20 +63,50 @@ function account_api(PDO $db,array $a): string {
     return 'central-approved '.$user['id'].' '.$user['handle'];
 }
 
+function account_email(string $email): string {
+    $email=strtolower(trim($email));
+    if(strlen($email)>254 || preg_match('/[^\x21-\x7e]/',$email) || !filter_var($email,FILTER_VALIDATE_EMAIL))throw new InvalidArgumentException('Enter a valid email address.');
+    return $email;
+}
+function account_lookup(PDO $db,string $login): array|false {
+    $login=strtolower(trim($login));
+    $field=str_contains($login,'@')?'email':'handle';
+    $q=$db->prepare('SELECT * FROM accounts WHERE '.$field.'=? AND active=1');$q->execute([$login]);return $q->fetch();
+}
+function account_register(PDO $db,string $handle,string $email,string $password): array {
+    $handle=account_handle($handle);$email=account_email($email);account_password($password);
+    $id=bin2hex(random_bytes(16));$recovery=bin2hex(random_bytes(24));
+    try {
+        $q=$db->prepare('INSERT INTO accounts(id,handle,email,password_hash,recovery_hash,created_at) VALUES(?,?,?,?,?,?)');$q->execute([$id,$handle,$email,password_hash($password,PASSWORD_DEFAULT),hash('sha256',$recovery),time()]);
+    }catch(PDOException $e){if($e->getCode()==='23000')throw new InvalidArgumentException('Username or email is already registered.');throw $e;}
+    return ['id'=>$id,'handle'=>$handle,'email'=>$email,'auth_version'=>1,'recovery'=>$recovery];
+}
+function account_native_session(PDO $db,array $user): string {
+    $token=bin2hex(random_bytes(32));$expires=time()+43200;
+    $q=$db->prepare('INSERT INTO account_sessions(token_hash,account_id,auth_version,expires) VALUES(?,?,?,?)');$q->execute([hash('sha256',$token),$user['id'],$user['auth_version'],$expires]);
+    return $token.' '.$user['handle'].' '.$expires;
+}
 function account_client_api(PDO $db,array $a): string {
     $action=$a['action']??'';
+    if($action==='account-client-register') {
+        account_limit($db,'account-client-register',5);
+        $db->beginTransaction();
+        try {
+            $user=account_register($db,is_string($a['handle']??null)?$a['handle']:'',is_string($a['email']??null)?$a['email']:'',is_string($a['password']??null)?$a['password']:'');
+            $session=account_native_session($db,$user);$db->commit();
+            return 'central-registered '.$session.' '.$user['recovery'].' '.$user['email'];
+        }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+    }
     if($action==='account-client-login') {
         account_limit($db,'account-client-login');
-        $handle=account_handle(is_string($a['handle']??null)?$a['handle']:'');
-        account_limit_identity($db,'account-client-user',$handle,30);
+        $login=$a['login']??$a['handle']??'';if(!is_string($login) || strlen($login)>254)throw new InvalidArgumentException('Enter your email address or username.');
+        $login=strtolower(trim($login));account_limit_identity($db,'account-client-user',$login,30);
         $password=is_string($a['password']??null)?$a['password']:'';
-        $q=$db->prepare('SELECT id,handle,password_hash,auth_version FROM accounts WHERE handle=? AND active=1');$q->execute([$handle]);$user=$q->fetch();
+        $user=account_lookup($db,$login);
         $hash=$user['password_hash']??'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
         $valid=strlen($password)<=72 && !str_contains($password,"\0") && password_verify($password,$hash);
-        if(!$user || !$valid){http_response_code(401);return 'central-error Incorrect username or password';}
-        $token=bin2hex(random_bytes(32));$expires=time()+43200;
-        $q=$db->prepare('INSERT INTO account_sessions(token_hash,account_id,auth_version,expires) VALUES(?,?,?,?)');$q->execute([hash('sha256',$token),$user['id'],$user['auth_version'],$expires]);
-        return 'central-session '.$token.' '.$user['handle'].' '.$expires;
+        if(!$user || !$valid){http_response_code(401);return 'central-error Incorrect email, username or password';}
+        return 'central-session '.account_native_session($db,$user).' '.($user['email']??'-');
     }
     $token=text_value($a,'session',64);
     if(!preg_match('/^[a-f0-9]{64}$/D',$token)){http_response_code(401);return 'central-expired Sign in to your account again';}

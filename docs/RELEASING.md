@@ -47,10 +47,10 @@ Windows ZIPs bundle non-system runtime DLLs after recursively checking PE import
 
 Artifacts are written to outputs/artifacts/. `prepare` stages exact bytes and per-file checksums in outputs/release/publish/ and writes outputs/release/manifest.json. Review its destinations, commit, tag, annotation, notes and hashes. All artifact types, including corresponding source, are published together. Archive files, binary contents and source inputs are checked again before publication. Native build outputs must remain available and be checked on the recorded host platform.
 
-Set version.mk's `VERSION ?= MAJOR.MINOR.PATCH` before building. Default tags are annotated `vMAJOR.MINOR.PATCH`. A custom tag/annotation can be frozen during preparation:
+Set version.mk's `VERSION ?= MAJOR.MINOR` (or `MAJOR.MINOR.PATCH`) before building. Default tags are annotated `vMAJOR.MINOR` or `vMAJOR.MINOR.PATCH`. A custom tag/annotation can be frozen during preparation:
 
 ```sh
-python3 scripts/release.py prepare --tag v1.0.0 --tag-message 'LineClash 1.0.0'
+python3 scripts/release.py prepare --tag v0.1 --tag-message 'LineClash 0.1'
 ```
 
 Move the whole outputs/ directory aside when starting another build/release; preserve receipts and provenance. A source change, changed binary, unexpected staged file or conflicting existing asset causes validation to stop.
@@ -112,3 +112,5 @@ SIGN_IDENTITY='Developer ID Application: Your Name (TEAMID)' python3 scripts/rel
 ```
 
 macOS builds reject ad-hoc signing and missing identities. All game/server executables, app bundles and bundled libraries are signed and verified; the DMG is signed too. Signing errors stop the build. Signing is separate from Apple notarization; these changes do not automatically submit artifacts for notarization. Preserve previous `dist/LineClash-VERSION-macos-ARCH.zip` and `.dmg` files before rebuilding the same version.
+
+Two-part project versions such as `0.1` appear unchanged in the server, clients, tags and archive filenames. Windows Installer and macOS bundle short-version metadata represent that version as `0.1.0`.

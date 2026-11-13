@@ -41,7 +41,8 @@ def sign_binaries(root,identity):
 
 def wix_document(entries,version):
     """One stable component per file, embedded CAB, normal uninstall/upgrade."""
-    if not re.fullmatch(r'\d+\.\d+\.\d+',version):raise ValueError('MSI requires a numeric major.minor.patch release version')
+    if not re.fullmatch(r'\d+\.\d+(?:\.\d+)?',version):raise ValueError('MSI requires a numeric major.minor or major.minor.patch release version')
+    if version.count('.')==1:version+='.0'
     major,minor,patch=map(int,version.split('.'))
     if major>255 or minor>255 or patch>65535:raise ValueError('Version exceeds Windows Installer limits')
     ns='http://wixtoolset.org/schemas/v4/wxs';ET.register_namespace('',ns)

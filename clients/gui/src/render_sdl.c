@@ -2846,26 +2846,49 @@ void sdl_render_accounts(ClientCtx *c){
     SDL_SetRenderDrawColor(g_rend,0x0d,0x0d,0x1a,0xff);SDL_RenderClear(g_rend);
     fr(0,0,WIN_W,108,0x161d2dff);dt(48,28,"Your accounts",COL_WHITE,3);
     dt(48,80,"Choose an identity for public servers.",COL_LTGRAY,1);
-    int busy=account_https_busy();
+    if(c->account_recovery[0]){
+        dt(48,156,"Account created",COL_WHITE,2);
+        dt(48,210,"Save this recovery code privately. It is shown only now.",COL_LTGRAY,1);
+        char first[25];memcpy(first,c->account_recovery,24);first[24]=0;
+        dt(48,262,first,COL_HOSTGOLD,2);dt(48,306,c->account_recovery+24,COL_HOSTGOLD,2);
+        dt(48,366,"Use it to reset your password if you lose access.",COL_GRAY,1);
+        if(dbtn(48,410,220,36,"Copy recovery code",BS_NORMAL)){SDL_SetClipboardText(c->account_recovery);snprintf(c->account_message,sizeof(c->account_message),"Recovery code copied.");}
+        dt(48,474,c->account_message,COL_LTGRAY,1);
+        if(dbtn(48,546,360,40,"I saved my code - continue",BS_ACTIVE))client_accounts_action(c,ACCOUNT_RECOVERY_DONE);
+        SDL_RenderPresent(g_rend);return;
+    }
+    int busy=account_https_busy(),creating=c->account_create_mode;
     dt(48,142,"Saved profiles",COL_LTGRAY,1);
     for(int i=0;i<c->account_count;i++){
         char label[64];snprintf(label,sizeof(label),"%s@%s%s",i==c->account_active?"Active: ":"",c->accounts[i].handle,c->accounts[i].token[0] && c->accounts[i].expires>time(NULL)?"  / signed in":"");
         if(dbtn(48,174+i*40,360,32,label,busy?BS_DISABLED:i==c->account_cursor?BS_ACTIVE:BS_NORMAL) && !busy)client_accounts_select(c,i);
     }
-    if(!c->account_count)dt(48,182,"Add your first account on the right.",COL_GRAY,1);
+    if(!c->account_count)dt(48,182,"Sign in or create your first account.",COL_GRAY,1);
     const int x=460,w=540;
-    dt(x,142,"Sign in or add an account",COL_WHITE,2);
-    dt(x,194,"Username",COL_LTGRAY,1);
-    if(draw_textfield(x,218,w,32,&c->tf_account_handle,"Your central account") && !busy){c->tf_account_handle.focused=1;c->tf_account_password.focused=0;}
-    dt(x,272,"Password",COL_LTGRAY,1);
-    if(draw_passfield(x,296,w,32,&c->tf_account_password,"Password") && !busy){c->tf_account_handle.focused=0;c->tf_account_password.focused=1;}
-    if(dbtn(x,354,w,36,busy?"Working securely...":"Sign in over HTTPS",busy?BS_DISABLED:BS_ACTIVE) && !busy)client_accounts_action(c,ACCOUNT_SIGNIN);
-    dt(x,410,"Passwords and login tokens are never saved to disk.",COL_GRAY,1);
-    dt(x,436,"Sign in once each time you open the client.",COL_GRAY,1);
-    if(dbtn(x,484,w,32,"Create an account / recover password",BS_NORMAL))sdl_open_account_code("");
-    if(dbtn(48,538,174,34,"Use account",busy?BS_DISABLED:BS_ACTIVE) && !busy)client_accounts_action(c,ACCOUNT_USE);
-    if(dbtn(234,538,174,34,"Sign out",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_LOGOUT);
-    if(dbtn(48,586,360,32,"Remove saved profile",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_REMOVE);
+    dt(x,142,creating?"Create your account":"Sign in to your account",COL_WHITE,2);
+    TextField *fields[]={&c->tf_account_handle,&c->tf_account_email,&c->tf_account_password,&c->tf_account_confirm};
+    const char *labels[]={"Username","Email","Password","Confirm password"};
+    int first=creating?0:1,last=creating?3:2;
+    for(int i=first;i<=last;i++){
+        int y=194+(i-first)*(creating?66:78);
+        dt(x,y,i==1 && !creating?"Email (or existing username)":labels[i],COL_LTGRAY,1);
+        int clicked=i>=2?draw_passfield(x,y+24,w,32,fields[i],labels[i]):draw_textfield(x,y+24,w,32,fields[i],labels[i]);
+        if(clicked && !busy){for(int j=0;j<4;j++)fields[j]->focused=i==j;}
+    }
+    int submit=creating?470:354;
+    if(dbtn(x,submit,w,36,busy?"Working securely...":creating?"Create account":"Sign in",busy?BS_DISABLED:BS_ACTIVE) && !busy)client_accounts_action(c,creating?ACCOUNT_REGISTER:ACCOUNT_SIGNIN);
+    if(creating){
+        if(dbtn(x,530,w,32,"Back to sign in",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_LOGIN_MODE);
+        dt(x,586,"Your username is public. Your email stays private.",COL_GRAY,1);
+    }else{
+        dt(x,410,"Passwords and login tokens are never saved to disk.",COL_GRAY,1);
+        dt(x,436,"Sign in once each time you open the client.",COL_GRAY,1);
+        if(dbtn(x,484,w,32,"Create a new account",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_CREATE_MODE);
+        if(dbtn(x,536,w,32,"Recover password on website",BS_NORMAL))sdl_open_account_code("");
+        if(dbtn(48,538,174,34,"Use account",busy?BS_DISABLED:BS_ACTIVE) && !busy)client_accounts_action(c,ACCOUNT_USE);
+        if(dbtn(234,538,174,34,"Sign out",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_LOGOUT);
+        if(dbtn(48,586,360,32,"Remove saved profile",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_REMOVE);
+    }
     char message[88];snprintf(message,sizeof(message),"%.87s",c->account_message);dt(48,666,message,COL_HOSTGOLD,1);
     if(dbtn(48,714,180,36,"Back",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_BACK);
     SDL_RenderPresent(g_rend);

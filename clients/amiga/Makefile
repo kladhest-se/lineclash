@@ -1,11 +1,14 @@
+include ../../version.mk
 AMIGA_TOOLS ?= /Users/frossmant/Development/tools/amiga/m68k-amigaos-gcc-16.2
 CC = $(AMIGA_TOOLS)/bin/m68k-amigaos-gcc
 CPU ?= 68020
-CFLAGS = -std=gnu99 -O2 -m$(CPU) -msoft-float -noixemul -DPLATFORM_AMIGA -I../gui/src -I../../shared/include -MMD -MP -Wall
+CFLAGS = $(VERSION_CFLAGS) -std=gnu99 -O2 -m$(CPU) -msoft-float -noixemul -DPLATFORM_AMIGA -I../gui/src -I../../shared/include -MMD -MP -Wall
 LDFLAGS = -m$(CPU) -msoft-float -noixemul
 SOURCES = main.c render.c audio.c directory.c https.c account_https.c clock.c ../gui/src/accounts.c ../gui/src/client.c ../../shared/src/net.c ../../shared/src/field.c ../../shared/src/piece.c ../../shared/src/protocol.c
 OBJECTS = $(addprefix build/,$(notdir $(SOURCES:.c=.o)))
+$(OBJECTS): ../../version.mk
 .PHONY: all clean
+.DEFAULT_GOAL := all
 all: LineClash
 LineClash: $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) -o $@ -lm -lamisslstubs

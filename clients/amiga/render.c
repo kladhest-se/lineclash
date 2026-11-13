@@ -13,7 +13,7 @@ static int click_x=-1,click_y=-1;
 static void box(int x,int y,int w,int h,int pen){SetAPen(window->RPort,pen);RectFill(window->RPort,x,y,x+w-1,y+h-1);}
 static void text(int x,int y,const char *s,int pen){SetAPen(window->RPort,pen);SetBPen(window->RPort,0);SetDrMd(window->RPort,JAM1);Move(window->RPort,x,y+7);Text(window->RPort,s,(ULONG)strlen(s));}
 static int button(int x,int y,int w,const char *label){box(x,y,w,14,2);text(x+4,y+3,label,1);return click_x>=x && click_x<x+w && click_y>=y && click_y<y+14;}
-static void begin(const char *title){box(0,0,640,256,0);box(0,0,640,20,2);text(8,6,"LINECLASH",5);text(104,6,title,1);}
+static void begin(const char *title){box(0,0,640,256,0);box(0,0,640,20,2);text(8,6,"LINECLASH",5);text(104,6,title,1);text(560,6,"v" TETRINETZ_VERSION,3);}
 static void end(void){click_x=click_y=-1;}
 int sdl_init(void){log_info("Opening native Intuition frontend");KeymapBase=OpenLibrary("keymap.library",37);if(!KeymapBase)return 0;
  screen=OpenScreenTags(NULL,SA_Width,640,SA_Height,256,SA_Depth,4,SA_DisplayID,HIRES_KEY,SA_Title,"LineClash",SA_ShowTitle,FALSE,TAG_DONE);if(!screen)return 0;
@@ -53,8 +53,10 @@ void sdl_render_game(ClientCtx *c){begin(c->nick);if(c->state==CS_IN_LOBBY){text
  text(8,230,c->status,5);if(c->chat_input.active)text(160,230,c->chat_input.text,1);overlay(c);end();}
 
 void sdl_render_accounts(ClientCtx *c){begin("ACCOUNTS");int busy=account_https_busy();
+ if(c->account_recovery[0]){text(16,42,"Account created - save your recovery code privately",5);text(16,86,c->account_recovery,6);text(16,118,"It can reset your password and is shown only now.",1);if(button(16,176,280,"I saved my code - continue"))client_accounts_action(c,ACCOUNT_RECOVERY_DONE);end();return;}
  for(int i=0;i<c->account_count;i++){char label[32];snprintf(label,sizeof(label),"%s%s",i==c->account_active?"* ":"",c->accounts[i].handle);if(button(8,30+i*18,170,label) && !busy)client_accounts_select(c,i);}
- TextField *fields[]={&c->tf_account_handle,&c->tf_account_password};
- for(int i=0;i<2;i++){int y=44+i*36;text(192,y-12,i?"Password":"Username",1);box(192,y,432,18,2);char value[128];if(i){int visible=fields[i]->len<50?fields[i]->len:50;memset(value,'*',visible);value[visible]=0;}else snprintf(value,sizeof(value),"%s",fields[i]->text);text(200,y+3,value,fields[i]->focused?5:1);if(!busy && click_y>=y && click_y<y+18 && click_x>=192){fields[i]->focused=1;fields[1-i]->focused=0;}}
- if(!busy){if(button(192,120,160,"Sign in (HTTPS)"))client_accounts_action(c,ACCOUNT_SIGNIN);if(button(360,120,160,"Use account"))client_accounts_action(c,ACCOUNT_USE);if(button(192,146,160,"Sign out"))client_accounts_action(c,ACCOUNT_LOGOUT);if(button(360,146,160,"Remove profile"))client_accounts_action(c,ACCOUNT_REMOVE);if(button(192,190,160,"Back"))client_accounts_action(c,ACCOUNT_BACK);}
- text(8,224,"Create accounts: https://lineclash.kladhest.se/account/",3);char message[78];snprintf(message,sizeof(message),"%.77s",busy?"Working securely with AmiSSL...":c->account_message);text(8,240,message,5);end();}
+ TextField *fields[]={&c->tf_account_handle,&c->tf_account_email,&c->tf_account_password,&c->tf_account_confirm};const char *labels[]={"Username","Email / username","Password","Confirm password"};
+ int creating=c->account_create_mode,first=creating?0:1,last=creating?3:2;
+ for(int i=first;i<=last;i++){int y=44+(i-first)*30;text(192,y-12,labels[i],1);box(192,y,432,18,2);char value[128];if(i>=2){int visible=fields[i]->len<50?fields[i]->len:50;memset(value,'*',visible);value[visible]=0;}else snprintf(value,sizeof(value),"%.50s",fields[i]->text);text(200,y+3,value,fields[i]->focused?5:1);if(!busy && click_y>=y && click_y<y+18 && click_x>=192){for(int j=0;j<4;j++)fields[j]->focused=i==j;}}
+ if(!busy){if(creating){if(button(192,168,200,"Create account"))client_accounts_action(c,ACCOUNT_REGISTER);if(button(400,168,200,"Back to sign in"))client_accounts_action(c,ACCOUNT_LOGIN_MODE);}else{if(button(192,112,160,"Sign in"))client_accounts_action(c,ACCOUNT_SIGNIN);if(button(360,112,160,"Use account"))client_accounts_action(c,ACCOUNT_USE);if(button(192,140,160,"Sign out"))client_accounts_action(c,ACCOUNT_LOGOUT);if(button(360,140,160,"Remove profile"))client_accounts_action(c,ACCOUNT_REMOVE);if(button(192,168,240,"Create new account"))client_accounts_action(c,ACCOUNT_CREATE_MODE);}if(button(192,194,160,"Back"))client_accounts_action(c,ACCOUNT_BACK);}
+ char message[78];snprintf(message,sizeof(message),"%.77s",busy?"Working securely with AmiSSL...":c->account_message);text(8,240,message,5);end();}

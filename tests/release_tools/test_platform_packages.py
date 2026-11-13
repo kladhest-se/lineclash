@@ -20,6 +20,9 @@ class PackagesTests(unittest.TestCase):
   self.assertEqual(doc.find('.//w:Shortcut',ns).get('WorkingDirectory'),doc.find('.//w:Directory[@Name="bin"]',ns).get('Id'))
   with self.assertRaises(ValueError):packages.wix_document([('/tmp/file','../escape')],'1.0.0')
   with self.assertRaises(ValueError):packages.wix_document([],'1.0.0-beta')
+ def test_two_part_project_version_in_msi(self):
+  doc=ET.fromstring(packages.wix_document([],'0.1'))
+  self.assertEqual(doc.find('{http://wixtoolset.org/schemas/v4/wxs}Package').get('Version'),'0.1.0')
  def test_mac_never_falls_back_to_adhoc(self):
   with patch('platform_packages.platform.system',return_value='Darwin'):
    with self.assertRaises(RuntimeError):packages.preflight({'SIGN_IDENTITY':'-'})
