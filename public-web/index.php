@@ -19,19 +19,12 @@ site_header('Multiplayer falling blocks','home','./');
   </div>
 </section>
 
-
-<section class="section" id="screenshots" aria-labelledby="screenshots-heading">
-<p class="eyebrow">Inside LineClash</p><h2 class="section-title" id="screenshots-heading">Your board. Your rivals. One more round.</h2>
-<p class="section-sub">A native desktop game with competitive rooms, a server browser, and a soundtrack for the next session. Screenshots from the current development client.</p>
-<div class="screenshot-grid">
-<figure><a href="assets/screenshots/game.png"><img src="assets/screenshots/game.png" width="1060" height="800" alt="LineClash game view with the playing field, next piece, hold and opponents" loading="lazy"></a><figcaption>The arena · falling blocks and multiplayer rooms</figcaption></figure>
-<figure><a href="assets/screenshots/servers.png"><img src="assets/screenshots/servers.png" width="1060" height="800" alt="The native LineClash server browser" loading="lazy"></a><figcaption>Find a room · discover community servers</figcaption></figure>
-</div></section>
-<section class="section" id="get" aria-labelledby="get-heading"><p class="eyebrow">Ready when you are</p><h2 class="section-title" id="get-heading">Get the game.</h2>
-<p class="section-sub">The latest published GitHub release, with downloads for the platforms available in that release. Drafts and prereleases are excluded.</p>
-<div class="download-panel"><p id="release-status" role="status">Checking the latest release…</p><div id="release-assets" class="release-assets"></div><div class="download-actions"><a class="btn btn-outline" href="https://github.com/kladhest-se/lineclash/releases">All GitHub releases ↗</a><a class="btn btn-outline" href="#build">Build from source</a><button type="button" class="copy-button" id="release-retry" hidden>Try again</button></div><noscript><p>Enable JavaScript to check downloads automatically, or visit GitHub releases. You can also build from source below.</p></noscript></div>
-<p class="small muted">Native packages may require SDL2 and other runtime libraries. Check the release notes for platform and installation requirements.</p></section>
-<section class="section community-destinations"><a class="feature-card" href="servers/"><h2>Find your next server →</h2><p>Browse live community servers and copy an address to join in the game.</p></a><a class="feature-card" href="statistics/"><h2>Follow the competition →</h2><p>Statistics, ranked leaderboards, match history, player profiles and replays.</p></a></section>
+<section class="section" id="about" aria-labelledby="about-heading">
+  <p class="eyebrow">About the game</p>
+  <h2 class="section-title" id="about-heading">Stack together. Clash with friends.</h2>
+  <p class="section-sub">LineClash is a native multiplayer falling-block game. Build clean stacks, clear lines, and send specials to shake up your rivals’ boards. Play in rooms with up to eight players, team up with friends, or practice against AI bots.</p>
+  <p>Choose a community server or host your own. Room rules let you shape each session, while spectators, chat and an in-game music library keep the arena lively between rounds.</p>
+</section>
 
 <div class="section-divider"></div>
 
@@ -102,6 +95,31 @@ site_header('Multiplayer falling blocks','home','./');
 
 <div class="section-divider"></div>
 
+<section class="section" id="screenshots" aria-labelledby="screenshots-heading">
+<p class="eyebrow">Inside LineClash</p><h2 class="section-title" id="screenshots-heading">Your board. Your rivals. One more round.</h2>
+<p class="section-sub">A native desktop game with competitive rooms, a server browser, and a soundtrack for the next session. Screenshots from the current development client.</p>
+<div class="screenshot-grid">
+<figure><a href="assets/screenshots/game.png"><img src="assets/screenshots/game.png" width="1060" height="800" alt="LineClash game view with the playing field, next piece, hold and opponents" loading="lazy"></a><figcaption>The arena · falling blocks and multiplayer rooms</figcaption></figure>
+<figure><a href="assets/screenshots/servers.png"><img src="assets/screenshots/servers.png" width="1060" height="800" alt="The native LineClash server browser" loading="lazy"></a><figcaption>Find a room · discover community servers</figcaption></figure>
+</div></section>
+
+<div class="section-divider"></div>
+
+<section class="section community-destinations"><a class="feature-card" href="servers/"><h2>Find your next server →</h2><p>Browse live community servers and copy an address to join in the game.</p></a><a class="feature-card" href="statistics/"><h2>Follow the competition →</h2><p>Statistics, ranked leaderboards, match history, player profiles and replays.</p></a></section>
+
+<div class="section-divider"></div>
+
+<section class="section" id="license"><p class="eyebrow">Open source</p><h2 class="section-title">Free software. Make it yours.</h2><p class="section-sub">GPL version 3 or later — free to use, modify, and redistribute under its terms. Music and fonts carry their own licenses.</p><div class="hero-actions"><a class="btn btn-outline" href="source/">Source, license &amp; credits →</a><a class="btn btn-outline" href="documentation/">Read the documentation →</a></div></section>
+
+<div class="section-divider"></div>
+
+<section class="section" id="get" aria-labelledby="get-heading"><p class="eyebrow">Ready when you are</p><h2 class="section-title" id="get-heading">Get the game.</h2>
+<p class="section-sub">The latest published GitHub release, with downloads for the platforms available in that release. Drafts and prereleases are excluded.</p>
+<div class="download-panel"><p id="release-status" role="status">Checking the latest release…</p><div id="release-assets" class="release-assets"></div><div class="download-actions"><a class="btn btn-outline" href="https://github.com/kladhest-se/lineclash/releases">All GitHub releases ↗</a><a class="btn btn-outline" href="#build">Build from source</a><button type="button" class="copy-button" id="release-retry" hidden>Try again</button></div><noscript><p>Enable JavaScript to check downloads automatically, or visit GitHub releases. You can also build from source below.</p></noscript></div>
+<p class="small muted">Native packages may require SDL2 and other runtime libraries. Check the release notes for platform and installation requirements.</p></section>
+
+<div class="section-divider"></div>
+
 <!-- Build -->
 <div class="section" id="build">
   <p class="eyebrow">Get started</p>
@@ -151,10 +169,6 @@ site_header('Multiplayer falling blocks','home','./');
 <span class="s">./clients/gui/lineclash</span></pre>
   </div>
 </div>
-
-<div class="section-divider"></div>
-
-<section class="section" id="license"><p class="eyebrow">Open source</p><h2 class="section-title">Free software. Make it yours.</h2><p class="section-sub">GPL version 3 or later — free to use, modify, and redistribute under its terms. Music and fonts carry their own licenses.</p><div class="hero-actions"><a class="btn btn-outline" href="source/">Source, license &amp; credits →</a><a class="btn btn-outline" href="documentation/">Read the documentation →</a></div></section>
 
 <script>
 /* ── Tab switching ─────────────────────────────────────── */

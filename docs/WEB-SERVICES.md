@@ -89,3 +89,5 @@ After publishing a tagged GitHub release with package assets, the page picks it 
 Run `node tests/test_web_downloads.js` for release lookup and asset validation checks, and `make web-test` for website/database integration.
 
 The main navigation is **Home, Servers, Statistics, Documentation, Source**. Screenshots and **Get the game** are sections on Home (`/#screenshots` and `/#get`), not separate pages. The persistent Get the game button returns there from every page. `/documentation/` provides a quick start, desktop controls and links to maintained repository guides; `/source/` groups repositories, contributions, source checkout, licensing and credits. These public pages work without a configured database and use the shared block animation.
+
+Home introduces the game in this order: hero, about, features, specials, screenshots, community links, licensing, Get the game, then source-build instructions. Download buttons in the header and hero jump directly to the lower download section.
