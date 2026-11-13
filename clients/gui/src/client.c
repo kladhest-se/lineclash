@@ -6,6 +6,7 @@ static unsigned long g_ping_tick = 0; /* incremented each client_tick call */
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <ctype.h>
 #ifndef PLATFORM_WINDOWS
 #include <sys/stat.h>
 #endif
@@ -176,6 +177,7 @@ static void settings_save(ClientCtx *c) {
     FILE *f = fopen(settings_path(), "w");
     if (!f) return;
     fprintf(f, "# LineClash client settings\n");
+    fprintf(f,"ui_scale = %d\npiece_patterns = %d\nhigh_contrast = %d\n",c->ui_scale,c->piece_patterns,c->high_contrast);
     fprintf(f, "sfx = %d\n",    c->sound_enabled);
     fprintf(f, "music = %d\n",  music_get_enabled());
     fprintf(f, "sfx_vol = %.2f\n",   sound_get_sfx_volume());
@@ -196,6 +198,28 @@ static void settings_save(ClientCtx *c) {
     fclose(f);
 }
 
+void client_cycle_ui_scale(ClientCtx *c){
+    const int scales[]={75,100,125,150};int next=100;
+    for(int i=0;i<4;i++)if(scales[i]==c->ui_scale)next=scales[(i+1)%4];
+    c->ui_scale=next;sdl_set_ui_options(c->ui_scale,c->piece_patterns,c->high_contrast);settings_save(c);
+}
+const char *client_server_status(const SavedServer *s){
+    if(s->auth_status==-1)return "Wrong credentials";
+    if(s->auth_status==-2)return "Protocol mismatch";
+    if(s->auth_status==-4)return "Server full";
+    if(s->auth_status==-5)return "Access denied";
+    if(s->online==-1||s->auth_status==-3)return "Unreachable";
+    if(s->online==1 && s->capacity>0 && s->users_playing+s->users_idle>=s->capacity)return "No open slots";
+    return s->online==1?"Online":"Not checked";
+}
+int client_probe_greeting(SavedServer *s,const char *message){
+    char lower[256];snprintf(lower,sizeof(lower),"%s",message);
+    for(char *p=lower;*p;p++)*p=(char)tolower((unsigned char)*p);
+    s->online=1;
+    if(!strcmp(message,"LineClash/1.0")){if(s->auth_status!=-1)s->auth_status=0;return 1;}
+    s->auth_status=strstr(lower,"full")?-4:strstr(lower,"ban")||strstr(lower,"denied")?-5:-2;
+    return 0;
+}
 void client_save_settings(ClientCtx *c) { settings_save(c); }
 
 static void settings_load(ClientCtx *c) {
@@ -208,6 +232,9 @@ static void settings_load(ClientCtx *c) {
         if (*p == '#' || *p == '\n' || *p == '\r' || *p == '\0') continue;
         char key[64] = "", val[64] = "";
         if (sscanf(p, "%63[^= \t] = %63s", key, val) < 2) continue;
+        if(!strcmp(key,"ui_scale")){int size=atoi(val);if(size==75||size==100||size==125||size==150)c->ui_scale=size;}
+        if(!strcmp(key,"piece_patterns"))c->piece_patterns=atoi(val)?1:0;
+        if(!strcmp(key,"high_contrast"))c->high_contrast=atoi(val)?1:0;
         if (!strcmp(key, "sfx"))    c->sound_enabled   = atoi(val) ? 1 : 0;
         if (!strcmp(key, "music")) {
             c->saved_music_enabled = atoi(val) ? 1 : 0;
@@ -551,6 +578,12 @@ static void gui_reconnect_tick(ClientCtx *c) {
     }
 }
 
+static int snapshot_integer(const char *text,int low,int high,int *result){
+    if(!text || !*text)return 0;
+    char *end;long value=strtol(text,&end,10);
+    if(*end || value<low || value>high)return 0;
+    *result=(int)value;return 1;
+}
 void client_handle_msg(ClientCtx *c, const char *line) {
     char cmd[MAX_MSG_LEN], args[16][MAX_MSG_LEN];
     int n = proto_parse(line,cmd,args,16);
@@ -600,7 +633,7 @@ void client_handle_msg(ClientCtx *c, const char *line) {
     if (!strcmp(cmd,"noconnecting")) {
         /* "noconnecting LineClash/1.0" is the server greeting — ignore it.
            Only treat as fatal error if it carries a rejection reason. */
-        const char *msg = args[0];
+        const char *msg = strchr(line,' ');msg=msg?msg+1:args[0];
         if (strcmp(msg,"LineClash/1.0") != 0) {
             c->reconnect_blocked=1; net_reconnect_stop(&c->reconnect);
             /* Check if this is an admin-initiated kill — show popup */
@@ -611,7 +644,8 @@ void client_handle_msg(ClientCtx *c, const char *line) {
                 c->kick_popup_room_return = 0;
                 c->kick_popup_open = 1;
             }
-            snprintf(c->connect_error, sizeof(c->connect_error), "%s", msg);
+            for(int i=0;i<c->server_count;i++)if(!strcasecmp(c->server_list[i].host,c->tf_host.text)&&c->server_list[i].port==atoi(c->tf_port.text))client_probe_greeting(&c->server_list[i],msg);
+            snprintf(c->connect_error, sizeof(c->connect_error), "%s%s",strstr(msg,"LineClash/")?"Protocol mismatch: ":"",msg);
             if (c->sock != INVALID_SOCK) { sock_close(c->sock); c->sock = INVALID_SOCK; }
             c->state = CS_CONNECT; music_start_menu();
         }
@@ -636,11 +670,11 @@ void client_handle_msg(ClientCtx *c, const char *line) {
                 {c->server_list[si2].auth_status=1;c->server_list[si2].online=1;break;}}
         /* Tell server our client type/platform */
 #if defined(__APPLE__)
-        net_send(c->sock, "clientinfo gui macos " TETRINETZ_VERSION);
+        net_send(c->sock, "clientinfo gui macos " TETRINETZ_VERSION " input-v1");
 #elif defined(_WIN32)
-        net_send(c->sock, "clientinfo gui windows " TETRINETZ_VERSION);
+        net_send(c->sock, "clientinfo gui windows " TETRINETZ_VERSION " input-v1");
 #else
-        net_send(c->sock, "clientinfo gui linux " TETRINETZ_VERSION);
+        net_send(c->sock, "clientinfo gui linux " TETRINETZ_VERSION " input-v1");
 #endif
         net_send(c->sock, "reqleaderboard");
         if(c->reconnect.active) {
@@ -1053,6 +1087,7 @@ void client_handle_msg(ClientCtx *c, const char *line) {
     }
 
     if (!strcmp(cmd,"newgame")) {
+        c->authority=0;c->input_sequence=0;
         int i, freq[NUM_PIECES]={14,14,14,14,14,14,14};
         if (n>=2) c->my_field.level=atoi(args[0]);
         c->paused=0; c->winner[0]='\0'; c->winner_timer=0;
@@ -1212,6 +1247,23 @@ void client_handle_msg(ClientCtx *c, const char *line) {
         ctx_chat(c, su_text, 0xffcc00ff);
         return;
     }
+    if(!strcmp(cmd,"statev1") && n==15) {
+        int values[14],low[]={0,0,0,-4,-4,0,-1,0,0,0,1},high[]={2147483647,6,3,FIELD_WIDTH+4,FIELD_HEIGHT,6,6,1,2147483647,2147483647,100000};
+        for(int i=0;i<11;i++)if(!snapshot_integer(args[i],low[i],high[i],&values[i]))return;
+        if(!snapshot_integer(args[13],0,15,&values[13])||strlen(args[12])!=FIELD_WIDTH*FIELD_HEIGHT||strlen(args[11])>62)return;
+        for(int i=0;args[12][i];i++)if(!((args[12][i]>='0'&&args[12][i]<='9')||(args[12][i]>='a'&&args[12][i]<='m')))return;
+        if(strcmp(args[11],"-"))for(int i=0;args[11][i];i++)if(!strchr(SPECIAL_CHARS,args[11][i]))return;
+        c->authority=1;unsigned ack=(unsigned)strtoul(args[0],NULL,10);if(ack>c->input_sequence)c->input_sequence=ack;
+        c->cur.type=atoi(args[1]);c->cur.rotation=atoi(args[2]);c->cur.x=atoi(args[3]);c->cur.y=atoi(args[4]);
+        piece_init(&c->next,atoi(args[5]));c->hold.type=atoi(args[6]);c->hold_used=atoi(args[7]);
+        int old_lines=c->my_field.lines;
+        c->my_field.lines=atoi(args[8]);c->my_field.score=atoi(args[9]);c->my_field.level=atoi(args[10]);
+        field_decode(&c->my_field,args[12]);c->my_field.special_count=0;c->my_field.special_head=c->my_field.special_tail=0;
+        for(int si=0;args[11][si] && args[11][si]!='-';si++)for(int sk=0;SPECIAL_CHARS[sk];sk++)if(SPECIAL_CHARS[sk]==args[11][si]){field_add_special(&c->my_field,(uint8)(sk+1));break;}
+        int flags=atoi(args[13]);c->immunity_timer=(flags&1)?300:0;c->darkness_timer=(flags&2)?300:0;c->confusion_timer=(flags&4)?300:0;c->mutate_timer=(flags&8)?300:0;
+        if(c->my_field.lines>old_lines)sound_play(c,SFX_LINE_CLEAR);
+        return;
+    }
     if (!strcmp(cmd,"fieldack") && n>=4) {
         /* Server confirms authoritative lines/score/level after piece lock */
         int srv_lines = atoi(args[0]);
@@ -1242,7 +1294,7 @@ void client_handle_msg(ClientCtx *c, const char *line) {
         for (si=0;SPECIAL_CHARS[si];si++) if(SPECIAL_CHARS[si]==sp_char){sp=(uint8)(si+1);break;}
 
         /* Apply effect to own field if we are the target */
-        if (to_slot==c->slot && !c->is_spectator) {
+        if (to_slot==c->slot && !c->is_spectator && !c->authority) {
             if (c->immunity_timer>0 && sp!=SP_IMMUNITY) {
                 /* Blocked by immunity — still show activity but no effect */
             } else {
@@ -1410,6 +1462,11 @@ void client_on_key(ClientCtx *c, int sc, int sym, int is_text, const char *txt) 
     #define SK_C   6   /* hold piece */
     #define SK_LSHIFT 225
     #define SK_RSHIFT 229
+    if(sc==59){c->keymap_popup_open=!c->keymap_popup_open;c->keymap_capture_idx=-1;return;}
+    if(!c->keymap_popup_open && !c->music_player_open && (sc==61||sc==63||sc==64)){
+        if(sc==63)client_cycle_ui_scale(c);
+        else {if(sc==64)c->piece_patterns=!c->piece_patterns;else c->high_contrast=!c->high_contrast;sdl_set_ui_options(c->ui_scale,c->piece_patterns,c->high_contrast);settings_save(c);}return;
+    }
     if((c->state==CS_PLAYING || c->state==CS_GAMEOVER) && (sc==65 || sc==66 || sc==67)) {
         if(sc==65) music_previous();
         else if(sc==66) music_toggle_pause();
@@ -1491,6 +1548,7 @@ void client_on_key(ClientCtx *c, int sc, int sym, int is_text, const char *txt) 
         return;
     }
     if (c->keymap_popup_open) {
+        if(c->keymap_capture_idx>=0 && (sc==59||sc==61||sc==63||sc==64))return;
         if (c->keymap_capture_idx >= 0) {
             /* Any key press captures the new binding */
             if (sc != SK_ESCAPE) {
@@ -1719,6 +1777,10 @@ void client_on_key(ClientCtx *c, int sc, int sym, int is_text, const char *txt) 
         if (c->paused) { if(sc==SK_F5) client_on_button(c,BTN_RESUME); return; }
         /* Confusion reverses left/right and swaps rotate direction */
         {int confused=(c->confusion_timer>0);
+        if(c->authority){
+            const char *action=sc==c->km.move_left?"left":sc==c->km.move_right?"right":sc==c->km.rotate_cw?"cw":sc==c->km.rotate_ccw?"ccw":sc==c->km.soft_drop?"down":sc==c->km.hard_drop?"drop":(sc==c->km.hold||sc==c->km.hold2||sc==SK_RSHIFT)?"hold":NULL;
+            if(action){char input[64];snprintf(input,sizeof(input),"inputv1 %u %s",++c->input_sequence,action);net_send(c->sock,input);return;}
+        }
         /* Gameplay keys — use remappable keymap (km) instead of hardcoded scancodes */
         if (sc==c->km.move_left) {
                 if(confused){ if(piece_move_right(&c->my_field,&c->cur)){sound_play(c,SFX_MOVE);proto_send_field(c->sock,c->slot,&c->my_field);c->lock_timer=c->lock_delay_ms;} }
@@ -1996,7 +2058,7 @@ void client_on_button(ClientCtx *c, BtnId btn) {
         if (c->server_cursor>=0&&c->server_cursor<c->server_count) {
             SavedServer *ss=&c->server_list[c->server_cursor];
             /* Block only if explicitly failed auth/unreachable */
-            if(ss->auth_status==-1||ss->auth_status==-2||ss->auth_status==-3) break;
+            /* A previous probe failure must not permanently prevent retrying. */
             strncpy(c->tf_host.text,ss->host,sizeof(c->tf_host.text)-1);
             c->tf_host.len=(int)strlen(ss->host);
             { char ps[8]; snprintf(ps,sizeof(ps),"%d",ss->port);
@@ -2451,7 +2513,13 @@ void client_tick(ClientCtx *c) {
                     } else if(r==1&&tline[0]){
                         char tcmd[64],targs[17][MAX_MSG_LEN];
                         proto_parse(tline,tcmd,targs,16);
-                        if(!strcmp(tcmd,"noconnecting")&&ps)      { ps->online=1; ps->auth_status=0; ps->ping_ms=(int)(net_now_ms()-c->probe_started);if(ps->ping_ms<1)ps->ping_ms=1; }
+                        if(!strcmp(tcmd,"noconnecting")&&ps){
+                            const char *reason=strchr(tline,' ');
+                            if(!client_probe_greeting(ps,reason?reason+1:"")){
+                                sock_close(c->srv_test_sock);c->srv_test_sock=INVALID_SOCK;c->srv_test_state=0;
+                                c->srvlist_probe_idx=(pi+1)%c->server_count;c->srvlist_probe_timer=60;done=1;
+                            }else {ps->ping_ms=(int)(net_now_ms()-c->probe_started);if(ps->ping_ms<1)ps->ping_ms=1;}
+                        }
                         else if(!strcmp(tcmd,"servername")&&ps){
                             if(!strcmp(ps->name,ps->host))
                                 strncpy(ps->name,targs[0],MAX_SERVER_NAME-1);
@@ -2543,7 +2611,7 @@ void client_tick(ClientCtx *c) {
         }
     }
 
-    if (c->state!=CS_PLAYING||c->paused||c->is_spectator) return;
+    if (c->state!=CS_PLAYING||c->paused||c->is_spectator||c->authority) return;
 
     /* Lock delay: if piece is grounded, count down before locking */
     if (c->lock_active) {
@@ -2623,6 +2691,7 @@ void client_run_gui(void) {
     c.km.hold       =  6;  /* C     */ c.km.hold2      = 225; /* LShift*/
     c.km.chat       = 43;  /* Tab   */ c.km.pause      = 62;  /* F5    */
     c.km.ready      = 21;  /* R     */
+    c.ui_scale=100;c.piece_patterns=1;
     settings_load(&c);  /* load sfx/music prefs and keymap — before sound_init */
     strncpy(c.tf_host.text,"localhost",sizeof(c.tf_host.text)-1);
     c.tf_host.len=(int)strlen(c.tf_host.text);
@@ -2647,6 +2716,7 @@ void client_run_gui(void) {
     piece_init(&c.cur,0); piece_init(&c.next,1);
 
     if (!sdl_init()) { net_cleanup(); return; }
+    sdl_set_ui_options(c.ui_scale,c.piece_patterns,c.high_contrast);
     sound_init();
 
     /* On macOS app bundle, point music_load at Contents/Resources/

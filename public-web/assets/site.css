@@ -1064,3 +1064,30 @@ section[id],div[id=build] { scroll-margin-top:100px; }
   padding-left:12px;
   font-weight:600;
 }
+
+:is(a,button,input,select,summary):focus-visible { outline:3px solid var(--sky); outline-offset:4px; }
+@media(prefers-contrast:more) { :root { --overlay1:#e4e8fa; --overlay0:#c6d0f5; --surface0:#68718d; } }
+.release-assets { display:block; }
+.release-group { border-top:1px solid var(--surface0); padding:20px 0; margin-top:20px; }
+.release-group h3 { font-size:20px; margin-bottom:14px; }
+.release-group a { margin:0 12px 12px 0; }
+
+.guide-list dt{margin-top:1.5rem;font-size:1.15rem;font-weight:600}.guide-list dd{margin:.4rem 0 0;color:var(--text-muted, #a6adc8)}
+.documentation-toc a[aria-current="page"]{color:var(--lavender, #b4befe);font-weight:700}
+
+/* Guide overview and navigation share the public site's palette. */
+.documentation-intro h1{font-family:var(--sans,Inter,sans-serif);font-size:clamp(42px,6vw,76px);letter-spacing:-.055em;line-height:1.08}
+.documentation-intro .page-intro{max-width:none}
+.documentation-tabs{display:flex;gap:30px;border-bottom:1px solid var(--surface1);margin:0 0 42px;overflow-x:auto;scrollbar-width:thin}
+.documentation-tabs a{flex:none;color:var(--overlay1);padding:0 0 18px;border-bottom:3px solid transparent;white-space:nowrap;font-size:15px}
+.documentation-tabs a:hover{color:var(--text)}
+.documentation-tabs a[aria-current="page"]{color:var(--text);border-color:var(--mauve);font-weight:600}
+/* OpenFP-style guide overview and full-width subject pages. */
+.documentation-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.documentation-card{display:block;border:1px solid var(--surface1);padding:30px 32px;background:rgba(24,24,37,.3);transition:border-color .15s,background .15s}
+.documentation-card:hover{border-color:var(--mauve);background:rgba(49,50,68,.45)}
+.documentation-card h2{font:700 25px/1.3 Inter,sans-serif;letter-spacing:-.7px;color:var(--text);margin:0 0 16px}
+.documentation-card h2 span{color:var(--mauve)}
+.documentation-card p{font-size:16px;line-height:1.7;color:var(--overlay1);margin:0}
+.documentation-layout.documentation-without-sidebar{display:block;max-width:960px}
+@media(max-width:650px){.documentation-cards{grid-template-columns:1fr;gap:16px}.documentation-card{padding:24px}.documentation-tabs{gap:24px;margin-bottom:28px}}

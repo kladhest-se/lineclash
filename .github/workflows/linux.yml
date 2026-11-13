@@ -1,0 +1,28 @@
+name: Linux native verification
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install native dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential libsdl2-dev libsqlite3-dev libcurl4-openssl-dev python3
+      - name: Verify and build release archives
+        run: python3 scripts/release.py build --config examples/release-config.json
+      - name: Test extracted package
+        run: python3 scripts/smoke_package.py outputs/artifacts/LineClash-$(sh get-version.sh)-linux-$(uname -m).tar.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lineclash-linux
+          path: |
+            dist/verification/
+            outputs/artifacts/LineClash-*.tar.gz
+            outputs/artifacts/SHA256SUMS
+          if-no-files-found: error

@@ -69,6 +69,9 @@ class FakeAPI:
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
         self.addCleanup(patch.stopall)
+        patch('platform_packages.preflight',return_value='').start()
+        patch('platform_packages.installers',return_value=[]).start()
+        patch('platform_packages.verify_installers').start()
         patch('windows_runtime.runtime_files',return_value=[]).start()
         self.tmp=tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name)
@@ -111,6 +114,17 @@ class ReleaseTests(unittest.TestCase):
             return provenance.run(args,root,capture,env)
         patch('release.run',side_effect=run).start()
         return manifest,apis,remotes
+
+    def test_linux_native_archive_is_tar_with_executable_modes(self):
+        import shutil
+        shutil.rmtree(self.root/'outputs')
+        with patch('release.platform.system',return_value='Linux'),patch('release.run'):
+            release.build(self.config,self.root)
+            record=release.read_json(release.output(self.root)/'BUILD-PROVENANCE.json')
+            self.assertTrue(record['native_asset'].endswith('.tar.gz'))
+            with tarfile.open(release.output(self.root)/record['native_asset']) as archive:
+                self.assertEqual(archive.getmember('bin/lineclashd').mode,0o755)
+            release.check(self.root)
 
     def test_inventory_valid(self):self.assertIn('SHA256SUMS',release.check(self.root))
     def test_plan_does_not_build_or_contact_network(self):

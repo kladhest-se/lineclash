@@ -46,8 +46,8 @@ def read_games(path, state=None, destination=None):
             condition = ' AND NOT EXISTS (SELECT 1 FROM delivery.delivered d WHERE d.game_id=games.game_id AND d.destination=?)'
             parameters = (destination,)
         columns={row[1] for row in db.execute('PRAGMA table_info(games)')}
-        extra=['started_epoch','ended_epoch','ranked','end_reason','replay_truncated']
-        fields=','.join(k if k in columns else ("'legacy'" if k=='end_reason' else '0')+' AS '+k for k in extra)
+        extra=['started_epoch','ended_epoch','ranked','end_reason','replay_truncated','input_protocol']
+        fields=','.join(k if k in columns else ("'legacy'" if k in ('end_reason','input_protocol') else '0')+' AS '+k for k in extra)
         games=[dict(row) for row in db.execute(
             "SELECT game_id,room_id,started_at,ended_at,winner_nick,winner_team,player_count," + fields + " FROM games WHERE ended_at<>''" + condition + " ORDER BY game_id LIMIT 20", parameters)]
         tables={row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}

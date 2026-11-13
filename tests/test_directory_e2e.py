@@ -22,9 +22,15 @@ with tempfile.TemporaryDirectory() as d:
    time.sleep(.5)
    first,second=Peer(gameport,'TestWinner'),Peer(gameport,'TestLoser')
    try:
+    first.send('clientinfo gui test 1.0.0 input-v1');second.send('clientinfo gui test 1.0.0 input-v1')
     first.join();second.join();first.send('playerready');second.send('playerready');first.sync();second.sync()
     first.send('startgame 1');first.until('newgame');second.until('newgame')
-    second.send('playerlost 2');first.until('endgame');first.sync()
+    second.until('statev1 ')
+    for seq in range(1,100):
+     second.send(f'inputv1 {seq} drop');time.sleep(.06)
+     with sqlite3.connect(d/'games.sqlite3') as db:
+      if db.execute('SELECT ended_epoch FROM games ORDER BY game_id DESC LIMIT 1').fetchone()[0]:break
+    first.until('endgame');first.sync()
    finally:first.close();second.close()
    deadline=time.monotonic()+22
    while time.monotonic()<deadline:

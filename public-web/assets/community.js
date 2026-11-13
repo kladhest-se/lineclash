@@ -3,7 +3,7 @@ document.addEventListener('click',async event=>{const button=event.target.closes
 
 // Keep the contents selection in sync with clicks, deep links and history.
 (() => {
- const links=[...document.querySelectorAll('.documentation-toc a')];
+ const links=[...document.querySelectorAll('.documentation-toc a[href^="#"]')];
  if(!links.length)return;
  function selectChapter(){
   let target=null;

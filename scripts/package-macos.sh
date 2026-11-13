@@ -44,6 +44,14 @@ install_name_tool -change "$SDL2_PATH" "$RPATH" "$BIN"
 install_name_tool -id "$RPATH" "$BUNDLE/Contents/Frameworks/$SDL2_NAME"
 codesign --force --sign - "$BUNDLE/Contents/Frameworks/$SDL2_NAME"
 codesign --force --sign - "$BIN"
+# SDL2-compat loads SDL3 dynamically rather than declaring a Mach-O import.
+if strings "$SDL2_REAL" | grep 'libSDL3.dylib' >/dev/null; then
+    SDL3_PATH="$(dirname "$(dirname "$(dirname "$SDL2_PATH")")")/sdl3/lib/libSDL3.dylib"
+    [[ -f "$SDL3_PATH" ]] || fail "SDL2-compat needs SDL3 beside the bundled SDL2 library"
+    cp -L "$SDL3_PATH" "$BUNDLE/Contents/Frameworks/libSDL3.dylib"
+    chmod 755 "$BUNDLE/Contents/Frameworks/libSDL3.dylib"
+    codesign --force --sign - "$BUNDLE/Contents/Frameworks/libSDL3.dylib"
+fi
 ok "SDL2 bundled and re-signed"
 
 header "Writing LineClash.app Info.plist"
@@ -108,7 +116,7 @@ ok "lineclash.icns generated"
 
 if [[ -n "$SIGN_IDENTITY" ]]; then
     header "Code signing with: $SIGN_IDENTITY"
-    codesign --force --timestamp --sign "$SIGN_IDENTITY" "$BUNDLE/Contents/Frameworks/"*.dylib 2>/dev/null || true
+    codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$BUNDLE/Contents/Frameworks/"*.dylib
     codesign --force --timestamp --sign "$SIGN_IDENTITY" "$BUNDLE/Contents/MacOS/lineclash"
     codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$BUNDLE"
     codesign --verify --verbose "$BUNDLE"
@@ -159,6 +167,14 @@ cat > "$SRV_BUNDLE/Contents/Info.plist" << EOF
 EOF
 ok "lineclashd.app created"
 
+if [[ -n "$SIGN_IDENTITY" ]]; then
+    for binary in "$SRV_BUNDLE/Contents/MacOS/lineclashd" "$SRV_BUNDLE/Contents/MacOS/lineclashd-tool"; do
+        [[ ! -f "$binary" ]] || codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$binary"
+    done
+    codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY" "$SRV_BUNDLE"
+    codesign --verify --deep --strict "$SRV_BUNDLE"
+fi
+
 # ── DMG ────────────────────────────────────────────────────────
 header "Packaging LineClash-$VERSION-macos-$MAC_ARCH.dmg"
 DMG_OUT="$DIST_DIR/LineClash-$VERSION-macos-$MAC_ARCH.dmg"
@@ -197,15 +213,23 @@ SERVER:  Double-click lineclashd.app to start the server (port 31457).
 CLI:     ./lineclash-cli <server>
 EOF
 
+ZIP_OUT="$DIST_DIR/LineClash-$VERSION-macos-$MAC_ARCH.zip"
+[[ ! -e "$ZIP_OUT" ]] || fail "Preserve existing ZIP before rebuilding: $ZIP_OUT"
+ditto -c -k --sequesterRsrc "$ST/LineClash" "$ZIP_OUT"
 if command -v hdiutil &>/dev/null; then
     KB="$(du -sk "$ST" | cut -f1)"
     hdiutil create -volname "LineClash $VERSION" -srcfolder "$ST/LineClash" \
         -ov -format UDZO -size $(( (KB/1024)+32 ))m "$DMG_OUT" > /dev/null 2>&1 && {
         DSZ="$(du -sh "$DMG_OUT" | cut -f1)"
         ok "DMG: $DMG_OUT ($DSZ)"
-    } || warn "hdiutil failed — DMG skipped"
+    } || fail "hdiutil failed"
 fi
 
+[[ -f "$DMG_OUT" ]] || fail "DMG was not produced"
+if [[ -n "$SIGN_IDENTITY" ]]; then
+    codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG_OUT"
+    codesign --verify --strict "$DMG_OUT"
+fi
 rm -rf "$ST" "$SRV_BUNDLE" "$BUNDLE"
 hr
 ok "macOS packaging complete — dist/"

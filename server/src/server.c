@@ -315,7 +315,7 @@ void lobby_send_field(Lobby *lb, Player *sender) {
 /* ---- Start game ---- */
 
 /* Generate N pieces into player's server-side queue using server RNG */
-static void sv_gen_pieces(Player *p, Lobby *lb, int n) {
+void sv_gen_pieces(Player *p, Lobby *lb, int n) {
     int i;
     for (i = 0; i < n; i++) {
         int tail = p->sv_piece_tail % 64;
@@ -369,7 +369,9 @@ void lobby_start_game(Lobby *lb) {
          if(lb->players[i2].connected&&!lb->players[i2].spectator&&!lb->players[i2].is_bot)
              humans++;
      for(i2=0;i2<MAX_PLAYERS;i2++) if(lb->players[i2].connected&&!lb->players[i2].spectator) pc++;
-     lb->track_stats = (humans >= 2 && humans == pc); /* store flag for end-of-game */
+     int capable=1;
+     for(i2=0;i2<MAX_PLAYERS;i2++)if(lb->players[i2].connected&&!lb->players[i2].spectator&&!lb->players[i2].is_bot&&!lb->players[i2].input_capable)capable=0;
+     lb->track_stats = (humans >= 2 && humans == pc && capable); /* store flag for end-of-game */
      auth_game_start(lb->id, pc);
      auth_game_ranked(lb->id,lb->track_stats);
      {
@@ -464,6 +466,7 @@ void lobby_start_game(Lobby *lb) {
     }
 
     lobby_broadcast(lb, msg, -1);
+    for(i=0;i<MAX_PLAYERS;i++)if(lb->players[i].connected&&!lb->players[i].is_bot&&!lb->players[i].spectator)authority_start(lb,&lb->players[i]);
     /* Tell clients the lock delay so they can implement it locally */
     { char ldmsg[32]; snprintf(ldmsg,sizeof(ldmsg),"lockdelay %d",lb->lock_delay_ms);
       lobby_broadcast(lb, ldmsg, -1); }
@@ -778,7 +781,15 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
     g_stat_bytes_recv += strlen(msg);
     n = proto_parse(msg, cmd, args, 16);
     if (n == 0) return;
+    if(strcmp(cmd,"__hb__") && !p->authority_internal)p->sv_last_field=time(NULL);
 
+    if(!strcmp(cmd,"inputv1")) {
+        if(n==3)authority_input(lb,p,args[0],args[1]);
+        return;
+    }
+    if(p->authority && !p->authority_internal &&
+       (!strcmp(cmd,"f")||!strcmp(cmd,"lineclear")||!strcmp(cmd,"lvl")||
+        !strcmp(cmd,"holdpiece")||!strcmp(cmd,"holdclear")||!strcmp(cmd,"playerlost")))return;
     /* Never dispatch gameplay before enforcing round and pause state. */
     {
         int gameplay = !strcmp(cmd,"f") || !strcmp(cmd,"lineclear") ||
@@ -1054,6 +1065,7 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
                     }
                     for (int si = 0; si < ns; si++) {
                         Player *tgt = &lb->players[send_to[si]];
+                        if(tgt->authority && tgt->immunity_until>(long long)net_now_ms())continue;
                         /* Send garbage lines using configured hole style */
                         char sbuf[48];
                         for (int gl = 0; gl < garbage; gl++) {
@@ -1165,6 +1177,9 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
                 break;
             }
         }
+        if(target && target->authority && target->immunity_until>(long long)net_now_ms() && sp_char!='i'){
+            authority_send(lb,p);authority_send(lb,target);return;
+        }
         if (target && target->connected && !target->spectator) {
             uint8 sp = 0;
             int si;
@@ -1175,26 +1190,27 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
                      lb->id, p->nick, sp_char, target->nick);
             switch (sp) {
                 case SP_ADDLINE:     field_add_garbage(&target->field, 1);    break;
-                case SP_CLEARLINE:   field_clear_lines(&target->field);       break;
+                case SP_CLEARLINE:   field_clear_line_bottom(&target->field);       break;
                 case SP_NUKEFIELD:   field_nuke(&target->field);              break;
                 case SP_RANDOMCLEAR: field_random_clear(&target->field);      break;
-                case SP_CLEARSPECIAL:field_clear_specials(&target->field);    break;
+                case SP_CLEARSPECIAL:field_clear_specials(&target->field); target->sv_specials_head=target->sv_specials_tail; break;
                 case SP_GRAVITY:     field_gravity(&target->field);           break;
                 case SP_QUAKEFIELD:  field_quake(&target->field);             break;
-                case SP_BLOCKBOMB:   field_block_bomb(&target->field, NULL);  break;
+                case SP_BLOCKBOMB:   field_block_bomb(&target->field, target->authority?&target->sv_cur:NULL);  break;
                 case SP_CLEARCOLUMN: field_clear_column(&target->field);      break;
                 /* Non-field specials — effects applied client-side from sb broadcast */
-                case SP_IMMUNITY: break;
-                case SP_MUTATE:   break;
+                case SP_IMMUNITY: if(target->authority)target->immunity_until=net_now_ms()+5000; break;
+                case SP_MUTATE: if(target->authority){target->sv_cur.type=rand()%NUM_PIECES;target->mutate_until=net_now_ms()+5000;} break;
                 case SP_SWITCHFIELD: {
                     Player *src = NULL;
                     for (i = 0; i < MAX_PLAYERS; i++) {
                         if (lb->players[i].slot == from_slot) { src = &lb->players[i]; break; }
                     }
                     if (src && !src->spectator) {
-                        Field tmp = src->field;
-                        src->field = target->field;
-                        target->field = tmp;
+                        uint8 cells[FIELD_HEIGHT][FIELD_WIDTH];
+                        memcpy(cells,src->field.cells,sizeof(cells));
+                        memcpy(src->field.cells,target->field.cells,sizeof(cells));
+                        memcpy(target->field.cells,cells,sizeof(cells));
                         /* Broadcast each player's new field display to all spectators/others */
                         lobby_send_field(lb, src);
                         lobby_send_field(lb, target);
@@ -1216,10 +1232,12 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
                     break;
                 }
                 case SP_DARKNESS:
+                    if(target->authority)target->darkness_until=net_now_ms()+5000;
                     if (target->is_bot) target->bot_darkness_ticks = 8;
                     /* Human darkness applied client-side from sb broadcast */
                     break;
                 case SP_CONFUSION:
+                    if(target->authority)target->confusion_until=net_now_ms()+5000;
                     if (target->is_bot) target->bot_confusion_ticks = 80;
                     /* Human confusion applied client-side from sb broadcast */
                     break;
@@ -1248,7 +1266,7 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
     if (strcmp(cmd, "__hb__") == 0) {
         time_t now = time(NULL);
         if (lb->paused) { p->sv_last_field=now; return; }
-        if (p->is_bot) return; /* bots managed by AI tick, not heartbeat */
+        if (p->is_bot) return; /* human clients keep the connection alive with pings */
         if (p->alive && !p->spectator &&
             lb->game_state == STATE_PLAYING &&
             now - p->sv_last_field > 30) {
@@ -1601,6 +1619,15 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
        when they pick a new (or the same) lobby. ---- */
     if (strcmp(cmd, "leaveLobby") == 0) {
         sock_t saved_sock = p->sock; /* save before any removal */
+        Pending returning;memset(&returning,0,sizeof(returning));
+        returning.sock=saved_sock;returning.active=returning.auth_ok=1;returning.input_capable=p->input_capable;
+        snprintf(returning.pending_nick,sizeof(returning.pending_nick),"%s",p->nick);
+        snprintf(returning.ip,sizeof(returning.ip),"%s",p->ip);
+        snprintf(returning.client_type,sizeof(returning.client_type),"%s",p->client_type);
+        snprintf(returning.client_platform,sizeof(returning.client_platform),"%s",p->client_platform);
+        snprintf(returning.client_version,sizeof(returning.client_version),"%s",p->client_version);
+        returning.recv_len=p->recv_len;memcpy(returning.recv_buf,p->recv_buf,(size_t)p->recv_len);
+
         /* If leaving mid-game, treat as a loss */
         if (lb->game_state == STATE_PLAYING && !p->spectator && p->alive) {
             char lbuf[MAX_MSG_LEN];
@@ -1627,11 +1654,8 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
                     /* Player's socket goes to pending after end_game cleans up */
                     for (int k=0; k<MAX_PENDING; k++) {
                         if (!g_pending[k].active) {
-                            strncpy(g_pending[k].pending_nick, p->nick, sizeof(g_pending[k].pending_nick)-1);
-                            g_pending[k].sock    = saved_sock;
-                            g_pending[k].active  = 1;
-                            g_pending[k].auth_ok = 1;
-                            send_lobby_list(saved_sock);
+                            g_pending[k]=returning;
+                    send_lobby_list(saved_sock);
                             break;
                         }
                     }
@@ -1647,11 +1671,7 @@ void lobby_handle_message(Lobby *lb, Player *p, const char *msg) {
             int k;
             for (k = 0; k < MAX_PENDING; k++) {
                 if (!g_pending[k].active) {
-                    strncpy(g_pending[k].pending_nick, p->nick, sizeof(g_pending[k].pending_nick)-1);
-                    g_pending[k].sock     = saved_sock;
-                    g_pending[k].recv_len = 0;
-                    g_pending[k].active   = 1;
-                    g_pending[k].auth_ok  = 1;
+                    g_pending[k]=returning;
                     send_lobby_list(saved_sock);
                     log_info("Player %s returned to lobby select", p->nick);
                     break;
@@ -1779,6 +1799,7 @@ static Player *lobby_add_player(Lobby *lb, sock_t sock,
           field_encode(&rp->field, enc, sizeof(enc));
           snprintf(fm, sizeof(fm), "resume_field %s", enc);
           net_send(sock, fm); }
+        if(rp->authority)authority_send(lb,rp);
         log_info("Lobby %d: %s reconnected to slot %d", lb->id, nick, rp->slot);
         return rp;
         }
@@ -2117,6 +2138,7 @@ void server_run(int port, const char *cfg_path) {
     server_api_init();
 
     while (g_server.running) {
+        for(int al=0;al<g_server.lobby_count;al++)for(int ap=0;ap<MAX_PLAYERS;ap++)authority_tick(&g_server.lobbies[al],&g_server.lobbies[al].players[ap]);
         net_flush_all();
         server_api_poll();
         {
@@ -2446,6 +2468,7 @@ void server_run(int port, const char *cfg_path) {
                     strncpy(pend->client_type,     args[0], sizeof(pend->client_type)-1);
                     strncpy(pend->client_platform, args[1], sizeof(pend->client_platform)-1);
                     strncpy(pend->client_version,  args[2], sizeof(pend->client_version)-1);
+                    pend->input_capable=(np>=5 && !strcmp(args[3],"input-v1"));
                     continue;
                 }
 
@@ -2702,6 +2725,7 @@ void server_run(int port, const char *cfg_path) {
                             strncpy(player->ip, pend->ip, sizeof(player->ip)-1);
                             player->is_admin   = auth_is_admin(nick);
                             player->priv_level = auth_get_priv_level(nick);
+                            player->input_capable=pend->input_capable;
                             strncpy(player->client_type,     pend->client_type,     sizeof(player->client_type)-1);
                             strncpy(player->client_platform, pend->client_platform, sizeof(player->client_platform)-1);
                             strncpy(player->client_version,  pend->client_version,  sizeof(player->client_version)-1);

@@ -231,6 +231,8 @@ int auth_open(const char *path){
     sqlite3_exec(g_db,"ALTER TABLE game_stats ADD COLUMN game_id INTEGER NOT NULL DEFAULT 0;",NULL,NULL,NULL);
     sqlite3_exec(g_db,"ALTER TABLE game_stats ADD COLUMN placement INTEGER NOT NULL DEFAULT 0;",NULL,NULL,NULL);
     sqlite3_exec(g_db,"CREATE INDEX IF NOT EXISTS game_stats_game ON game_stats(game_id);",NULL,NULL,NULL);
+    sqlite3_exec(g_db,"ALTER TABLE games ADD COLUMN input_protocol TEXT NOT NULL DEFAULT 'legacy';",NULL,NULL,NULL);
+    sqlite3_exec(g_db,"UPDATE games SET ranked=0 WHERE input_protocol<>'input-v1';",NULL,NULL,NULL);
     log_info("Auth: opened '%s'",path);
     return 1;}
 
@@ -1082,8 +1084,8 @@ void auth_replay_finish(int room) {
 void auth_game_ranked(int room,int ranked) {
     sqlite3_stmt *s=NULL;
     if(!g_db) return;
-    if(sqlite3_prepare_v2(g_db,"UPDATE games SET ranked=? WHERE game_id=(SELECT MAX(game_id) FROM games WHERE room_id=?)",-1,&s,NULL)==SQLITE_OK) {
-        sqlite3_bind_int(s,1,ranked); sqlite3_bind_int(s,2,room); sqlite3_step(s); sqlite3_finalize(s);
+    if(sqlite3_prepare_v2(g_db,"UPDATE games SET ranked=?,input_protocol=CASE WHEN ?=1 THEN 'input-v1' ELSE 'legacy' END WHERE game_id=(SELECT MAX(game_id) FROM games WHERE room_id=?)",-1,&s,NULL)==SQLITE_OK) {
+        sqlite3_bind_int(s,1,ranked); sqlite3_bind_int(s,2,ranked); sqlite3_bind_int(s,3,room); sqlite3_step(s); sqlite3_finalize(s);
     }
 }
 void auth_game_stopped(int room) {

@@ -36,7 +36,7 @@ with tempfile.TemporaryFile() as log:
             except OSError: time.sleep(.05)
         payload=dict(server_id=id,token=token,database_id=uuid.uuid4().hex,status={'players':2,'rooms':1},games=[dict(game_id=2,room_id=1,started_at='2026-11-13 10:00:00',ended_at='2026-11-13 10:05:00',winner_nick='<Winner>',winner_team='',player_count=2)])
         g=payload['games'][0]
-        g.update(started_epoch=1794564000,ended_epoch=1794564300,ranked=1,end_reason='completed',players=[dict(nick='<Winner>',placement=1,won=1,lines_cleared=12,specials_sent=3,blocks_placed=50)])
+        g.update(started_epoch=1794564000,ended_epoch=1794564300,ranked=1,input_protocol='input-v1',end_reason='completed',players=[dict(nick='<Winner>',placement=1,won=1,lines_cleared=12,specials_sent=3,blocks_placed=50)])
         raw=json.dumps([dict(elapsed_ms=0,line='newgame 1'),dict(elapsed_ms=100,line='f 1 '+'0'*264),dict(elapsed_ms=200,line='endgame')],separators=(',',':')).encode()
         g.update(replay_gzip=base64.b64encode(gzip.compress(raw)).decode(),replay_sha256=hashlib.sha256(raw).hexdigest(),replay_truncated=0)
         bad=dict(payload,token='wrong'); assert call(payload=bad)[0]==403

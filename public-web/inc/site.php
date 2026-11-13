@@ -24,3 +24,8 @@ function site_footer(string $base='../'): void { ?>
 <script src="<?=site_h($base)?>assets/community.js" defer></script>
 </body></html>
 <?php }
+
+function documentation_tabs(string $active='overview'): void {
+    $guides=['overview'=>'Overview','basics'=>'Gameplay','controls'=>'Clients & controls','server'=>'Server setup'];
+    $base=$active==='overview'?'./':'../';
+?><nav class="documentation-tabs" aria-label="Documentation guides"><?php foreach($guides as $key=>$label): ?><a href="<?=site_h($base.($key==='overview'?'':$key.'/'))?>"<?=$active===$key?' aria-current="page"':''?>><?=site_h($label)?></a><?php endforeach; ?></nav><?php } ?>

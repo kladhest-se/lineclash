@@ -288,6 +288,9 @@ typedef struct {
     int       lobby_refresh_timer;  /* counts down; requests fresh list at 0 */
 
     /* In-lobby / game */
+    int ui_scale, piece_patterns, high_contrast;
+    int authority;
+    unsigned input_sequence;
     int slot, room_id, is_host, is_spectator;
     int no_attacks, last_player_wins, no_taunts, speedup_enabled;
     int garbage_system;    /* 0=classic LineClash, 1=guideline (B2B+combo) */
@@ -517,3 +520,8 @@ int directory_parse(char *body,SavedServer *rows,int capacity);
 int directory_url_valid(const char *url,int local);
 void directory_shutdown(void);
 #endif /* CLIENT_H */
+
+void sdl_set_ui_options(int scale,int patterns,int contrast);
+void client_cycle_ui_scale(ClientCtx *c);
+int client_probe_greeting(SavedServer *server,const char *message);
+const char *client_server_status(const SavedServer *server);

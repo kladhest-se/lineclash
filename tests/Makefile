@@ -34,6 +34,7 @@ integration: $(C_INTEGRATION)
 	$(if $(C_INTEGRATION),./test_integration $(SERVER),@echo "POSIX process harness skipped; portable protocol tests run below")
 	$(PYTHON) test_http.py $(SERVER)
 	$(PYTHON) test_protocol.py $(SERVER)
+	$(PYTHON) test_authority.py $(SERVER)
 
 test_field: test_field.c $(SHARED)
 	$(CC) $(CFLAGS) $^ -o $@ -lm $(LDFLAGS)

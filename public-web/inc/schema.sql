@@ -31,3 +31,7 @@ CREATE TABLE IF NOT EXISTS directory_players (
  PRIMARY KEY(server_id,database_id,game_id,nick), INDEX player_history(server_id,nick),
  FOREIGN KEY(server_id,database_id,game_id) REFERENCES directory_games(server_id,database_id,game_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Legacy board reports cannot establish authoritative ranked results.
+ALTER TABLE directory_games ADD COLUMN IF NOT EXISTS input_protocol VARCHAR(16) NOT NULL DEFAULT 'legacy';
+UPDATE directory_games SET ranked=0 WHERE input_protocol<>'input-v1';

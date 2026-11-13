@@ -66,6 +66,9 @@ function announce(PDO $db,array $a): array {
         if(!in_array($reason,['legacy','completed','stopped','abandoned'],true)) throw new InvalidArgumentException('Invalid end reason');
         $ranked=isset($g['ranked'])?integer_value($g,'ranked',0,1):0;
         if($ranked && ($reason!=='completed' || $started===0 || $g['player_count']<2)) throw new InvalidArgumentException('Invalid ranked match');
+        $protocol=isset($g['input_protocol'])?text_value($g,'input_protocol',16):'legacy';
+        if(!in_array($protocol,['legacy','input-v1'],true))throw new InvalidArgumentException('Invalid input protocol');
+        if($protocol!=='input-v1')$ranked=0;
         $raw=null; $hash='';
         if(isset($g['replay_gzip'])) {
             $packed=base64_decode(text_value($g,'replay_gzip',1500000),true);
@@ -83,7 +86,7 @@ function announce(PDO $db,array $a): array {
                 $last=$ms;
             }
         }
-        $rows[$index]=array_merge($rows[$index],[$started,$ended,$ranked,$reason,$raw,$hash,isset($g['replay_truncated'])?integer_value($g,'replay_truncated',0,1):0]);
+        $rows[$index]=array_merge($rows[$index],[$started,$ended,$ranked,$reason,$raw,$hash,isset($g['replay_truncated'])?integer_value($g,'replay_truncated',0,1):0,$protocol]);
         $players=$g['players']??[];
         if(!is_array($players) || !array_is_list($players) || count($players)>8) throw new InvalidArgumentException('Invalid players');
         $playerRows[$index]=[]; $seen=[];
@@ -98,7 +101,7 @@ function announce(PDO $db,array $a): array {
     $db->beginTransaction();
     try {
         $q=$db->prepare('UPDATE directory_servers SET last_seen=?,status_json=? WHERE id=?'); $q->execute([time(),json_encode($clean,JSON_THROW_ON_ERROR),$id]);
-        $q=$db->prepare('INSERT INTO directory_games(server_id,database_id,game_id,room_id,started_at,ended_at,winner_nick,winner_team,player_count,started_epoch,ended_epoch,ranked,end_reason,replay_json,replay_sha256,replay_truncated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE game_id=game_id');
+        $q=$db->prepare('INSERT INTO directory_games(server_id,database_id,game_id,room_id,started_at,ended_at,winner_nick,winner_team,player_count,started_epoch,ended_epoch,ranked,end_reason,replay_json,replay_sha256,replay_truncated,input_protocol) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE game_id=game_id');
         $pq=$db->prepare('INSERT INTO directory_players VALUES(?,?,?,?,?,?,?,?,?)');
         foreach($rows as $index=>$row) {
             $q->execute($row);

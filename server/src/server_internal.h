@@ -16,6 +16,7 @@ typedef struct {
     char   ip[48];
     int    nick_is_new;
     int    is_tool;        /* 1 = admin tool session, not a game client */
+    int    input_capable;
     int    is_room_kicked; /* 1 = returned from room-kick, allow reconnect */
     char   client_type[32];
     char   client_platform[32];
@@ -52,3 +53,10 @@ void   server_api_shutdown(void);
 sock_t server_api_get_sock(void);
 void   server_api_accept(void);
 void   server_api_poll(void);
+
+void sv_gen_pieces(Player *p,Lobby *lb,int count);
+void authority_start(Lobby *lb,Player *p);
+void authority_send(Lobby *lb,Player *p);
+void authority_input(Lobby *lb,Player *p,const char *sequence,const char *action);
+void authority_tick(Lobby *lb,Player *p);
+void lobby_handle_message(Lobby *lb,Player *p,const char *message);

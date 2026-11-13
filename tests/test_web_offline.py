@@ -24,9 +24,10 @@ with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryFile() as log:
   assert code==200 and 'Community data is temporarily unavailable' not in home and 'id="screenshots"' in home and 'Get the game' in home
   assert '0 live servers' not in home
   assert 'id="get"' in home and '>Screenshots</a>' not in home
-  for path,heading in [('/documentation/','Default desktop controls'),('/source/','License &amp; credits'),('/credits/','The people behind LineClash.'),('/privacy/','Public game information'),('/api/docs/','Public endpoints')]:
+  for path,heading in [('/documentation/','Guides for players and server operators.'),('/documentation/basics/','Join'),('/documentation/controls/','Default desktop controls'),('/documentation/features/','Servers, match history and replays'),('/documentation/modes/','Game modes'),('/documentation/specials/','Specials'),('/documentation/server/','Configure a game server'),('/source/','Build the server.'),('/credits/','The people behind LineClash.'),('/privacy/','Public game information'),('/api/docs/','Public endpoints')]:
    code,body=get(path);assert code==200 and heading in body and 'id="block-background"' in body,path
    assert 'aria-label="Main"' in body and '#get"' in body
+   if path.startswith('/documentation/') and path!='/documentation/':assert '<aside' not in body,path
   assert 'href="./" aria-current="page">Home</a>' in home
   for path in ['/servers/','/leaderboards/','/matches/','/statistics/']:
    code,body=get(path);assert code==503 and 'aria-label="Main"' in body and 'temporarily unavailable' in body,path

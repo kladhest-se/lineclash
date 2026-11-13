@@ -10,7 +10,7 @@ Discovery does not send your account credentials to the directory. Selecting a n
 
 ## Ranked and casual games
 
-A round can award ranked wins when it starts with at least two human players and no active bots. Manually stopped rounds, solo games and bot games are casual. Natural draws can count as ranked matches without awarding a winner. Ranked results are reported by the server; they are not a guarantee of tournament rules or cheat-free play.
+A round can award ranked wins when it starts with at least two human players, no active bots, and every player uses server-processed inputs. Older board-reporting clients play casual rounds. Manually stopped rounds, solo games and bot games are casual. Natural draws can count as ranked matches without awarding a winner. Ranked results are reported by the server; they are not a guarantee of tournament rules or cheat-free play.
 
 Statistics includes match history, player records and ranked wins. Player records are scoped to the server and nickname. A placement of zero means unknown, such as after a disconnect. New timestamps use UTC; old history is labelled legacy rather than assigned a guessed timezone.
 

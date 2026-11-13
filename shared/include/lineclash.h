@@ -176,6 +176,11 @@ typedef struct {
     int    sv_piece_sent;      /* how many pieces sent to client so far */
     Field  sv_field;           /* server's authoritative field copy */
     Piece  sv_cur;             /* server's current piece for client */
+    int    input_capable, authority, authority_internal;
+    unsigned input_sequence;
+    long long authority_tick, authority_drop, authority_lock, authority_last_lock;
+    long long input_window, immunity_until, confusion_until, darkness_until, mutate_until;
+    int input_count, authority_resets;
     int    sv_field_mismatch;  /* consecutive field mismatches */
     /* Client identification */
     char   client_type[32];    /* "gui", "cli", "tool", "" */

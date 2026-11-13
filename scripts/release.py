@@ -105,7 +105,7 @@ def inventory(root=ROOT):
     assets = record.get('artifacts', {})
     require(isinstance(assets, dict) and assets and n['website'] in assets, 'Missing artifact record')
     require(all(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*', name) for name in assets), 'Invalid artifact name')
-    require(record.get('native_asset') in assets and record['native_asset'].endswith('.zip'), 'Missing native ZIP')
+    require(record.get('native_asset') in assets and record['native_asset'].endswith(('.zip','.tar.gz')), 'Missing native archive')
     required = set(n.values()) | set(assets)
     sums = folder / 'SHA256SUMS'
     require(folder.is_dir() and not sums.is_symlink(), 'Build release artifacts first')
@@ -184,13 +184,23 @@ def check(root=ROOT):
     # additionally compared to the exact binaries/docs built on this host.
     require(record.get('platform')==platform.system() and record.get('architecture')==platform.machine(),
             'Validate/publish native build outputs on the host platform recorded by build')
-    expected={name:digest(root/path) for path,name in native_files(root)}
-    with ZipFile(output(root)/record['native_asset']) as archive:
-        actual={}
-        for item in archive.infolist():
-            require(not item.is_dir() and item.filename not in actual,'Unexpected native ZIP entry')
-            actual[item.filename]=hashlib.sha256(archive.read(item)).hexdigest()
-        require(actual==expected,'Native ZIP differs from the verified build')
+    expected=record.get('native_entries') if record['platform']=='Darwin' else {name:digest(root/path) for path,name in native_files(root)}
+    require(isinstance(expected,dict) and expected,'Missing native payload inventory')
+    actual={}
+    if record['native_asset'].endswith('.tar.gz'):
+        with tarfile.open(output(root)/record['native_asset']) as archive:
+            for item in archive.getmembers():
+                require(item.isfile() and item.name not in actual,'Unexpected native tar entry')
+                actual[item.name]=hashlib.sha256(archive.extractfile(item).read()).hexdigest()
+    else:
+        with ZipFile(output(root)/record['native_asset']) as archive:
+            for item in archive.infolist():
+                if record['platform']=='Darwin' and item.is_dir():continue
+                require(not item.is_dir() and item.filename not in actual,'Unexpected native ZIP entry')
+                actual[item.filename]=hashlib.sha256(archive.read(item)).hexdigest()
+    require(actual==expected,'Native archive differs from the verified build')
+    from platform_packages import verify_installers
+    verify_installers(record,output(root),root)
     return files
 
 
@@ -209,22 +219,36 @@ def build(config, root=ROOT, assets=()):
     for spec in config.get('credentials',{}).values():
         if spec.get('provider','env')=='env':env.pop(spec.get('variable',''),None)
     env['PYTHON']=env.get('LINECLASH_RELEASE_PYTHON',sys.executable)
+    from platform_packages import preflight, sign_binaries, installers
+    identity=preflight(env)
     for command in build_commands(config):run(command,root,env=env)
+    if identity:sign_binaries(root,identity)
     require(before==source_hash(root) and revision==commit(root),'Source changed during build')
     folder.mkdir(parents=True,exist_ok=True); n=names(root)
-    native='LineClash-'+version(root)+'-'+platform.system().lower()+'-'+platform.machine()+'.zip'
-    with ZipFile(folder/native,'w',compression=8) as archive:
-        for path,name in native_files(root):
-            digest(root/path); archive.write(root/path,name)
+    system=platform.system()
+    native='LineClash-'+version(root)+'-'+('macos' if system=='Darwin' else system.lower())+'-'+platform.machine()+('.tar.gz' if system=='Linux' else '.zip')
+    if system=='Linux':
+        write_tar(folder/native,[(name,(root/path).read_bytes(),0o755 if name.startswith('bin/') else 0o644) for path,name in native_files(root)])
+    else:
+        with ZipFile(folder/native,'w',compression=8) as archive:
+            for path,name in native_files(root):
+                digest(root/path); archive.write(root/path,name)
+    extra=installers(root,folder,version(root),identity,env)
     write_tar(folder/n['website'],[(str(p.relative_to(root/'public-web')),p.read_bytes(),0o644) for p in website_files(root)])
+    native_entries={}
+    if system=='Darwin':
+        with ZipFile(folder/native) as archive:
+            native_entries={item.filename:hashlib.sha256(archive.read(item)).hexdigest() for item in archive.infolist() if not item.is_dir()}
     recorded={native:digest(folder/native),n['website']:digest(folder/n['website'])}
+    recorded.update({p.name:digest(p) for p in extra})
     for item in assets:
         path=Path(item).expanduser().resolve()
         require(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*',path.name) and path.name not in set(n.values())|set(recorded)|{'SHA256SUMS'},'Duplicate/invalid extra asset')
         sha=digest(path); secret_check(path.read_bytes()); shutil.copyfile(path,folder/path.name)
         recorded[path.name]=sha
     record={'version':version(root),'commit':revision,'source_sha256':before,
-            'platform':platform.system(),'architecture':platform.machine(),'native_asset':native,
+            'platform':platform.system(),'architecture':platform.machine(),'native_asset':native,'installer_assets':[p.name for p in extra],
+            'signing_identity':identity or '', 'native_entries':native_entries,
             'runtime_validation':'Native automated checks passed; other OS runtime and installer checks require their own hosts.',
             'dependencies':('Windows non-system runtime DLLs are bundled; extract the complete ZIP.' if platform.system()=='Windows' else 'Native binaries require SDL2 and libcurl (GUI on POSIX), and SQLite runtime; ZIP is not a standalone installer.'),
             'artifacts':recorded}

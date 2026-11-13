@@ -14,14 +14,18 @@ except ImportError:
  raise SystemExit('Install documentation build dependencies: python3 -m pip install -r scripts/requirements-docs.txt')
 ROOT=Path(__file__).resolve().parents[1]
 PROFILES={
- 'manual':[('playing','Playing','docs/PLAYING.md'),('features','Servers, history & replays','docs/GAMEPLAY-FEATURES.md'),('configuration','Server configuration','docs/CONFIGURATION.md')],
- 'source':[('development','Build & development','docs/DEVELOPMENT.md'),('windows','Windows builds','docs/WINDOWS.md')],
+ 'basics':[('playing','Game basics','docs/GAME-BASICS.md'),('modes','Game modes','docs/GAME-MODES.md'),('specials','Specials','docs/SPECIALS.md'),('features','Servers, history & replays','docs/GAMEPLAY-FEATURES.md')],
+ 'controls':[('clients','Run & configure clients','docs/CLIENTS.md'),('controls','Controls & accessibility','docs/CONTROLS.md')],
+ 'server':[('server-start','Start a server','docs/SERVER-START.md'),('configuration','Configure a server','docs/CONFIGURATION.md'),('management','Manage a server','docs/SERVER-MANAGEMENT.md')],
+ 'source':[('development','Run from source','docs/DEVELOPMENT.md'),('windows','Build & run on Windows','docs/WINDOWS.md')],
  'api':[('community-api','Community API','docs/COMMUNITY-API.md'),('status-api','Dedicated server API','docs/API.md')],
 }
 CHAPTERS={path:(key,profile) for profile,guides in PROFILES.items() for key,title,path in guides}
-BASES={'manual':'../','source':'../','api':'../../'}
-ROUTES={'manual':'documentation/','source':'source/','api':'api/docs/'}
-TARGETS={'manual':'documentation.html','source':'source-documentation.html','api':'api-documentation.html'}
+DOC_PAGES={'basics':'Gameplay','controls':'Clients & controls','server':'Server setup'}
+BASES={profile:('../../' if profile in DOC_PAGES or profile=='api' else '../') for profile in PROFILES}
+ROUTES={profile:'documentation/'+profile+'/' for profile in DOC_PAGES}
+ROUTES.update(source='source/',api='api/docs/')
+TARGETS={profile:profile+'-documentation.html' for profile in PROFILES}
 ASSETS={}
 
 def link(url,source,profile):
@@ -82,14 +86,57 @@ def public_guide(path):
   text='\n\n'.join(p for p in text.split('\n\n') if not p.startswith(('The GUI music player','See [discovery')))
   text=text.replace(' See [trust review](TRUST-REVIEW.md) and [platform verification](PLATFORM-VERIFICATION.md).','')
  elif path=='docs/CONFIGURATION.md':
-  text=text.split('## Public website registration')[0]
+  text='# Configure a game server\n\nSettings are read at startup. Restart after editing the configuration. Room settings saved in SQLite can override initial defaults; use room controls to update an existing room.\n\n## File format and options'+text.split('## File format and options',1)[1].split('## Accounts and administration',1)[0]
  elif path=='docs/DEVELOPMENT.md':
-  packages=text.split('## Packages',1)[1].split('## Public web page',1)[0]
-  text='# Build and development\n\nBuild the native game and dedicated server with a C compiler, make, SQLite and SDL2. macOS and Linux also use libcurl; Windows uses WinHTTP. Platform-specific commands are above.\n\n## Project layout\n\nThe GUI is in `clients/gui/`, the dedicated server in `server/`, and shared gameplay/network code in `shared/`. Run `make -j4` from the project root to build. The default Windows target excludes the POSIX terminal client.\n\n## Packages'+packages
-  text+='\n## Interface development\n\nThe antialiased GUI font is compiled from `clients/gui/src/ui_font.h`. Regenerate it with Pillow and `python3 scripts/build_ui_font.py`. Roboto is licensed under SIL OFL 1.1; preserve its license when packaging.\n'
+  text="""# Run from source
+
+After building with the platform commands above, run the server and client in separate terminals from the project root.
+
+## Start a local server — macOS and Linux
+
+Create a local configuration with writable database and log paths:
+
+```sh
+cp server/lineclashd.cfg.example ./lineclashd.cfg
+./server/lineclashd --config ./lineclashd.cfg
+```
+
+Leave this terminal open. Press Ctrl+C to stop the server. To restart it, run the same command again with the same configuration.
+
+## Start the desktop client — macOS and Linux
+
+In another terminal, from the project root:
+
+```sh
+./clients/gui/lineclash
+```
+
+Add `localhost` with game port `31457`, enter a nickname and password, connect and join a room. A new nickname registers when server registration is enabled. Use Quit or close the window to stop the client.
+
+## Start the terminal client — macOS and Linux
+
+```sh
+./clients/cli/lineclash-cli localhost 31457
+```
+
+Follow the on-screen connection prompts and contextual controls. Use `--help` for saved connection options. The terminal client is not built by the default Windows target.
+
+## Administration tool
+
+```sh
+./server/lineclashd-tool --help
+```
+
+On Windows, use `./server/lineclashd-tool.exe --help`. See the [server guide](SERVER-MANAGEMENT.md) for account privileges and administration. See [clients and controls](CLIENTS.md) for preferences and connection troubleshooting.
+
+## Rebuild after changes
+
+Run `make -j4` again from the project root. Stop running programs before replacing their binaries. For a clean rebuild, run `make clean` followed by `make -j4`. Keep your configuration and database when rebuilding.
+"""
  elif path=='docs/WINDOWS.md':
-  text=text.split('Verification evidence:')[0]
-  text=text.replace('For verification and a distributable ZIP:','Create a distributable ZIP:').replace('make verify\n','')
+  text=text.split('For verification and a distributable ZIP:')[0]
+  text=text.replace('# Windows build and packaging','# Build and run on Windows')
+  text+='\n## Stop and restart\n\nStop the foreground server with Ctrl+C in its terminal. Close the game window to exit the client. Start either executable again with the same command. Connect the GUI to `localhost:31457` when using the local server.\n'
  elif path=='docs/API.md':text=text.split('## Public directory API')[0]
  elif path=='docs/COMMUNITY-API.md':
   text=text.split('The directory supervisor handles')[0]+'Keep tokens private and use HTTPS.\n'
@@ -99,6 +146,8 @@ def generate(profile):
  guides=PROFILES[profile]
  nav=''.join('<li><a href="#'+key+'">'+html.escape(title)+'</a></li>' for key,title,path in guides)
  parts=['<!-- Generated by scripts/build_web_docs.py. Edit the Markdown guides, then rebuild. -->','<div class="documentation-layout"><aside class="documentation-toc"><details open><summary>On this page</summary><nav aria-label="Documentation contents"><ul>'+nav+'</ul></nav></details></aside><div class="documentation-content">']
+ if profile in DOC_PAGES:
+  parts[1]='<div class="documentation-layout documentation-without-sidebar"><div class="documentation-content">'
  for key,title,path in guides:
   rendered=markdown.markdown(public_guide(path),extensions=['fenced_code','tables','toc','sane_lists'],extension_configs={'toc':{'baselevel':2,'slugify':lambda value,sep,prefix=key:prefix+'-'+slugify(value,sep)}})
   parser=SafeHTML(path,profile);parser.feed(rendered);parser.close()
@@ -118,5 +167,5 @@ def main():
   if args.check:
    if not destination.is_file() or destination.read_bytes()!=source.read_bytes():raise SystemExit('Stale documentation image: '+name)
   else:destination.parent.mkdir(parents=True,exist_ok=True);destination.write_bytes(source.read_bytes())
- print(('Checked' if args.check else 'Generated')+' '+str(sum(map(len,PROFILES.values())))+' documentation chapters across 3 pages and '+str(len(ASSETS))+' images')
+ print(('Checked' if args.check else 'Generated')+' '+str(sum(map(len,PROFILES.values())))+' documentation chapters across '+str(len(PROFILES))+' pages and '+str(len(ASSETS))+' images')
 if __name__=='__main__':main()

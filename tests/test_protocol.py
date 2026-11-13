@@ -66,7 +66,7 @@ class ProtocolTests(unittest.TestCase):
                 q.send('playerlost 2');p.until('endgame');p.sync()
                 with sqlite3.connect(root/'db.sqlite3') as db:
                     game=db.execute('SELECT game_id,ranked,started_epoch,ended_epoch,end_reason FROM games').fetchone()
-                    self.assertEqual(game[1],1);self.assertGreater(game[2],0);self.assertGreaterEqual(game[3],game[2]);self.assertEqual(game[4],'completed')
+                    self.assertEqual(game[1],0);self.assertGreater(game[2],0);self.assertGreaterEqual(game[3],game[2]);self.assertEqual(game[4],'completed')
                     players=db.execute('SELECT nick,placement,won,game_ended FROM game_stats ORDER BY nick').fetchall()
                     self.assertEqual([(x[0],x[1],x[2]) for x in players],[('loser',2,0),('winner',1,1)])
                     self.assertTrue(all(x[3] for x in players))

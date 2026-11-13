@@ -18,6 +18,12 @@ int main(void) {
     char bad[]="LC-DIRECTORY-1\nevil\tEvil\tbad@host\t31457\t2\t8\n";assert(directory_parse(bad,rows,4)==-1);
     assert(!directory_url_valid("http://example.com/api/",1));assert(!directory_url_valid("https://user:password@example.com/api/",0));
     assert(directory_url_valid("https://example.com/api/",0));
+    SavedServer status;memset(&status,0,sizeof(status));
+    assert(!client_probe_greeting(&status,"Server is full") && status.auth_status==-4);
+    assert(!strcmp(client_server_status(&status),"Server full"));
+    assert(!client_probe_greeting(&status,"You are banned from this server") && status.auth_status==-5);
+    assert(!client_probe_greeting(&status,"LineClash/9.0") && status.auth_status==-2);
+    assert(client_probe_greeting(&status,"LineClash/1.0") && status.auth_status==0);
     assert(net_init()); listener=net_listen(0); assert(listener!=INVALID_SOCK);
     struct sockaddr_in addr; socklen_t al=sizeof(addr);
     assert(getsockname(listener,(struct sockaddr *)&addr,&al)==0); port=ntohs(addr.sin_port);

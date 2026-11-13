@@ -9,6 +9,7 @@
 #  include <shellapi.h>  /* ShellExecuteA */
 #endif
 
+static int g_patterns=0,g_high_contrast=0,g_ui_scale=100;
 static SDL_Window   *g_win  = NULL;
 static SDL_Renderer *g_rend = NULL;
 static SDL_Texture *g_ui_font = NULL;
@@ -84,11 +85,11 @@ static const unsigned char FONT[NCHARS][FH]={
 /* Shared slate / mint interface palette; saturated gameplay colours stay distinct. */
 static uint32_t theme_color(uint32_t c) {
     switch(c) {
-    case 0x0d0d1aff:case 0x0d0d18ff:case 0x0d0d1eff:case 0x0a0a14ff:return 0x0b111bff;
-    case 0x12122aff:case 0x10102aff:case 0x10101eff:case 0x14142cff:case 0x141420ff:case 0x16182aff:return 0x121c2aff;
-    case 0x1a1a2eff:case 0x1a1a40ff:case 0x20203aff:case 0x181828ff:return 0x182435ff;
-    case 0x2a2a5aff:case 0x1e1e46ff:case 0x1e1e3aff:return 0x203449ff;
-    case 0x3a3a6aff:case 0x4a4a80ff:case 0x282840ff:case 0x1a1a34ff:return 0x2b3c51ff;
+    case 0x0d0d1aff:case 0x0d0d18ff:case 0x0d0d1eff:case 0x0a0a14ff:return 0x10121fff;
+    case 0x12122aff:case 0x10102aff:case 0x10101eff:case 0x14142cff:case 0x141420ff:case 0x16182aff:return 0x191c2fff;
+    case 0x1a1a2eff:case 0x1a1a40ff:case 0x20203aff:case 0x181828ff:return 0x22263cff;
+    case 0x2a2a5aff:case 0x1e1e46ff:case 0x1e1e3aff:return 0x303752ff;
+    case 0x3a3a6aff:case 0x4a4a80ff:case 0x282840ff:case 0x1a1a34ff:return 0x3c4562ff;
     case 0x4040aaff:case 0x404060ff:case 0x4040a0ff:case 0x5050a0ff:case 0x6060a0ff:case 0x5050c0ff:case 0x383858ff:case 0x5050aaff:case 0x404040ff:return 0x8da0baff;
     case 0x22cc44ff:case 0x00cc44ff:return 0x72dfbbff;
     case 0xcc2222ff:return 0xf38b96ff;
@@ -116,7 +117,8 @@ static void round_fill(int x,int y,int w,int h,int radius,uint32_t color) {
     }
 }
 static void surface(int x,int y,int w,int h,uint32_t fill,uint32_t border) {
-    round_fill(x,y,w,h,8,border);round_fill(x+1,y+1,w-2,h-2,7,fill);
+    round_fill(x,y+2,w,h,9,0x080b14ff);
+    round_fill(x,y,w,h,9,border);round_fill(x+1,y+1,w-2,h-2,8,fill);
 }
 static unsigned int text_next(const char **text) {
     const unsigned char *s=(const unsigned char*)*text;unsigned int c=*s++;
@@ -148,6 +150,7 @@ static int tw(const char *text,int sc) {
     return (int)lroundf(width);
 }
 static void dt(int x,int y,const char *text,uint32_t color,int sc) {
+    if(g_high_contrast){unsigned brightness=((color>>24)&255)+((color>>16)&255)+((color>>8)&255);if(brightness>=160 && brightness<520)color=0xf0f5fcff;}
     float at=(float)x;
     while(*text){unsigned int cp=text_next(&text);draw_glyph(at,y,cp,color,sc);at+=UI_GLYPHS[glyph_index(cp)][6]*sc/256.0f;}
 }
@@ -181,8 +184,8 @@ static int dbtn(int x,int y,int w,int h,const char*lbl,BtnStyle sty){
     switch(sty) {
     case BS_DISABLED:bg=0x121d2bff;bo=0x243247ff;tc=0x6e8099ff;break;
     case BS_TOGON:bg=hov?0x24544aff:0x193d38ff;bo=0x327f6eff;tc=0x9af0d2ff;break;
-    case BS_ACTIVE:bg=hov?0xa5f2d8ff:0x72dfbbff;bo=bg;tc=0x102c27ff;break;
-    default:bg=hov?0x293d53ff:0x1a293cff;bo=hov?0x526b87ff:0x31445dff;tc=0xdce6f3ff;
+    case BS_ACTIVE:bg=hov?0xd5c8ffff:0xbba5f4ff;bo=bg;tc=0x201b36ff;break;
+    default:bg=hov?0x303951ff:0x20283bff;bo=hov?0x7383a5ff:0x39445eff;tc=0xdce6f3ff;
     }
     surface(x,y,w,h,bg,bo);
     dtc(x+w/2,y+(h-FH)/2,lbl,tc,1);
@@ -249,11 +252,17 @@ static void dblk(int px,int py,int sz,uint8_t val,int ghost){
     if(!val){fr(px,py,sz,sz,0x0d0d1aff);dr(px,py,sz,sz,0x16162aff);return;}
     col=ccol(val);
     if(ghost){dr(px+1,py+1,sz-2,sz-2,(col&0xffffff00)|0x60);return;}
-    fr(px,py,sz,sz,col);
-    {uint32_t r=(col>>24)&0xff,g=(col>>16)&0xff,b=(col>>8)&0xff,a=col&0xff;
-     uint32_t lt=((r+60>255?255:r+60)<<24)|((g+60>255?255:g+60)<<16)|((b+60>255?255:b+60)<<8)|a;
-     uint32_t dk=((r/2)<<24)|((g/2)<<16)|((b/2)<<8)|a;
-     fr(px,py,sz,2,lt);fr(px,py,2,sz,lt);fr(px,py+sz-2,sz,2,dk);fr(px+sz-2,py,2,sz,dk);}
+    /* Small gutters keep adjacent pieces legible without heavy bevels. */
+    fr(px,py,sz,sz,0x101522ff);
+    round_fill(px+1,py+1,sz-2,sz-2,sz>=16?3:1,col);
+    {unsigned r=col>>24,g=(col>>16)&255,b=(col>>8)&255;
+     uint32_t shine=((r+(255-r)/4)<<24)|((g+(255-g)/4)<<16)|((b+(255-b)/4)<<8)|255;
+     fr(px+3,py+2,sz-6,1,shine);}
+    if(g_patterns && val>=1 && val<=7){
+        int dots=val,cell=sz>=18?3:1,spacing=cell+1,ox=px+3,oy=py+3;
+        unsigned lum=(((col>>24)&255)*299+((col>>16)&255)*587+((col>>8)&255)*114)/1000;uint32_t marker=lum<140?0xf7faffff:0x101820ff;
+        for(int i=0;i<dots;i++)fr(ox+(i%3)*spacing,oy+(i/3)*spacing,cell,cell,marker);
+    }
     if(val>8&&val<=8+NUM_SPECIALS&&sz>=12){char s[2]={SPECIAL_CHARS[val-9],0};dts(px+sz/2-3,py+sz/2-5,s,0xffffffff,1);}
 }
 
@@ -280,11 +289,11 @@ static void dfield(int ox,int oy,int sz,Field*f,Piece*cur,int show_ghost){
 
 static void dnext(int ox,int oy,int bw,int bh,Piece*p){
     const PieceShape*sh=&PIECES[p->type][0];int sz=bh<80?16:20,i,cx=ox+bw/2-sz,cy=oy+bh/2-sz;
-    fr(ox,oy,bw,bh,0x0d0d1aff);dr(ox,oy,bw,bh,COL_BORDER);dt(ox+4,oy+3,"NEXT",COL_GRAY,1);
+    surface(ox,oy,bw,bh,0x171f30ff,0x303c54ff);dt(ox+8,oy+5,"NEXT",0xaebbd4ff,1);
     for(i=0;i<4;i++) dblk(cx+sh->c[i].dx*sz,cy+sh->c[i].dy*sz,sz,(uint8_t)(p->type+1),0);}
 
 static void dhold(int ox,int oy,int bw,int bh,int ptype,int used,const char*keyhint){
-    fr(ox,oy,bw,bh,used?0x0a0a0aff:0x0d0d1aff);dr(ox,oy,bw,bh,used?0x303030ff:COL_BORDER);
+    surface(ox,oy,bw,bh,used?0x121a27ff:0x171f30ff,0x303c54ff);
     dt(ox+4,oy+3,"HOLD",used?0x404040ff:COL_GRAY,1);
     dt(ox+4+tw("HOLD",1)+4,oy+3,keyhint,used?0x303030ff:0x505070ff,1);
     if(ptype>=0&&ptype<NUM_PIECES){
@@ -298,7 +307,7 @@ static void dhold(int ox,int oy,int bw,int bh,int ptype,int used,const char*keyh
 }
 
 static void dpanel(int x,int y,int w,int h,const char*title){
-    surface(x,y,w,h,0x131f2eff,0x2b3c51ff);
+    surface(x,y,w,h,0x181f31ff,0x303c54ff);
     if(title&&*title){dt(x+9,y+4,title,0x9caec6ff,1);}
 }
 
@@ -396,7 +405,7 @@ static void draw_activity_log(int ox, int oy, int w, int h, ClientCtx *c) {
     int maxl = (h - 20) / lh;
     int start = c->act_count - maxl; if(start<0) start=0;
     /* Same style as chat panel: dark background, border, plain text label */
-    fr(ox,oy,w,h,0x10101fff); dr(ox,oy,w,h,COL_BORDER);
+    surface(ox,oy,w,h,0x141c2cff,0x35415bff);
     dt(ox+4,oy+3,"ACTIVITY",COL_GRAY,1);
     for(i=start;i<c->act_count;i++){
         int ty=oy+20+(i-start)*lh;
@@ -441,7 +450,7 @@ static void dopp(int ox,int oy,Field*f,const char*nick,int alive,int spectating,
     /* Field background */
     fr(ox,oy,fw,fh,spectating?0x080814ff:0x0d0d1aff);
     for(y=0;y<FIELD_HEIGHT;y++) for(x=0;x<FIELD_WIDTH;x++){
-        uint8_t v=f->cells[y][x]; if(v) fr(ox+x*sz,oy+y*sz,sz-1,sz-1,ccol(v));}
+        uint8_t v=f->cells[y][x]; if(v) dblk(ox+x*sz,oy+y*sz,sz-1,v,0);}
 
     /* Spectator overlay — dim the field with SPECTATOR text */
     if(spectating){
@@ -474,13 +483,13 @@ static int draw_chat_panel(int ox,int oy,int w,int h,ClientCtx*c){
     if(c->chat_scroll<0)          c->chat_scroll=0;
 
     /* Panel background + border */
-    fr(ox,oy,w,h,0x0c0c1aff); dr(ox,oy,w,h,0x3a3a60ff);
+    surface(ox,oy,w,h,0x141c2cff,0x35415bff);
 
     /* Header */
     dt(ox+4,oy+4,"ROOM CHAT",0x6060a0ff,1);
     {int btn_w=tw("Chat (Tab)",1)+14;
      if(dbtn(ox+w-sb_w-btn_w-2,oy+2,btn_w,16,"Chat (Tab)",BS_NORMAL)) clicked_chat=1;}
-    fr(ox,oy+hdr_h,w,sep,0x2a2a50ff);
+    fr(ox+8,oy+hdr_h,w-16,sep,0x303c54ff);
 
     /* Messages — scroll: 0=show newest, N=show N lines back */
     {int end=c->chat_count - c->chat_scroll; if(end<0)end=0;
@@ -656,7 +665,7 @@ static void render_keymap_popup(ClientCtx *c, int saved_click) {
     };
     const int NKEYS = 11;
     const int ROW_H = 30, ROW_PAD = 4;
-    int pw=400, ph=30+NKEYS*(ROW_H+ROW_PAD)+50;
+    int pw=460, ph=30+NKEYS*(ROW_H+ROW_PAD)+112;
     int px=(WIN_W-pw)/2, py=(WIN_H-ph)/2;
     int capturing = (c->keymap_capture_idx >= 0);
 
@@ -676,7 +685,7 @@ static void render_keymap_popup(ClientCtx *c, int saved_click) {
     g_mouse.clicked = saved_click;
 
     fr(px,py,pw,ph,0x10102aff); dr(px,py,pw,ph,COL_PIECE_I);
-    dtc(px+pw/2,py+10,"Key Bindings",COL_LTGRAY,2);
+    dtc(px+pw/2,py+10,"Controls & display",COL_LTGRAY,2);
 
     for(int i=0;i<NKEYS;i++){
         int bx=px+12, by=py+28+i*(ROW_H+ROW_PAD);
@@ -699,6 +708,11 @@ static void render_keymap_popup(ClientCtx *c, int saved_click) {
             c->keymap_capture_idx=i; g_mouse.clicked=0;
         }
     }
+    {int y=py+30+NKEYS*(ROW_H+ROW_PAD)+8,w=(pw-32)/3;char label[64];
+     snprintf(label,sizeof(label),"Scale %d%%",c->ui_scale?c->ui_scale:100);
+     if(dbtn(px+12,y,w,30,label,BS_NORMAL))client_cycle_ui_scale(c);
+     if(dbtn(px+16+w,y,w,30,c->piece_patterns?"Patterns: on":"Patterns: off",BS_NORMAL)){c->piece_patterns=!c->piece_patterns;sdl_set_ui_options(c->ui_scale,c->piece_patterns,c->high_contrast);client_save_settings(c);}
+     if(dbtn(px+20+w*2,y,w,30,c->high_contrast?"Contrast: on":"Contrast: off",BS_NORMAL)){c->high_contrast=!c->high_contrast;sdl_set_ui_options(c->ui_scale,c->piece_patterns,c->high_contrast);client_save_settings(c);}}
     if(dbtn(px+12,py+ph-44,pw-24,32,"Close",BS_NORMAL)){
         c->keymap_popup_open=0; c->keymap_capture_idx=-1;
     }
@@ -1052,8 +1066,8 @@ void sdl_render_server_list(ClientCtx*c){
     round_fill(32,26,13,13,3,0x72dfbbff);round_fill(48,26,13,13,3,0x72dfbbff);round_fill(48,42,13,13,3,0x46a98bff);
     dt(75,22,"LineClash",0xf0f5fcff,2);
     dt(76,56,"MULTIPLAYER FALLING BLOCKS",0x91a4bfff,1);
-    dt(32,112,"Find your next match.",0xf0f5fcff,2);
-    dt(33,153,"Discover a community server, or make yourself at home on a favourite.",0x97abc5ff,1);
+    dt(32,109,"Your next match starts here.",0xf0f5fcff,2);
+    dt(33,153,"Find a server. Join a room. Make every line count.",0x97abc5ff,1);
     if(dbtn(WIN_W-96,22,64,28,"Quit",BS_NORMAL))        action=BTN_QUIT;
     if(dbtn(WIN_W-166,22,62,28,"About",BS_NORMAL))      action=BTN_SRV_ABOUT;
     if(dbtn(WIN_W-238,22,64,28,"Keymap",BS_NORMAL))     action=BTN_KEYMAP_POPUP;
@@ -1103,8 +1117,10 @@ void sdl_render_server_list(ClientCtx*c){
     const char *directory_url=SDL_getenv("LINECLASH_DIRECTORY_URL");
     if(directory_url && directory_url_valid(directory_url,0) && dbtn(WIN_W-498,22,104,28,"Browse web",BS_NORMAL)) music_link(directory_url);
 
-    /* Column headers */
-    surface(LSX,HDR_Y,LSW,32,0x182638ff,0x2b3c51ff);
+    {char count[48];snprintf(count,sizeof(count),"%d SAVED SERVERS",c->server_count);
+     dt(WIN_W-190,137,count,0xbba5f4ff,1);}
+    /* Quiet table header lets server names carry the visual weight. */
+    fr(LSX,HDR_Y,LSW,32,0x171f30ff);
     dt(COL_NAME,HDR_Y+8,"Game server",   0x5050a0ff,1);
     dt(COL_STAT,HDR_Y+8,"Status",         0x5050a0ff,1);
     dt(COL_REG, HDR_Y+8,"Registered",     0x5050a0ff,1);
@@ -1146,12 +1162,12 @@ void sdl_render_server_list(ClientCtx*c){
         int is_cur = (i==c->server_cursor);
 
         /* Determine if connection is allowed — only block if explicitly failed */
-        int blocked = (ss->auth_status==-1||ss->auth_status==-2||ss->auth_status==-3);
+        int blocked = 0; /* Retry is available even after a failed probe. */
 
-        uint32_t bg = is_cur ? 0x203a43ff : (i%2 ? 0x152131ff : 0x121e2dff);
-        uint32_t bo = is_cur ? (blocked?0xa03030ff:0x4d9f8bff) : 0x25354aff;
+        uint32_t bg = is_cur ? 0x2b2b47ff : 0x182133ff;
+        uint32_t bo = is_cur ? (blocked?0xa03030ff:0x9581c7ff) : 0x2c3950ff;
         surface(LSX,ry+3,LSW,ROW_H-6,bg,bo);
-        if(is_cur)round_fill(LSX+1,ry+13,3,ROW_H-26,1,0x72dfbbff);
+        if(is_cur)round_fill(LSX+1,ry+13,3,ROW_H-26,1,0xbba5f4ff);
 
         /* Click left area = select; selected + click = connect (if allowed) */
         int cw = LSW - BUTTONS_W - 6;
@@ -1161,6 +1177,7 @@ void sdl_render_server_list(ClientCtx*c){
         }
 
         /* Name (top) + host:port (sub-line) */
+
         uint32_t name_col = blocked ? 0x606060ff : (is_cur?COL_WHITE:COL_LTGRAY);
         {char label[31];snprintf(label,sizeof(label),"%.30s",ss->name[0]?ss->name:ss->host);dt(COL_NAME,ry+11,label,name_col,1);}
         {char sub[100]; snprintf(sub,sizeof(sub),"%s%.21s:%d",ss->favourite?"* ":"",ss->host,ss->port);
@@ -1180,6 +1197,7 @@ void sdl_render_server_list(ClientCtx*c){
          } else {
              slabel="--"; dot_in=0x1a1a00ff; dot_out=0x555522ff; txt_col=0x444433ff;
          }
+         slabel=client_server_status(ss);
          fr(COL_STAT,dy,10,10,dot_in); dr(COL_STAT,dy,10,10,dot_out);
          dt(COL_STAT+14,dy,slabel,txt_col,1);
          char detail[40];if(ss->ping_ms>0)snprintf(detail,sizeof(detail),"%dms  %d/%d",ss->ping_ms,ss->users_playing+ss->users_idle,ss->capacity);else snprintf(detail,sizeof(detail),"Latency unknown");
@@ -1393,13 +1411,13 @@ void sdl_render_connect(ClientCtx*c){
     SDL_RenderClear(g_rend);
 
     /* Title */
-    fr(0,0,WIN_W,120,0x12122aff); dr(0,0,WIN_W,120,COL_BORDER);
+    fr(0,0,WIN_W,108,0x161d2dff); fr(32,107,WIN_W-64,1,0x39445eff);
     dts(cx - tw("LineClash",3)/2, 20, "LineClash", COL_PIECE_I, 3);
     {char ver[32]; snprintf(ver,sizeof(ver),"v%s",TETRINETZ_VERSION);
      dtc(cx, 76, ver, COL_GRAY, 1);}
 
     /* Form panel */
-    fr(PX,PY,PW,PH,0x12122aff); dr(PX,PY,PW,PH,COL_BORDER);
+    surface(PX-12,PY-4,PW+24,PH+12,0x181f31ff,0x39445eff);
 
     if (is_authing) {
         dtc(cx, PY+PH/2-10, "Authenticating...", COL_HOSTGOLD, 1);
@@ -2024,7 +2042,7 @@ void sdl_render_game(ClientCtx*c){
     SDL_RenderClear(g_rend);
 
     /* Header */
-    fr(0,0,WIN_W,28,0x12122aff);dr(0,0,WIN_W,28,COL_BORDER);
+    fr(0,0,WIN_W,28,0x1c2437ff);fr(0,27,WIN_W,1,0x3b4864ff);
     /* Back to lobby button — top left */
     if(dbtn(4,3,120,22,"BACK TO LOBBY",BS_NORMAL)) action=BTN_BACK_TO_LOBBIES;
     {char base[64];
@@ -2679,7 +2697,20 @@ int sdl_poll_events(ClientCtx *c) {
 }
 
 /* ============================== SDL INIT/SHUTDOWN ============================== */
+void sdl_set_ui_options(int scale,int patterns,int contrast){
+    g_patterns=patterns;g_high_contrast=contrast;
+    if(scale!=75&&scale!=100&&scale!=125&&scale!=150)scale=100;
+    if(g_win && scale!=g_ui_scale){
+        SDL_Rect bounds={0,0,WIN_W*2,WIN_H*2};int display=SDL_GetWindowDisplayIndex(g_win);
+        SDL_GetDisplayUsableBounds(display<0?0:display,&bounds);
+        int w=WIN_W*scale/100,h=WIN_H*scale/100;
+        if(w>bounds.w)w=bounds.w;if(h>bounds.h-40)h=bounds.h-40;
+        SDL_SetWindowSize(g_win,w,h);
+    }
+    g_ui_scale=scale;
+}
 int sdl_init(void) {
+    g_ui_scale=100;
     /* The game owns its entry point on every platform, including WinMain. */
     SDL_SetMainReady();
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
@@ -2688,7 +2719,7 @@ int sdl_init(void) {
     }
     g_win = SDL_CreateWindow("LineClash",
                              SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                             WIN_W, WIN_H, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);
+                             WIN_W, WIN_H, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
     if (!g_win) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         SDL_Quit();

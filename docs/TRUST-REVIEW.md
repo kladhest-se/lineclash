@@ -11,8 +11,10 @@
 
 Regression tests exercise these boundaries with adversarial raw TCP clients. This is protocol hardening, not a claim that gameplay is fully authoritative.
 
+## Authoritative input protocol
+
+Updated GUI clients negotiate `input-v1`. The server simulates gravity, moves, rotation, holds, locks, clears and inventory. Client board/line/level/loss claims are ignored in that mode. Inputs require strictly increasing sequence numbers, bounded processing rates, server-timed drops and bounded lock resets. Reconnect snapshots restore the server state. Legacy clients remain playable but cannot create ranked rounds. Older ranked history without `input-v1` provenance is demoted to casual during local and website migrations.
+
 ## Remaining architectural trust
 
-The existing protocol still accepts a client's board contents and `lineclear 1..4` reports. A modified client can fabricate plausible boards/clears and thereby earn garbage attacks, specials and progression. The server's pre-generated piece queue is not yet a complete validated input simulation. Hold/reset messages and client-side effects also rely on honest gameplay. Plain TCP does not provide transport confidentiality, and account password hashes are authentication credentials.
-
-For cheat-resistant ranked matches, introduce a versioned input protocol: clients send sequenced movement/rotation/drop/hold commands, the server simulates piece motion, locks, clears, hold state and garbage, and authoritative snapshots correct client prediction. Derive awards/statistics solely from that simulation and record command sequences for replay. Keep the legacy board-reporting protocol explicitly unranked until that migration is complete. This requires a coordinated gameplay protocol change rather than speculative validation of legacy board snapshots.
+Operators can fabricate their own reports, and automation, collusion and account sharing are not prevented by input simulation. Plain TCP still lacks transport confidentiality; that work was not selected in this change. Snapshot replays contain server-derived boards, not a deterministic command-resimulation proof. Native Windows/Linux execution still requires their CI hosts.

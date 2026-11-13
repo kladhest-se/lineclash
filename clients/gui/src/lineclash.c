@@ -7,6 +7,15 @@
 
 int main(int argc, char *argv[]) {
     for (int i=1; i<argc; i++) {
+        if(!strcmp(argv[i],"--smoke-test")){
+            if(!net_init())return 1;
+            if(!sdl_init()){net_cleanup();return 1;}
+            int ok=sound_init();
+            if(ok){music_set_res_prefix(sdl_get_res_dir());music_select(0);MusicPlayback playback;
+                ok=0;for(int n=0;n<150;n++){music_tick();music_snapshot(&playback);if(playback.failed)break;if(playback.duration>0){ok=1;break;}SLEEP_MS(20);}
+            }
+            sound_shutdown();sdl_shutdown();net_cleanup();return ok?0:1;
+        }
         if (!strcmp(argv[i],"--debug")) {
             /* Redirect stderr to debug log */
             char debug_path[1024];
