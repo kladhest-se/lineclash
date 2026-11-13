@@ -88,7 +88,10 @@ void auth_make_nonce(char out[AUTH_NONCE_LEN]){
 #else
     FILE *entropy=fopen("/dev/urandom","rb");if(!entropy || fread(buf,1,sizeof(buf),entropy)!=sizeof(buf)){log_error("Secure randomness unavailable");exit(1);}fclose(entropy);
 #endif
-    for(i=0;i<32;i++)snprintf(out+i*2,3,"%02x",buf[i]);out[64]=0;
+    for (i = 0; i < 32; i++) {
+        snprintf(out + i * 2, 3, "%02x", buf[i]);
+    }
+    out[64] = 0;
 }
 
 /* ============================================================

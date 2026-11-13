@@ -2471,7 +2471,10 @@ void server_run(int port, const char *cfg_path) {
                             char message[96];snprintf(message,sizeof(message),"centralidentity %s",pend->pending_nick);net_send(pend->sock,message);snprintf(message,sizeof(message),"centralresume %s",pend->central_resume);net_send(pend->sock,message);net_send(pend->sock,"authok existing Central reconnect verified");
                         }
                     }
-                    if(!resumed)net_send(pend->sock,"autherr Central reconnect expired; sign in again");continue;
+                    if (!resumed) {
+                        net_send(pend->sock, "autherr Central reconnect expired; sign in again");
+                    }
+                    continue;
                 }
                 if(!strcmp(cmd,"centralauth")){server_central_begin(pend);continue;}
                 if(!strcmp(cmd,"directory-proof") && np==2){
