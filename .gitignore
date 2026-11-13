@@ -59,3 +59,6 @@ public-web/config.inc.php
 
 *.health.json
 tests/test_discovery
+
+# Native Windows executable outputs
+*.exe

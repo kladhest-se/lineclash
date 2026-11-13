@@ -135,15 +135,20 @@ def write_tar(destination, entries):
                 archive.addfile(info,io.BytesIO(data))
 
 
-def native_files(root=ROOT):
-    windows = platform.system() == 'Windows'
+def native_files(root=ROOT, windows=None, runtime_dirs=(), objdump=None):
+    windows = platform.system() == 'Windows' if windows is None else windows
     suffix = '.exe' if windows else ''
     entries = [('server/lineclashd'+suffix, 'bin/lineclashd'+suffix),
                ('server/lineclashd-tool'+suffix, 'bin/lineclashd-tool'+suffix),
                ('clients/gui/lineclash'+suffix, 'bin/lineclash'+suffix)]
     if not windows: entries.append(('clients/cli/lineclash-cli','bin/lineclash-cli'))
+    else:
+        from windows_runtime import runtime_files
+        executables=[root/path for path,name in entries]
+        for dll in runtime_files(executables,[p.parent for p in executables]+list(runtime_dirs),objdump):
+            entries.append((str(dll),'bin/'+dll.name))
     entries += [('LICENSE.md','LICENSE.md'),('README.md','README.md'),
-                ('server/lineclashd.cfg.example','lineclashd.cfg.example')]
+                ('server/lineclashd.windows.cfg.example' if windows else 'server/lineclashd.cfg.example','lineclashd.cfg.example')]
     if (root/'scripts/server_directory.py').is_file():
         entries.append(('scripts/server_directory.py','scripts/server_directory.py'))
     if (root/'scripts/refresh-lineclash.sh').is_file():
@@ -221,7 +226,7 @@ def build(config, root=ROOT, assets=()):
     record={'version':version(root),'commit':revision,'source_sha256':before,
             'platform':platform.system(),'architecture':platform.machine(),'native_asset':native,
             'runtime_validation':'Native automated checks passed; other OS runtime and installer checks require their own hosts.',
-            'dependencies':'Native binaries require SDL2 and libcurl (GUI on POSIX), and SQLite runtime; ZIP is not a standalone installer.',
+            'dependencies':('Windows non-system runtime DLLs are bundled; extract the complete ZIP.' if platform.system()=='Windows' else 'Native binaries require SDL2 and libcurl (GUI on POSIX), and SQLite runtime; ZIP is not a standalone installer.'),
             'artifacts':recorded}
     write_json(folder/n['record'],record)
     create_source(folder/n['source'],root,(folder/n['record']).read_bytes())

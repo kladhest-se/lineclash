@@ -43,7 +43,7 @@ make release-prepare
 - A complete source tar.gz and website tar.gz.
 - BUILD-PROVENANCE.json and SHA256SUMS.
 
-Native ZIPs require installed SDL2 and SQLite runtimes; they are not standalone installers and are not automatically signed or notarized. Existing package scripts can produce platform installers separately. Include explicitly reviewed prebuilt assets with repeatable `--asset PATH` arguments to `build`, for example a DMG or DEB. Additional asset hashes are recorded; importing one does not establish that its installer or another operating system was tested.
+Windows ZIPs bundle non-system runtime DLLs after recursively checking PE imports. Other native ZIPs require installed SDL2 and SQLite runtimes. ZIPs are not installers and are not automatically signed or notarized. Existing package scripts can produce platform installers separately. Include explicitly reviewed prebuilt assets with repeatable `--asset PATH` arguments to `build`, for example a DMG or DEB. Additional asset hashes are recorded; importing one does not establish that its installer or another operating system was tested.
 
 Artifacts are written to outputs/artifacts/. `prepare` stages exact bytes and per-file checksums in outputs/release/publish/ and writes outputs/release/manifest.json. Review its destinations, commit, tag, annotation, notes and hashes. All artifact types, including corresponding source, are published together. Archive files, binary contents and source inputs are checked again before publication. Native build outputs must remain available and be checked on the recorded host platform.
 

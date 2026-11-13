@@ -42,6 +42,20 @@ const char *cfg_default_log(void) {
 #endif
 
 
+#ifdef PLATFORM_WINDOWS
+static const char *windows_server_path(const char *name,char *path,size_t size) {
+    const char *base=getenv("APPDATA");
+    if(!base || !*base)base=".";
+    char folder[CFG_MAX_PATH];
+    snprintf(folder,sizeof(folder),"%s\\LineClash",base);CreateDirectoryA(folder,NULL);
+    snprintf(folder,sizeof(folder),"%s\\LineClash\\Server",base);CreateDirectoryA(folder,NULL);
+    snprintf(path,size,"%s\\%s",folder,name);return path;
+}
+const char *cfg_default_path(void){static char p[CFG_MAX_PATH];return windows_server_path("lineclashd.cfg",p,sizeof(p));}
+const char *cfg_default_db(void){static char p[CFG_MAX_PATH];return windows_server_path("database.sqlite3",p,sizeof(p));}
+const char *cfg_default_log(void){static char p[CFG_MAX_PATH];return windows_server_path("lineclashd.log",p,sizeof(p));}
+#endif
+
 ServerConfig g_cfg;
 static char active_config_path[CFG_MAX_PATH];
 

@@ -2,8 +2,13 @@ export
 
 .PHONY: all server client cli clean help run-server run-client run-cli
 
-# Default: build everything
+# The terminal client uses POSIX terminal facilities.
+HOST_OS := $(shell uname -s 2>/dev/null || echo Windows)
+ifneq ($(filter Windows MINGW% MSYS% CYGWIN%,$(HOST_OS)),)
+all: server client
+else
 all: server client cli
+endif
 
 server:
 	$(MAKE) -C server all

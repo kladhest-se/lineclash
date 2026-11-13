@@ -1,4 +1,5 @@
 #include "client.h"
+#define SDL_MAIN_HANDLED
 #include <SDL.h>
 #include <stdio.h>
 #include <string.h>
@@ -2679,6 +2680,8 @@ int sdl_poll_events(ClientCtx *c) {
 
 /* ============================== SDL INIT/SHUTDOWN ============================== */
 int sdl_init(void) {
+    /* The game owns its entry point on every platform, including WinMain. */
+    SDL_SetMainReady();
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 0;

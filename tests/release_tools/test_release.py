@@ -68,6 +68,8 @@ class FakeAPI:
 
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
+        self.addCleanup(patch.stopall)
+        patch('windows_runtime.runtime_files',return_value=[]).start()
         self.tmp=tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name)
         files={'version.mk':'VERSION ?= 1.0.0\n','get-version.sh':'#!/bin/sh\n',

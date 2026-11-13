@@ -35,6 +35,11 @@ static void ensure_dir(const char *filepath) {
         snprintf(cmd, sizeof(cmd), "mkdir -p '%s'", dir);
         { int _r=system(cmd); (void)_r; }
     }
+#elif defined(PLATFORM_WINDOWS)
+    char dir[CFG_MAX_PATH];snprintf(dir,sizeof(dir),"%s",filepath);
+    for(char *p=dir;*p;p++)if((*p=='/' || *p=='\\') && p>dir && p[-1]!=':') {
+        char saved=*p;*p='\0';CreateDirectoryA(dir,NULL);*p=saved;
+    }
 #else
     (void)filepath;
 #endif

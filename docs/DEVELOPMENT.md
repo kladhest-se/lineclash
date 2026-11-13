@@ -1,6 +1,6 @@
 # Development, tests and packaging
 
-Native builds target macOS and Linux. Server and GUI Makefiles contain Windows cross-compilation branches, but the terminal client and POSIX test harness are intended for macOS/Linux. Windows and Amiga branches need platform validation before release; they are not established by a successful native macOS build.
+Native builds support macOS, Linux and Windows x64. Windows builds include the GUI, dedicated server and administration tool; the terminal client and POSIX process harness are for macOS/Linux. See [Windows build and packaging](WINDOWS.md). Windows runtime validation requires a Windows host; cross-linking is separate evidence. Amiga branches remain unvalidated.
 
 ## Checks
 

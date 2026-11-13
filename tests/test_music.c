@@ -1,6 +1,7 @@
 /* Decode every bundled track and exercise streaming controls without speakers. */
 #include "../clients/gui/src/client.h"
 #include "../clients/gui/src/music_decoder.h"
+#define SDL_MAIN_HANDLED
 #include <SDL.h>
 #include <assert.h>
 #include <math.h>
@@ -45,7 +46,7 @@ int main(void) {
     }
     assert(!music_decoder_open("../music/does-not-exist.mp3"));
     SDL_setenv("SDL_AUDIODRIVER","dummy",1);
-    assert(SDL_Init(SDL_INIT_AUDIO|SDL_INIT_TIMER)==0); assert(sound_init());
+    SDL_SetMainReady(); assert(SDL_Init(SDL_INIT_AUDIO|SDL_INIT_TIMER)==0); assert(sound_init());
     music_set_res_prefix("../"); music_set_enabled(1); music_select(0); ready(0);
     for(int i=1;i<music_track_count();i++) { music_select(i); ready(i); }
     music_select(1); MusicPlayback p=ready(1);

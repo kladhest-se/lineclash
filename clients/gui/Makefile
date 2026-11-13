@@ -52,17 +52,18 @@ endif
 ifeq ($(UNAME),Windows)
     CC      = gcc
     CFLAGS  = -Wall -O2 -Wno-unknown-pragmas -Wno-stringop-truncation -Wno-format-truncation $(VERSION_CFLAGS)
-    LDFLAGS = -lws2_32 -lmingw32
+    LDFLAGS = -mwindows -lws2_32 -lshell32
     TARGET  = lineclash.exe
-    SDL2_LIBS += -lSDL2main
+    SDL2_LIBS := $(filter-out -lSDL2main -lmingw32,$(SDL2_LIBS))
 endif
+WINDOWS_SDL_PREFIX ?= /usr/x86_64-w64-mingw32
 ifeq ($(PLATFORM),win32)
     CC      = x86_64-w64-mingw32-gcc
     CFLAGS  = -Wall -O2 -Wno-unknown-pragmas -Wno-stringop-truncation -Wno-format-truncation $(VERSION_CFLAGS)
-    LDFLAGS = -lws2_32 -lmingw32
+    LDFLAGS = -mwindows -lws2_32 -lshell32
     TARGET  = lineclash.exe
-    SDL2_CFLAGS := -I/usr/x86_64-w64-mingw32/include/SDL2
-    SDL2_LIBS   := -L/usr/x86_64-w64-mingw32/lib -lSDL2main -lSDL2
+    SDL2_CFLAGS := -I$(WINDOWS_SDL_PREFIX)/include/SDL2
+    SDL2_LIBS   := -L$(WINDOWS_SDL_PREFIX)/lib -lSDL2
 endif
 
 SHARED = ../../shared/src

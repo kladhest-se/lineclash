@@ -1,0 +1,10 @@
+# LineClash Windows server example. Copy to a chosen --config path.
+# Omitted database/log paths use %APPDATA%\LineClash\Server.
+port = 31457
+server_name = LineClash
+num_lobbies = 3
+max_players_per_room = 8
+allow_bots = 1
+require_registered = 0
+status_api = 1
+status_port = 31458

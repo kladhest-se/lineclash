@@ -12,6 +12,10 @@ pacman -S --needed make git mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-SDL2
 
 The Windows gate builds the server, administration tool and SDL2 GUI, runs portable C tests over loopback TCP, and runs the Python HTTP/protocol suites. The POSIX-only C fork harness and terminal client are excluded there. Windows process-statistics calls and executable/library targets have platform-specific implementations. Interactive administration on Windows has fewer terminal facilities than POSIX; single-command/authentication paths are portable.
 
-Evidence from this development host: macOS native builds and runtime suites pass; MinGW compiles the shared/server/GUI sources, including the bundled audio decoders for Windows. Cross-compilation checks do not link against a Windows SDL2/SQLite installation or execute Windows binaries. No Linux container engine or native Windows runner is available here, so Linux/Windows runtime and installer validation remain pending those CI jobs. GUI lifecycle checks are headless; they do not replace visual gameplay testing on each OS.
+Evidence from this development host: macOS native builds and runtime suites pass; MinGW compiles the shared/server/GUI sources, including the bundled audio decoders for Windows. The latest cross-build also links all three Windows x64 executables against genuine Windows SDL2/SQLite libraries and checks recursive DLL imports. It does not execute Windows binaries. No Linux container engine or native Windows runner is available here, so Linux/Windows runtime and installer validation remain pending those CI jobs. GUI lifecycle checks are headless; they do not replace visual gameplay testing on each OS.
 
 The music gate checks all original audio hashes and credits, decodes all 19 selections, tests stereo streaming and controls with SDL dummy audio, and renders the player/About screens to check layout and wheel/Esc handling.
+
+See [Windows builds](WINDOWS.md) for native UCRT64 commands, portable ZIP packaging and verification limits.
+
+A GitHub-hosted Windows x64 workflow also runs the gate and packages a portable ZIP on pushes and pull requests; it does not require a separately registered Windows runner.

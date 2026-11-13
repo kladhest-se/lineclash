@@ -102,3 +102,5 @@ See [discovery, ranked history, health reports, replays and music shortcuts](doc
 For your Leap 16 / Apache and remote MariaDB hosts, follow [the Kladhest deployment guide](docs/DEPLOYMENT-KLADHEST.md). The update helper is `scripts/refresh-lineclash.sh`.
 
 The native GUI now uses antialiased Roboto typography and a unified slate/mint theme. See [the modern server browser](docs/images/gui-modern-empty.png). Restart the rebuilt client to use the new renderer.
+
+Windows x64: see [native build and packaging instructions](docs/WINDOWS.md).

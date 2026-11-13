@@ -6,8 +6,8 @@
  * Missing keys use defaults listed below.
  */
 
-/* Default paths — overridden at runtime on macOS to use ~/.lineclashd/ */
-#if defined(__APPLE__)
+/* Per-user defaults on macOS/Windows; system paths on Linux. */
+#if defined(__APPLE__) || defined(PLATFORM_WINDOWS) || defined(_WIN32)
 #define CFG_FILE          cfg_default_path()
 #define CFG_DEFAULT_DB    cfg_default_db()
 #define CFG_DEFAULT_LOG   cfg_default_log()

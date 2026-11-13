@@ -9,12 +9,13 @@ cd lineclash</pre><p>See <a href="#build">the build instructions below</a> for p
 <div class="community-section" id="build">
   <p class="eyebrow">Get started</p>
   <h2 class="section-title">Build from source.</h2>
-  <p class="section-sub">Build the native clients and dedicated server with a C compiler, make, SDL2, SQLite and libcurl.</p>
+  <p class="section-sub">Build the native clients and dedicated server with a C compiler, make, SDL2, SQLite, and libcurl on macOS/Linux. Windows uses WinHTTP.</p>
 
   <div class="tab-bar" role="tablist">
     <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="tab-macos"   onclick="showTab(this,'macos')">macOS</button>
     <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="tab-opensuse" onclick="showTab(this,'opensuse')">openSUSE</button>
     <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="tab-ubuntu"   onclick="showTab(this,'ubuntu')">Ubuntu</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-windows" onclick="showTab(this,'windows')">Windows</button>
   </div>
 
   <div id="tab-macos" class="tab-panel active" role="tabpanel">
@@ -53,6 +54,28 @@ cd lineclash</pre><p>See <a href="#build">the build instructions below</a> for p
 <span class="s">./server/lineclashd</span> &amp;
 <span class="s">./clients/gui/lineclash</span></pre>
   </div>
+
+<div id="tab-windows" class="tab-panel" role="tabpanel">
+<p>Run these commands in the <a href="https://www.msys2.org/">MSYS2 UCRT64</a> terminal on Windows 10 or 11 (64-bit).</p>
+<pre class="code-block"># Install Windows build tools and libraries
+pacman -S --needed make git mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-sqlite3 mingw-w64-ucrt-x86_64-python
+
+git clone https://github.com/kladhest-se/lineclash.git
+cd lineclash
+make -j4
+
+# Launch the native game
+./clients/gui/lineclash.exe
+
+# Optional dedicated server (run in another terminal)
+./server/lineclashd.exe
+
+# Verify on Windows, then create a portable ZIP
+make verify
+python scripts/package-windows.py</pre>
+<p>The server keeps its configuration, logs and database in <code>%APPDATA%\LineClash\Server</code>. The ZIP bundles the needed runtime DLLs and music; extract it and launch <code>bin/lineclash.exe</code>.</p>
+</div>
+
 </div>
 
 <script>
