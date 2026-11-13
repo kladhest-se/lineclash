@@ -18,10 +18,6 @@ site_header('Multiplayer falling blocks','home','./');
     </h1>
     <p class="hero-sub">Fast, brutal multiplayer falling blocks. Up to 8 players, AI bots, 14 specials, full guideline gameplay. Self-hosted.</p>
     <p class="hero-kicker">Your board. Your rivals. Your rules.</p>
-    <div class="hero-actions">
-      <a class="btn btn-primary" href="#get">Get the game</a>
-      <a class="btn btn-outline" href="#screenshots">See the game</a>
-    </div>
   </div>
 </section>
 <nav class="home-index" aria-label="On this page"><a href="#about">The game <span>01</span></a><a href="#features">Features <span>02</span></a><a href="#screenshots">Screenshots <span>03</span></a><a href="#get">Downloads <span>04</span></a></nav>
@@ -29,8 +25,7 @@ site_header('Multiplayer falling blocks','home','./');
 <section class="section" id="about" aria-labelledby="about-heading">
   <p class="eyebrow">The game</p>
   <h2 class="section-title" id="about-heading">Stack together. Clash with friends.</h2>
-  <p class="section-sub">LineClash is a native multiplayer falling-block game. Build clean stacks, clear lines, and send specials to shake up your rivals’ boards. Play in rooms with up to eight players, team up with friends, or practice against AI bots.</p>
-  <p>Choose a community server or host your own. Room rules let you shape each session, while spectators, chat and an in-game music library keep the arena lively between rounds.</p>
+  <p class="section-sub">LineClash is a native multiplayer falling-block game. Build clean stacks, clear lines, and send specials to shake up your rivals’ boards. Play in rooms with up to eight players, team up with friends, or practice against AI bots. Choose a community server or host your own. Room rules let you shape each session, while spectators, chat and an in-game music library keep the arena lively between rounds.</p>
 </section>
 
 <div class="section-divider"></div>
@@ -64,19 +59,13 @@ site_header('Multiplayer falling blocks','home','./');
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">05</span>
       <h3>Open source. Multiple platforms.</h3>
-      <p>Free software built for macOS and Linux. Explore the source, customize the game, and run it on your preferred platform.</p>
+      <p>Open-source software for macOS, Linux and Windows. Explore the source, customize the game, and run it on your preferred platform.</p>
     </article>
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">06</span>
       <h3>Self-hosted</h3>
-      <p>Run your own server. Build for macOS and Linux. Lightweight native clients and a dedicated server.</p>
+      <p>Run your own server. Build for macOS, Linux and Windows. Lightweight native clients and a dedicated server.</p>
     </article>
-  </div>
-  <div class="platform-row">
-    <div class="platform-chip"><span class="dot"></span>macOS arm64</div>
-    <div class="platform-chip"><span class="dot"></span>openSUSE Leap</div>
-    <div class="platform-chip"><span class="dot"></span>Ubuntu 24.04</div>
-    <div class="platform-chip"><span class="dot"></span>Any Linux (build from source)</div>
   </div>
 </div>
 
@@ -107,15 +96,14 @@ site_header('Multiplayer falling blocks','home','./');
   <h2 class="section-title" id="screenshots-heading">Take a closer look.</h2>
   <p class="section-sub">From the arena to the room browser. Select a thumbnail to open the full screenshot.</p>
   <div class="screenshot-gallery">
-    <?php home_preview('arena','The multiplayer arena'); home_preview('rooms','Rooms & rules'); ?>
+    <?php home_preview('arena','The multiplayer arena'); home_preview('rooms','Rooms & rules'); home_preview('servers','Discover servers'); ?>
   </div>
   <details class="more-screenshots">
-    <summary>More screenshots <span>5 more views</span></summary>
+    <summary>More screenshots <span>4 more views</span></summary>
     <div class="screenshot-gallery">
-      <?php home_preview('bots','AI difficulty controls'); home_preview('rules','Room settings'); home_preview('servers','Discover servers'); home_preview('music','In-game music player'); home_preview('credits','Soundtrack credits'); ?>
+      <?php home_preview('bots','AI difficulty controls'); home_preview('rules','Room settings'); home_preview('music','In-game music player'); home_preview('credits','Soundtrack credits'); ?>
     </div>
   </details>
-  <p class="preview-note">Native client previews with example players and rooms. Each board uses its own piece sequence.</p>
 </section>
 
 <div class="section-divider"></div>
@@ -123,7 +111,7 @@ site_header('Multiplayer falling blocks','home','./');
 <section class="section" id="get" aria-labelledby="get-heading"><p class="eyebrow">Join the next round</p><h2 class="section-title" id="get-heading">Get the game.</h2>
 <p class="section-sub">The latest published GitHub release, with downloads for the platforms available in that release. Drafts and prereleases are excluded.</p>
 <div class="download-panel"><p id="release-status" role="status">Checking the latest release…</p><div id="release-assets" class="release-assets"></div><div class="download-actions"><a class="btn btn-outline" href="https://github.com/kladhest-se/lineclash/releases">All GitHub releases ↗</a><a class="btn btn-outline" href="source/#build">Build from source</a><button type="button" class="copy-button" id="release-retry" hidden>Try again</button></div><noscript><p>Enable JavaScript to check downloads automatically, or visit GitHub releases. Build instructions are available on the Source page.</p></noscript></div>
-<p class="small muted">Native packages may require SDL2 and other runtime libraries. Check the release notes for platform and installation requirements.</p></section>
+</section>
 
 <dialog class="screenshot-viewer" aria-labelledby="screenshot-caption"><div class="viewer-toolbar"><p id="screenshot-caption"></p><button type="button" class="copy-button" data-viewer-zoom aria-pressed="false">Actual size</button><a class="section-link" data-viewer-original target="_blank" rel="noopener">Open original ↗</a><button type="button" class="copy-button" data-viewer-close aria-label="Close screenshot">Close ×</button></div><div class="viewer-stage"><img alt=""></div></dialog>
 <script src="assets/screenshots.js" defer></script>
