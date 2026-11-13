@@ -56,10 +56,13 @@ release-prepare:
 release-tools-test:
 	$(PYTHON) -B -m unittest discover -s tests/release_tools -v
 
-.PHONY: directory-test web-test
+.PHONY: directory-test web-test web-js-test
 directory-test:
 	$(PYTHON) tests/test_directory.py
 web-test: server
 	$(PYTHON) tests/test_web_offline.py
 	$(PYTHON) tests/test_web_mariadb.py
 	$(PYTHON) tests/test_directory_e2e.py
+
+web-js-test:
+	node tests/test_web_downloads.js

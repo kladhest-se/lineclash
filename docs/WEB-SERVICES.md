@@ -77,3 +77,13 @@ A concrete setup for web002, dbs001 and mgt001 is in [the Kladhest deployment gu
 ## Main website integration
 
 The main homepage surfaces live servers, online population, match totals, ranked leaders and recent results. Top navigation and a shared responsive theme connect `/servers/`, `/leaderboards/`, `/matches/` and `/statistics/`, including player profiles and replay pages. `/directory/` remains a compatible combined view. Server search/open-slot filters, address copying, server-scoped leaderboards and paginated ranked/casual history are available without inspecting JSON. These pages use the existing database schema; no migration is added by the interface integration.
+
+## Public website navigation and release downloads
+
+The landing page introduces the game with screenshots, features, licensing, and a prominent **Get the game** section (`/#get`). It does not query MariaDB. `/servers/` contains live server search and addresses. `/statistics/` brings together community totals, server activity, ranked leaderboards, and recent matches; full filtered histories remain at `/leaderboards/` and `/matches/`. Player profiles and replay URLs are preserved. Falling blocks are shared across all public pages, respect reduced-motion preferences, and pause in hidden tabs.
+
+The browser checks the public GitHub `kladhest-se/lineclash` latest-release API without credentials. GitHub returns only published stable releases; tags alone, drafts, and prereleases do not create downloads here. A 404 displays “Not released yet”; outages and rate limits display an unavailable state with a retry and direct GitHub link. Only uploaded package assets on the expected repository download path are linked; website packages, checksums, and provenance files are excluded. Asset names identify the actual platform; the page never invents unavailable installers. JavaScript-disabled visitors can follow the releases link or source-build instructions. Music and font licenses remain documented in `CREDITS.md`; game code is GPL version 3 or later.
+
+After publishing a tagged GitHub release with package assets, the page picks it up on the next load. No website configuration, access token, database migration, or rebuild is required. Deploy these website changes with the normal refresh script; existing `config.inc.php` is preserved.
+
+Run `node tests/test_web_downloads.js` for release lookup and asset validation checks, and `make web-test` for website/database integration.

@@ -4,7 +4,7 @@ require_once __DIR__.'/site.php';
 function community_load(string $page='home'): array {
     $d=['available'=>false,'invalid'=>false,'servers'=>[],'all_servers'=>[],'matches'=>[],'leaders'=>[],'metrics'=>[],'totals'=>[],'server_totals'=>[],'offset'=>0,'more_matches'=>false,'more_leaders'=>false,'server'=>'','mode'=>'all','q'=>'','availability'=>'all'];
     try {
-        if(in_array($page,['matches','leaderboards','directory'],true)) {
+        if(in_array($page,['matches','leaderboards','directory','statistics'],true)) {
             [$where,$args]=game_filter();$d['server']=$_GET['server']??'';$d['mode']=$_GET['mode']??'all';
             $offset=filter_var($_GET['offset']??0,FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>1000000]]);
             if($offset===false)throw new InvalidArgumentException('Invalid page');$d['offset']=$offset;
@@ -19,13 +19,13 @@ function community_load(string $page='home'): array {
         $d['metrics']=$db->query('SELECT COUNT(*) AS games,COALESCE(SUM(ranked=1),0) AS ranked_games FROM directory_games')->fetch();
         $d['metrics']['players_known']=count(array_filter($d['servers'],fn($s)=>!isset($s['status']['players'])))===0;
         $d['metrics']['live_servers']=count($d['servers']);$d['metrics']['players']=array_sum(array_map(fn($s)=>(int)($s['status']['players']??0),$d['servers']));
-        if(in_array($page,['home','directory','matches'],true)) {
+        if(in_array($page,['home','directory','matches','statistics'],true)) {
             $limit=$page==='home'?6:51;
             $sql='SELECT g.server_id,g.database_id,g.game_id,g.room_id,g.started_epoch,g.ended_epoch,g.ended_at,g.ranked,g.end_reason,g.winner_nick,g.player_count,s.name AS server_name FROM directory_games g JOIN directory_servers s ON s.id=g.server_id WHERE '.$where.' ORDER BY g.ended_epoch DESC,g.ended_at DESC,g.server_id,g.database_id,g.game_id DESC LIMIT '.$limit.' OFFSET ?';
             $stmt=$db->prepare($sql);foreach($args as $i=>$value)$stmt->bindValue($i+1,$value);$stmt->bindValue(count($args)+1,$d['offset'],PDO::PARAM_INT);$stmt->execute();$d['matches']=$stmt->fetchAll();
             $d['more_matches']=count($d['matches'])>50;$d['matches']=array_slice($d['matches'],0,50);
         }
-        if(in_array($page,['home','directory','leaderboards'],true)) {
+        if(in_array($page,['home','directory','leaderboards','statistics'],true)) {
             $leaderWhere="g.ranked=1 AND g.end_reason='completed' AND g.winner_nick<>''";$leaderArgs=[];
             if($d['server']!==''){$leaderWhere.=' AND g.server_id=?';$leaderArgs[]=$d['server'];}
             $limit=$page==='home'?5:51;
