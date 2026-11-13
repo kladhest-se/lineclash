@@ -92,4 +92,4 @@ The main navigation is **Home, Servers, Statistics, Documentation, Source**. Scr
 
 Home introduces the game in this order: hero, about, features, specials, screenshots, licensing, then Get the game. Server browsing and statistics remain on their dedicated pages; build instructions live on Source. Download buttons in the header and hero jump directly to the lower download section.
 
-The Home design uses a split introduction with a native game preview, numbered sections, and unboxed feature rows with subtle separators. Screenshots and release links retain the shared colors and animated block background; mobile layouts stack into one column.
+The Home design uses a text introduction, numbered sections, and unboxed feature rows with subtle separators. Feature rows include compact native-renderer screenshot thumbnails, which open a keyboard-accessible dialog with fit-to-screen, actual-size and original-image options. The hero contains no screenshot. Screenshots and release links retain the shared colors and animated block background; mobile layouts stack into one column.

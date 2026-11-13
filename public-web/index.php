@@ -1,6 +1,11 @@
 <?php
 require_once __DIR__.'/inc/site.php';
 
+
+function home_preview(string $image,string $caption): void { ?>
+<a class="screenshot-thumb" href="assets/screenshots/<?=site_h($image)?>.png" data-screenshot data-caption="<?=site_h($caption)?>" aria-label="Enlarge: <?=site_h($caption)?>"><img src="assets/screenshots/thumbs/<?=site_h($image)?>.png" width="180" height="136" alt="<?=site_h($caption)?>" loading="lazy"><span><?=site_h($caption)?></span></a>
+<?php }
+
 site_header('Multiplayer falling blocks','home','./');
 ?>
 <main id="main" class="home-page">
@@ -17,7 +22,6 @@ site_header('Multiplayer falling blocks','home','./');
       <a class="btn btn-outline" href="#screenshots">See the game</a>
     </div>
   </div>
-  <figure class="hero-scene"><a href="#screenshots"><img src="assets/screenshots/game.png" width="1060" height="800" alt="Preview of the native LineClash game" fetchpriority="high"></a><figcaption>Native multiplayer falling blocks · your next rivalry starts here</figcaption></figure>
 </section>
 
 <section class="section" id="about" aria-labelledby="about-heading">
@@ -39,31 +43,37 @@ site_header('Multiplayer falling blocks','home','./');
       <span class="feature-number" aria-hidden="true">01</span>
       <h3>Real-time multiplayer</h3>
       <p>Up to 8 players per room. Spectator mode. Team play. Reconnect window keeps your slot when you drop.</p>
+      <div class="feature-previews"><?php home_preview('arena','Multiplayer arena'); ?><?php home_preview('rooms','Choose a room'); ?></div>
     </article>
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">02</span>
       <h3>Guideline gameplay</h3>
       <p>SRS wall kicks, hold piece, lock delay, back-to-back bonus, combos, and perfect clear. All configurable per room.</p>
+      <div class="feature-previews"><?php home_preview('arena','Hold, next piece & boards'); ?><?php home_preview('rules','Room rules'); ?></div>
     </article>
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">03</span>
       <h3>AI bots</h3>
       <p>Configurable difficulty. Bots play with full game rules — garbage targeting, B2B, combos, and all 14 specials.</p>
+      <div class="feature-previews"><?php home_preview('bots','AI difficulty controls'); ?><?php home_preview('arena','Practice in the arena'); ?></div>
     </article>
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">04</span>
       <h3>Persistent rooms</h3>
       <p>Room settings saved to SQLite and restored on restart. Leaderboard and stats HTTP API included.</p>
+      <div class="feature-previews"><?php home_preview('rooms','Room browser'); ?><?php home_preview('rules','Configure a room'); ?></div>
     </article>
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">05</span>
-      <h3>Two clients</h3>
-      <p>SDL2 GUI client with HiDPI/Retina support. Terminal CLI client for headless or SSH play.</p>
+      <h3>Open source. Multiple platforms.</h3>
+      <p>Free software built for macOS and Linux. Explore the source, customize the game, and run it on your preferred platform.</p>
+      <div class="feature-previews"><?php home_preview('arena','Native desktop game'); ?><?php home_preview('servers','Desktop server browser'); ?></div>
     </article>
     <article class="feature-item">
       <span class="feature-number" aria-hidden="true">06</span>
       <h3>Self-hosted</h3>
       <p>Run your own server. Build for macOS and Linux. Lightweight native clients and a dedicated server.</p>
+      <div class="feature-previews"><?php home_preview('servers','Community servers'); ?><?php home_preview('rooms','Hosted rooms'); ?></div>
     </article>
   </div>
   <div class="platform-row">
@@ -98,10 +108,9 @@ site_header('Multiplayer falling blocks','home','./');
 
 <section class="section" id="screenshots" aria-labelledby="screenshots-heading">
 <p class="eyebrow">04 / Inside LineClash</p><h2 class="section-title" id="screenshots-heading">Your board. Your rivals. One more round.</h2>
-<p class="section-sub">A native desktop game with competitive rooms, a server browser, and a soundtrack for the next session. Screenshots from the current development client.</p>
-<div class="screenshot-grid">
-<figure><a href="assets/screenshots/game.png"><img src="assets/screenshots/game.png" width="1060" height="800" alt="LineClash game view with the playing field, next piece, hold and opponents" loading="lazy"></a><figcaption>The arena · falling blocks and multiplayer rooms</figcaption></figure>
-<figure><a href="assets/screenshots/servers.png"><img src="assets/screenshots/servers.png" width="1060" height="800" alt="The native LineClash server browser" loading="lazy"></a><figcaption>Find a room · discover community servers</figcaption></figure>
+<p class="section-sub">A native desktop game with competitive rooms, a server browser, and a soundtrack for the next session. Previews rendered by the current development client with example room and player data. Click a thumbnail to enlarge it.</p>
+<div class="screenshot-grid compact-gallery">
+<?php home_preview('arena','The multiplayer arena'); home_preview('rooms','Rooms & rules'); home_preview('bots','AI players'); home_preview('servers','Discover servers'); ?>
 </div></section>
 
 <div class="section-divider"></div>
@@ -115,6 +124,8 @@ site_header('Multiplayer falling blocks','home','./');
 <div class="download-panel"><p id="release-status" role="status">Checking the latest release…</p><div id="release-assets" class="release-assets"></div><div class="download-actions"><a class="btn btn-outline" href="https://github.com/kladhest-se/lineclash/releases">All GitHub releases ↗</a><a class="btn btn-outline" href="source/#build">Build from source</a><button type="button" class="copy-button" id="release-retry" hidden>Try again</button></div><noscript><p>Enable JavaScript to check downloads automatically, or visit GitHub releases. Build instructions are available on the Source page.</p></noscript></div>
 <p class="small muted">Native packages may require SDL2 and other runtime libraries. Check the release notes for platform and installation requirements.</p></section>
 
+<dialog class="screenshot-viewer" aria-labelledby="screenshot-caption"><div class="viewer-toolbar"><p id="screenshot-caption"></p><button type="button" class="copy-button" data-viewer-zoom aria-pressed="false">Actual size</button><a class="section-link" data-viewer-original target="_blank" rel="noopener">Open original ↗</a><button type="button" class="copy-button" data-viewer-close aria-label="Close screenshot">Close ×</button></div><div class="viewer-stage"><img alt=""></div></dialog>
+<script src="assets/screenshots.js" defer></script>
 <script src="assets/downloads.js" defer></script>
 </main>
 <?php site_footer("./"); ?>
