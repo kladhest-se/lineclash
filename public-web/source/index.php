@@ -13,8 +13,7 @@ cd lineclash</pre><p>See <a href="#build">the build instructions below</a> for p
 
   <div class="tab-bar" role="tablist">
     <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="tab-macos"   onclick="showTab(this,'macos')">macOS</button>
-    <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="tab-opensuse" onclick="showTab(this,'opensuse')">openSUSE</button>
-    <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="tab-ubuntu"   onclick="showTab(this,'ubuntu')">Ubuntu</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-linux" onclick="showTab(this,'linux')">Linux</button>
     <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-windows" onclick="showTab(this,'windows')">Windows</button>
   </div>
 
@@ -30,33 +29,22 @@ cd lineclash</pre><p>See <a href="#build">the build instructions below</a> for p
 <span class="s">./server/lineclashd</span> &amp;
 <span class="s">./clients/gui/lineclash</span></pre>
   </div>
-  <div id="tab-opensuse" class="tab-panel" role="tabpanel">
-<pre class="code-block"><span class="c"># Install dependencies</span>
-<span class="s">sudo zypper</span> install -y gcc make libSDL2-devel sqlite3-devel libcurl-devel
-
-<span class="c"># Clone and build</span>
-<span class="s">git</span> clone https://github.com/kladhest-se/lineclash.git
+  <div id="tab-linux" class="tab-panel" role="tabpanel">
+    <p>Install the dependencies for your distribution, then use the shared build and launch commands below.</p>
+    <h3>openSUSE</h3>
+<pre class="code-block"><span class="s">sudo zypper</span> install -y gcc make git libSDL2-devel sqlite3-devel libcurl-devel</pre>
+    <h3>Ubuntu / Debian</h3>
+<pre class="code-block"><span class="s">sudo apt</span> install gcc make git libsdl2-dev libsqlite3-dev libcurl4-openssl-dev</pre>
+    <h3>Build and run</h3>
+<pre class="code-block"><span class="s">git</span> clone https://github.com/kladhest-se/lineclash.git
 <span class="s">cd</span> lineclash &amp;&amp; make
 
-<span class="c"># Run</span>
-<span class="s">./server/lineclashd</span> &amp;
-<span class="s">./clients/gui/lineclash</span></pre>
-  </div>
-  <div id="tab-ubuntu" class="tab-panel" role="tabpanel">
-<pre class="code-block"><span class="c"># Install dependencies</span>
-<span class="s">sudo apt</span> install gcc make libsdl2-dev libsqlite3-dev libcurl4-openssl-dev
-
-<span class="c"># Clone and build</span>
-<span class="s">git</span> clone https://github.com/kladhest-se/lineclash.git
-<span class="s">cd</span> lineclash &amp;&amp; make
-
-<span class="c"># Run</span>
+<span class="c"># Run a local server and launch the game</span>
 <span class="s">./server/lineclashd</span> &amp;
 <span class="s">./clients/gui/lineclash</span></pre>
   </div>
 
 <div id="tab-windows" class="tab-panel" role="tabpanel">
-<p>Run these commands in the <a href="https://www.msys2.org/">MSYS2 UCRT64</a> terminal on Windows 10 or 11 (64-bit).</p>
 <pre class="code-block"># Install Windows build tools and libraries
 pacman -S --needed make git mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-sqlite3 mingw-w64-ucrt-x86_64-python
 
