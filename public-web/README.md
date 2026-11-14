@@ -40,7 +40,7 @@ Configure `public_url` and the `smtp` block in `config.inc.php` using the sample
 
 ## Client PIN sign-in
 
-`/pin/` lets users enter a client PIN first, then sign in with fresh username/email and password to authenticate their desktop or Amiga client. Direct password login remains available. Refresh the website and run `php bin/manage.php migrate` to add `account_client_pins`; the runtime database account needs SELECT, INSERT, UPDATE and DELETE on it. PINs last five minutes, require a separate private device secret for redemption, and create ordinary twelve-hour native sessions. SMTP is not required. See the repository web-service guide for deployment and limits.
+`/account/pin/` lets users enter a client PIN first, then sign in with fresh username/email and password to authenticate their desktop or Amiga client. Direct password login remains available. Refresh the website and run `php bin/manage.php migrate` to add `account_client_pins`; the runtime database account needs SELECT, INSERT, UPDATE and DELETE on it. PINs last five minutes, require a separate private device secret for redemption, and create ordinary twelve-hour native sessions. SMTP is not required. See the repository web-service guide for deployment and limits.
 
 
 ## Password policy and email activation

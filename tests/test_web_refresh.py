@@ -15,7 +15,7 @@ class RefreshTests(unittest.TestCase):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.base=Path(self.tmp.name)
   self.source=self.base/'source';self.source.mkdir();self.site=self.base/'site';self.site.mkdir();(self.site/'keep.txt').write_text('keep')
   self.config=self.site/'config.inc.php';self.config.write_text('<?php return [];')
-  for name in ['index.php','config.example.php','inc/service.php','inc/accounts.php','account/index.php','inc/schema.sql','inc/site.php','inc/community.php','inc/community-page.php','assets/site.css','assets/community.js','assets/blocks.js','assets/downloads.js','assets/screenshots.js','assets/screenshots/game.png','assets/screenshots/servers.png','servers/index.php','leaderboards/index.php','matches/index.php','statistics/index.php','documentation/index.php','source/index.php','credits/index.php','privacy/index.php','api/docs/index.php','inc/music-credits.json','documentation/basics/index.php','inc/basics-documentation.html','documentation/controls/index.php','inc/controls-documentation.html','documentation/features/index.php','documentation/modes/index.php','documentation/specials/index.php','documentation/server/index.php','inc/server-documentation.html','inc/source-documentation.html','inc/api-documentation.html','bin/manage.php','api/index.php','directory/index.php','.htaccess']:
+  for name in ['index.php','config.example.php','inc/service.php','inc/accounts.php','account/index.php','account/pin/index.php','account/pin/.htaccess','pin/index.php','pin/.htaccess','inc/pin-route.php','inc/schema.sql','inc/site.php','inc/community.php','inc/community-page.php','assets/site.css','assets/community.js','assets/blocks.js','assets/downloads.js','assets/screenshots.js','assets/screenshots/game.png','assets/screenshots/servers.png','servers/index.php','leaderboards/index.php','matches/index.php','statistics/index.php','documentation/index.php','source/index.php','credits/index.php','privacy/index.php','api/docs/index.php','inc/music-credits.json','documentation/basics/index.php','inc/basics-documentation.html','documentation/controls/index.php','inc/controls-documentation.html','documentation/features/index.php','documentation/modes/index.php','documentation/specials/index.php','documentation/server/index.php','inc/server-documentation.html','inc/source-documentation.html','inc/api-documentation.html','bin/manage.php','api/index.php','directory/index.php','.htaccess']:
    p=self.source/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('<?php echo "test";' if p.suffix=='.php' else '# fixture')
   self.bin=self.base/'bin';self.bin.mkdir();self.record=self.base/'rsync.json'
   programs={'id': 'echo 0', 'git': 'for last do :; done; mkdir -p "$last/public-web"; cp -R "$TEST_SOURCE/." "$last/public-web/"', 'flock': 'exit 0', 'chown': 'exit 0', 'rsync': 'exec python3 -c \'import json,os,sys;open(os.environ["TEST_RECORD"],"w").write(json.dumps(sys.argv[1:]))\' "$@"'}
@@ -24,6 +24,11 @@ class RefreshTests(unittest.TestCase):
   self.env=dict(os.environ,PATH=str(self.bin)+os.pathsep+os.environ['PATH'],LINECLASH_SITE=str(self.site),LINECLASH_WEB_CONFIG=str(self.config),TEST_SOURCE=str(self.source),TEST_RECORD=str(self.record))
   self.env.pop('LINECLASH_WEB_CONFIG',None)
  def run_script(self,*args):return subprocess.run(['sh',str(ROOT/'scripts/refresh-lineclash.sh'),*args],env=self.env,capture_output=True,text=True)
+ def test_missing_pin_route_leaves_site_unchanged(self):
+  for name in ['account/pin/index.php','account/pin/.htaccess','pin/.htaccess','inc/pin-route.php']:
+   path=self.source/name;content=path.read_text();path.unlink()
+   result=self.run_script();self.assertNotEqual(result.returncode,0);self.assertIn(name+' is missing',result.stderr)
+   self.assertEqual(self.config.read_text(),'<?php return [];');path.write_text(content)
  def test_preview_excludes_private_files_and_does_not_load_config(self):
   self.config.write_text('<?php exit("CONFIG MUST NOT EXECUTE");')
   result=self.run_script('--dry-run');self.assertEqual(result.returncode,0,result.stderr)

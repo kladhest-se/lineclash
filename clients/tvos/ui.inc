@@ -111,7 +111,7 @@ static void tv_account(ClientCtx *c){
         if(tv_button(64,516,600,"Sign out",0,!busy))client_accounts_action(c,ACCOUNT_LOGOUT);
     }else if(c->account_pin_mode){
         dt(64,194,"Sign in with your phone.",COL_WHITE,3);tv_text(64,270,"Visit this address and enter the PIN:",COL_LTGRAY);
-        dt(64,330,"lineclash.kladhest.se/pin",0xbba5f4ff,3);
+        dt(64,330,"lineclash.kladhest.se/account/pin",0xbba5f4ff,3);
         char pin[24];snprintf(pin,sizeof(pin),"%.4s  %.4s",c->account_pin,c->account_pin+4);dt(64,430,c->account_pin[0]?pin:"Getting a PIN...",0x75dabbff,5);
         if(tv_button(64,592,600,"Use email and password",0,1)){client_accounts_action(c,ACCOUNT_PIN_CANCEL);tv_account_form=1;}
         if(!c->account_pin_secret[0] && tv_button(746,592,600,"Get a new PIN",0,!busy))client_accounts_action(c,ACCOUNT_PIN_START);

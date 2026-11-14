@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-pin-') as folder, tempfile.Te
   with socket.socket() as s:s.bind(('127.0.0.1',0));port=s.getsockname()[1]
   app=subprocess.Popen(['php','-d','opcache.enable=0','-S',f'127.0.0.1:{port}','-t',str(ROOT/'public-web'),str(ROOT/'public-web/dev-router.php')],env=local,stdout=log,stderr=log)
   cookie='';csrf='';source=10
-  def call(path='/pin/',data=None,api=False):
+  def call(path='/account/pin/',data=None,api=False):
    global cookie,csrf
    headers={'Cookie':cookie,'X-Forwarded-For':f'198.18.22.{source}'};body=None
    if data is not None:
@@ -87,15 +87,19 @@ with tempfile.TemporaryDirectory(prefix='lineclash-pin-') as folder, tempfile.Te
    assert 'Client authenticated' in call(data=dict(action='authenticate',pin=pin,login=email.upper(),password=password))[1]
    sql('UPDATE accounts SET auth_version=auth_version+1')
    assert 'Account changed' in poll(secret)[1]
+   secret,pin=begin()
+   assert 'Username or email' in call('/pin/',dict(action='lookup',pin=pin))[1]
+   assert 'Client authenticated' in call('/pin/',dict(action='authenticate',pin=pin,login=email,password=password))[1]
+   assert poll(secret)[1].startswith('central-session ')
    secret,pin=begin();sql("UPDATE account_client_pins SET expires=1 WHERE pin='"+pin+"'")
    assert 'expired' in call(data=dict(action='lookup',pin=pin))[1]
    assert 'expired' in poll(secret)[1]
-   assert 'Enter the PIN shown' in call('/account/pin/')[1]
+   assert 'Enter the PIN shown' in call('/pin/')[1]
    assert api('account-client-pin-begin',client='injected\nclient')[0]==400
    source+=1
    for _ in range(5):assert api('account-client-pin-begin')[0]==200
    assert api('account-client-pin-begin')[0]==429
    assert rows("SELECT COUNT(*) AS n FROM account_client_pins WHERE expires=1")[0]['n']==0
-   print('PASS: hidden root PIN flow, PIN before fresh credentials, no cookie-only approval/menu links, hashed device secrets, single-use sessions, expiry, version revocation, legacy redirect and rate limits')
+   print('PASS: hidden account PIN flow, PIN before fresh credentials, no cookie-only approval/menu links, hashed device secrets, single-use sessions, expiry, version revocation, legacy redirect and rate limits')
   finally:app.terminate();app.wait(timeout=5)
  finally:php('database()->exec("DROP DATABASE `".$argv[2]."`");',name)

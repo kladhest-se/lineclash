@@ -8,7 +8,7 @@ require_once __DIR__.'/../inc/account-layout.php';
 require_once __DIR__.'/../inc/accounts.php';require_once __DIR__.'/../inc/account-profile.php';require_once __DIR__.'/../inc/password-recovery.php';require_once __DIR__.'/../inc/site.php';account_session();
 $avatarJson=$_SERVER['REQUEST_METHOD']==='POST' && ($_POST['action']??'')==='avatar' && ($_POST['format']??'')==='json';
 $error='';$notice=is_string($_SESSION['account_notice']??null)?$_SESSION['account_notice']:'';unset($_SESSION['account_notice']);$user=null;$code=strtoupper(trim((string)($_POST['code']??$_GET['code']??'')));
-if($_SERVER['REQUEST_METHOD']==='GET' && preg_match('/^[A-F0-9]{8}$/D',$code)){header('Location: ../pin/?code='.rawurlencode($code),true,303);exit;}
+if($_SERVER['REQUEST_METHOD']==='GET' && preg_match('/^[A-F0-9]{8}$/D',$code)){header('Location: /account/pin/?code='.rawurlencode($code),true,303);exit;}
 try {
     $db=database();$user=account_current($db);
     if($_SERVER['REQUEST_METHOD']==='POST'){
@@ -47,7 +47,7 @@ try {
                 account_assert_verified($candidate);$user=$candidate;session_regenerate_id(true);$_SESSION['account_id']=$user['id'];$_SESSION['auth_version']=(int)$user['auth_version'];
             }
         }
-        if($action==='approve')throw new InvalidArgumentException('Authenticate the client through /pin/.');
+        if($action==='approve')throw new InvalidArgumentException('Authenticate the client through /account/pin/.');
     }
     $user=account_current($db);
 }catch(InvalidArgumentException $e){if($avatarJson && http_response_code()<400)http_response_code(400);$error=$e->getMessage();}catch(Throwable $e){if($avatarJson)http_response_code(503);error_log('LineClash account error: '.$e->getMessage());$error='Account service unavailable. Try again later.';}

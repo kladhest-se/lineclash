@@ -80,15 +80,15 @@ with tempfile.TemporaryDirectory(prefix='lineclash-activation-') as folder, temp
    call('/account/');page=call('/account/',dict(action='login',email='pending@example.test',password=password))[1]
    assert 'Verify your email' in page and 'Your account: @pending' not in page
    status,pin_reply=api('account-client-pin-begin');device,pin=pin_reply.split()[1:3]
-   call('/pin/');call('/pin/',dict(action='lookup',pin=pin))
-   page=call('/pin/',dict(action='authenticate',pin=pin,login='pending',password=password))[1]
+   call('/account/pin/');call('/account/pin/',dict(action='lookup',pin=pin))
+   page=call('/account/pin/',dict(action='authenticate',pin=pin,login='pending',password=password))[1]
    assert 'Verify your email' in page and '<button name="action" value="approve">' not in page
    # Turning verification off allows a pending account temporarily, including PIN/browser login.
    configure(False)
    status,body=api('account-client-login',login='pending',password=password);assert status==200
    temporary_session=body.split()[1]
    call('/account/');assert 'Your account: @pending' in call('/account/',dict(action='login',email='pending@example.test',password=password))[1]
-   call('/pin/');assert 'Client authenticated' in call('/pin/',dict(action='authenticate',pin=pin,login='pending',password=password))[1]
+   call('/account/pin/');assert 'Client authenticated' in call('/account/pin/',dict(action='authenticate',pin=pin,login='pending',password=password))[1]
    configure(True)
    assert 'Your account: @pending' not in call('/account/')[1]
    assert api('account-client-logout',session=temporary_session)[0]==401

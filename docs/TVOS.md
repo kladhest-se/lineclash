@@ -64,7 +64,7 @@ The Apple remote remains available alongside the gamepad. In text dialogs, tvOS 
 
 ## Accounts and servers
 
-Use **Account → Sign in with a PIN**, then enter the displayed PIN at `https://lineclash.kladhest.se/pin/` on a phone or computer. Email/password sign-in and account creation also use the native TV keyboard. Account and directory requests use Foundation HTTPS with normal certificate validation and bounded responses. Redirects are refused. Passwords and account tokens remain in memory.
+Use **Account → Sign in with a PIN**, then enter the displayed PIN at `https://lineclash.kladhest.se/account/pin/` on a phone or computer. Email/password sign-in and account creation also use the native TV keyboard. Account and directory requests use Foundation HTTPS with normal certificate validation and bounded responses. Redirects are refused. Passwords and account tokens remain in memory.
 
 Public and saved servers use the existing TCP game protocol. Gameplay is not encrypted; account passwords are sent only to the central HTTPS endpoint. Settings, saved server entries and the remembered account name are stored in the app's Caches directory, which tvOS may purge. Re-enter them if storage is reclaimed.
 

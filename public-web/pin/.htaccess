@@ -1,0 +1,3 @@
+# PIN canonicalization is handled by PHP using a root-relative redirect.
+# Avoid mod_dir constructing a URL with the reverse proxy backend port.
+DirectorySlash Off

@@ -58,6 +58,7 @@ web-test: server
 	$(PYTHON) tests/test_account_policy.py
 	$(PYTHON) tests/test_smtp.py
 	$(PYTHON) tests/test_password_recovery.py
+	$(PYTHON) tests/test_pin_routes.py
 	$(PYTHON) tests/test_web_pins.py
 	$(PYTHON) tests/test_email_verification.py
 	$(PYTHON) tests/test_account_profile.py
