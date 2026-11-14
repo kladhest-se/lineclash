@@ -2,6 +2,8 @@
 (() => {
     const form = document.querySelector('.profile-avatar-form');
     if (!form) return;
+    // A control named action masks the form.action property in browsers.
+    const endpoint = form.getAttribute('action') || location.href;
     const inputs = Array.from(form.querySelectorAll('input[name="avatar"]'));
     const status = form.querySelector('[data-avatar-status]');
     let saved = inputs.find(input => input.checked)?.value;
@@ -30,7 +32,7 @@
             body.set('format', 'json');
             let failure = 'Could not save your avatar. Please try again.';
             try {
-                const response = await fetch(form.action, {
+                const response = await fetch(endpoint, {
                     method: 'POST', credentials: 'same-origin', redirect: 'error',
                     headers: {'Accept': 'application/json'}, body
                 });

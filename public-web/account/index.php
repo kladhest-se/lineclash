@@ -85,7 +85,7 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <?php else:?>
 <div class="profile-identity"><span class="profile-identity-avatar" data-avatar-current aria-hidden="true"><?=account_avatar_markup($user['avatar'],$user['handle'])?></span><p>Signed in as <strong>@<?=site_h($user['handle'])?></strong>.</p><form class="profile-signout" method="post" action="logout/"><input type="hidden" name="csrf" value="<?=site_h($_SESSION['csrf'])?>"><button type="submit">Sign out</button></form></div>
 <section class="profile-panel" aria-labelledby="player-settings-heading"><h2 id="player-settings-heading">Player settings</h2><p class="profile-hint">Choose your avatar for the website.</p>
-<div class="profile-player-settings"><form method="post" class="profile-avatar-form"><?php account_fields('');?><input type="hidden" name="action" value="avatar">
+<div class="profile-player-settings"><form method="post" action="./" class="profile-avatar-form"><?php account_fields('');?><input type="hidden" name="action" value="avatar">
 <fieldset><legend>Avatar</legend><div class="avatar-choices">
 <?php foreach(account_avatars() as $key=>[$label]):?><label class="avatar-choice"><input type="radio" name="avatar" value="<?=site_h($key)?>"<?=$user['avatar']===$key?' checked':''?>><span class="avatar-tile"><span class="avatar-choice-icon" aria-hidden="true"><?=account_avatar_markup($key,$user['handle'])?></span><span><?=site_h($label)?></span></span></label><?php endforeach;?>
 </div></fieldset><p class="avatar-save-status" data-avatar-status role="status" aria-live="polite"></p><noscript><button>Save avatar</button></noscript></form>
@@ -108,4 +108,4 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <form method="post" class="account-form"><?php account_fields('');?>
 <label for="delete-password">Current password</label><input id="delete-password" name="current_password" type="password" maxlength="72" autocomplete="current-password" required>
 <label for="delete-confirmation">Type DELETE to confirm</label><input id="delete-confirmation" name="confirmation" autocomplete="off" pattern="DELETE" required><button name="action" value="delete">Permanently delete account</button></form></div></details>
-<?php endif;account_navigation();?></main><?php if($user):?><script src="../assets/profile-avatar.js" defer></script><?php endif;site_footer();?>
+<?php endif;account_navigation();?></main><?php if($user):?><script src="../assets/profile-avatar.js?v=2" defer></script><?php endif;site_footer();?>

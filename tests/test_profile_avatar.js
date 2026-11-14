@@ -13,7 +13,9 @@ function fixture() {
         closest() {return {querySelector() {return {childNodes: [{cloneNode() {return {value};}}]};}};}
     }));
     const form = {
-        action: 'https://example.test/account/',
+        // Native HTML forms expose named controls before their action property.
+        action: {toString() {return '[object HTMLInputElement]';}},
+        getAttribute(name) {assert.equal(name, 'action'); return './';},
         querySelectorAll() {return inputs;}, querySelector() {return status;},
         addEventListener(name, handler) {handlers[name] = handler;}
     };
@@ -39,6 +41,7 @@ function fixture() {
     f.choose('t'); f.choose('z'); f.choose('o');
     assert.equal(f.requests.length, 1); // Only one save may be in flight.
     const first = f.requests[0];
+    assert.equal(first.url, './');
     assert.equal(first.options.credentials, 'same-origin');
     assert.equal(first.options.body.get('csrf'), 'fixture-csrf');
     assert.equal(first.options.body.get('action'), 'avatar');
