@@ -38,8 +38,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   assert csrf
   assert 'Save your recovery code' not in call()[1] and 'name="recovery"' not in call()[1]
   page=call()[1]
-  assert 'novalidate' in page and 'Use at least 12 characters.' in page
-  assert 'aria-describedby="account-password-help"' in page
+  assert 'novalidate' in page
   short=secrets.token_hex(5)+'x'
   invalid=call(data=dict(action='register',handle=handle,password=short))[1]
   assert 'Password is too short. Use at least 12 characters.' in invalid

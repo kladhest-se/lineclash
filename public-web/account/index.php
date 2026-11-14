@@ -38,14 +38,11 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <section class="community-section"><form method="post" class="account-form" novalidate>
 <?php account_fields($code);?>
 <label for="account-email">Email</label>
-<input id="account-email" name="email" type="email" maxlength="254" autocomplete="email" aria-describedby="account-email-help" value="<?=site_h(is_string($_POST['email']??null)?$_POST['email']:'')?>">
-<small id="account-email-help">Required for new accounts. Use your email to sign in. <?=account_email_verification_required()?'Check your inbox to activate a new account.':''?></small>
+<input id="account-email" name="email" type="email" maxlength="254" autocomplete="email" value="<?=site_h(is_string($_POST['email']??null)?$_POST['email']:'')?>">
 <label for="account-handle">Username (new accounts)</label>
-<input id="account-handle" name="handle" minlength="3" maxlength="14" autocomplete="username" pattern="[A-Za-z][A-Za-z0-9_]{2,13}" aria-describedby="account-handle-help" value="<?=site_h(is_string($_POST['handle']??null)?$_POST['handle']:'')?>">
-<small id="account-handle-help">Public game identity: 3–14 letters, numbers or underscores. Start with a letter. Existing accounts can still sign in by username.</small>
+<input id="account-handle" name="handle" minlength="3" maxlength="14" autocomplete="username" pattern="[A-Za-z][A-Za-z0-9_]{2,13}" value="<?=site_h(is_string($_POST['handle']??null)?$_POST['handle']:'')?>">
 <label for="account-password">Password</label>
-<input id="account-password" type="password" name="password" required minlength="<?=account_password_min_length()?>" maxlength="72" autocomplete="current-password" aria-describedby="account-password-help">
-<small id="account-password-help"><?=site_h(account_password_hint())?> Maximum 72 bytes.</small>
+<input id="account-password" type="password" name="password" required minlength="<?=account_password_min_length()?>" maxlength="72" autocomplete="current-password">
 <button name="action" value="login">Sign in</button><button name="action" value="register">Create account</button>
 <a href="pin/">Sign in a client with a PIN</a>
 <a href="verify/">Resend activation email</a>
