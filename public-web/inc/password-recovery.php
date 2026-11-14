@@ -3,15 +3,7 @@
 declare(strict_types=1);
 require_once __DIR__.'/accounts.php';
 require_once __DIR__.'/smtp.php';
-function account_recovery_settings(): ?array {
-    $path=web_config_path();if(!is_file($path))return null;
-    $config=require $path;if(!is_array($config))return null;$smtp=smtp_settings($config);
-    $url=$config['public_url']??'https://lineclash.kladhest.se';
-    if(!$smtp || !is_string($url) || strlen($url)>512 || !filter_var($url,FILTER_VALIDATE_URL))return null;
-    $parts=parse_url($url);
-    if(($parts['scheme']??'')!=='https' || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']))return null;
-    return ['smtp'=>$smtp,'url'=>rtrim($url,'/')];
-}
+function account_recovery_settings(): ?array {return account_mail_settings();}
 function account_recovery_request(PDO $db,string $email): void {
     $settings=account_recovery_settings();if(!$settings)throw new InvalidArgumentException('Email password recovery is disabled because SMTP is not configured.');
     account_limit($db,'password-reset',5);

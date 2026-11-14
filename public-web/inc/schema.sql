@@ -90,3 +90,14 @@ CREATE TABLE IF NOT EXISTS account_client_pins (
 -- Existing accounts keep username sign-in until an email is added.
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email VARCHAR(254) CHARACTER SET ascii COLLATE ascii_general_ci NULL;
 ALTER TABLE accounts ADD UNIQUE INDEX IF NOT EXISTS accounts_email(email);
+
+
+-- Existing accounts retain access; only opted-in new registrations await activation.
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email_pending TINYINT NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS account_email_verifications (
+ account_id CHAR(32) CHARACTER SET ascii PRIMARY KEY,
+ token_hash CHAR(64) CHARACTER SET ascii NOT NULL UNIQUE,
+ email VARCHAR(254) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+ expires BIGINT NOT NULL,
+ FOREIGN KEY(account_id) REFERENCES accounts(id), INDEX expiry(expires)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

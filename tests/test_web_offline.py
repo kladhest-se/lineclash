@@ -32,6 +32,8 @@ with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryFile() as log:
   for path in ['/servers/','/leaderboards/','/matches/','/statistics/']:
    code,body=get(path);assert code==503 and 'aria-label="Main"' in body and 'temporarily unavailable' in body,path
   code,body=get('/account/pin/');assert code==503 and 'temporarily unavailable' in body
+  code,body=get('/account/verify/');assert code==200 and 'not required' in body
+  assert get('/assets/email-verification.js')[0]==200
   code,body=get('/account/recover/');assert code==200 and 'disabled because SMTP' in body
   assert get('/assets/password-recovery.js')[0]==200
   assert get('/assets/site.css')[0]==200

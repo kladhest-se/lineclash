@@ -170,7 +170,7 @@ Erase all central accounts, browser-approval requests, native sessions, server r
 php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php reset-data --confirm-reset
 ```
 
-`reset-data` without an option also previews. The command uses the database selected by the normal site configuration and prints its name. It requires all nine known LineClash tables to be InnoDB, uses a single DELETE transaction in foreign-key order and rolls back if any deletion fails. The DB account needs SELECT and DELETE on those tables. It preserves the schema, unrelated tables and `config.inc.php`; no DROP or TRUNCATE permission is needed.
+`reset-data` without an option also previews. The command uses the database selected by the normal site configuration and prints its name. It requires all ten known LineClash tables to be InnoDB, uses a single DELETE transaction in foreign-key order and rolls back if any deletion fails. The DB account needs SELECT and DELETE on those tables. It preserves the schema, unrelated tables and `config.inc.php`; no DROP or TRUNCATE permission is needed.
 
 This is a destructive website reset. Dedicated servers' SQLite accounts, permissions and game records are separate and are not erased. Existing central sign-ins become invalid, while already-connected games continue. Live public servers can register again at their next heartbeat, and enabled result uploaders can repopulate history. Stop announcers/uploaders and website writes during the reset if the database must remain empty. Manually provisioned server identities and their upload tokens must be provisioned again afterward.
 
@@ -178,7 +178,7 @@ This is a destructive website reset. Dedicated servers' SQLite accounts, permiss
 
 Refresh public-web and run `php bin/manage.php migrate` before rebuilding the clients for native account creation. The migration adds a nullable, unique `accounts.email` column for compatibility with existing accounts. New registrations require a username, private email and password; emails are normalized to lowercase and are never sent to game servers or public statistics endpoints. Older accounts with no email retain username login. The client remembers one username and email locally; passwords and sessions remain in memory only.
 
-`account-client-register` with `format: "session"` creates the account and its first twelve-hour native session in one transaction. The client requires matching password confirmation and signs in immediately. Recovery codes are no longer issued or accepted. The existing configurable password minimum applies. Registration is limited to five attempts per observed source per minute. Registration does not send an email or verify email ownership. Optional SMTP enables email password recovery as described below.
+`account-client-register` with `format: "session"` creates the account and, when email activation is not required, its first twelve-hour native session in one transaction. The client requires matching password confirmation. It signs in immediately when activation is disabled, or asks the player to confirm the activation email before signing in. Recovery codes are no longer issued or accepted. The existing configurable password minimum applies. Registration is limited to five attempts per observed source per minute. Registration sends an activation email only when the email-verification option is enabled. Optional SMTP also enables email password recovery as described below.
 
 
 ## Optional SMTP and email password recovery
@@ -240,7 +240,7 @@ Omit `smtp`, or leave `host`/`from_address` empty, to disable password recovery 
 
 Use **Forgot password?** in the desktop client, or `/account/recover/` on the website. The Amiga client displays the same recovery address for opening in a browser. The request form returns the same acknowledgement for registered and unknown addresses. Limits are five requests per source per minute and one per email per minute, with ten reset submissions per source per minute. Resetting requires the email link, matching password confirmation, the configured password policy and browser CSRF protection. JavaScript moves the link's fragment token into a POST form and clears it from the address bar; reset secrets are not sent in GET requests or referrers. All recovery responses use `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
 
-Only SHA-256 hashes of random 256-bit reset tokens are stored. One link per account lasts 30 minutes; a new request supersedes it. A successful reset consumes it in a transaction, increments the account version, revokes native/browser sessions and invalidates approved connections awaiting redemption. Requesting a link alone does not change credentials or disconnect games already joined. Users sign in again after resetting. Old recovery codes cannot reset a password. Legacy accounts without an email cannot use this flow. SMTP recovery does not add registration-time email verification.
+Only SHA-256 hashes of random 256-bit reset tokens are stored. One link per account lasts 30 minutes; a new request supersedes it. A successful reset consumes it in a transaction, increments the account version, revokes native/browser sessions and invalidates approved connections awaiting redemption. Requesting a link alone does not change credentials or disconnect games already joined. Users sign in again after resetting. Old recovery codes cannot reset a password. Legacy accounts without an email cannot use this flow. Registration-time verification is controlled separately by `account_require_email_verification` below.
 
 Expired reset rows can be deleted periodically; each account has at most one. `reset-data` includes this table. Local tests use disposable databases, mailboxes and certificate authorities, and send no real email:
 
@@ -269,4 +269,47 @@ Run the isolated protocol tests with:
 
 ```sh
 LINECLASH_WEB_RESET_TEST_CONFIG=/path/to/test-config.php python3 tests/test_web_pins.py
+```
+
+
+## Password length and optional email activation
+
+These independent options belong inside the returned array in the existing document-root `config.inc.php`:
+
+```php
+'account_password_min_length' => 6,
+'account_require_email_verification' => true,
+```
+
+The password minimum already supports 1–72 characters (default 12). Setting it to 6 permits six-character passwords for new accounts and password resets; the existing maximum of 72 bytes still applies. Existing passwords continue working when the minimum is raised. Both desktop and Amiga clients use the website's policy.
+
+Email verification defaults to `false`, preserving existing installations. Use literal PHP `true` to require activation, or `false` to disable it. Enabling it requires valid `smtp` and canonical HTTPS `public_url` settings. A required activation cannot silently become optional because SMTP is missing: registration fails clearly without creating an account if mail settings are incomplete or the relay rejects delivery. Account/token creation is rolled back on sending failure. A successful SMTP submission means queued by the relay, so inbox delivery still depends on the mail system.
+
+After refreshing the website, run the additive migration before enabling the option:
+
+```sh
+/srv/www/vhosts/refresh-lineclash.sh
+php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php migrate
+```
+
+The migration adds `accounts.email_pending` (default 0) and `account_email_verifications`. Existing accounts retain access. Only registrations made while the option is enabled are marked pending. The administrator's `accounts.active` switch remains independent; confirming email can never re-enable a disabled account. Turning verification off lets pending accounts sign in without confirmation; turning it on again blocks those still waiting. Accounts created with the requirement disabled keep access when it is subsequently enabled.
+
+The runtime DB account needs SELECT, INSERT, UPDATE and DELETE on the new token table, plus its existing account UPDATE and rate-limit permissions. If schema-wide grants do not already cover it, run on the database host after migration:
+
+```sh
+mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lineclash.account_email_verifications TO 'lineclash_web'@'sth-ts-web002.kladhest.se';"
+mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lineclash.account_email_verifications TO 'lineclash_web'@'172.16.1.132';"
+```
+
+Native registration returns `central-verification-required` rather than an account session. Browser registration also remains signed out. The email links to `/account/verify/` with a random 256-bit secret in its fragment, keeping it out of access logs and referrers. JavaScript moves it into a CSRF-protected POST form; the user explicitly chooses **Verify email**, preventing mail-scanner GET requests from activating an account. Tokens are hashed in MariaDB, tied to the registered email address, last 24 hours and are consumed once in a transaction. Changing the email invalidates the old link. Confirmation clears the pending gate and increments the account version, invalidating sessions issued while the option was temporarily off. Users then sign in normally with password or PIN; no session is issued by the confirmation link itself.
+
+Pending accounts are rejected by direct native login, browser login, PIN login/approval, native-session validation and legacy game-server approval redemption while verification is required. Session issuance also rechecks the account's active, activation and version state. Existing connected games are not disconnected. Keep the website on HTTPS and preserve the supplied no-store/no-referrer headers.
+
+Use **Resend activation** in the desktop client, **Activation help** on Amiga or `/account/verify/`. A resend replaces the previous link and returns a generic acknowledgement for unknown, active and pending addresses, including delivery failures. Limits are five resend requests per source per minute, one per email per minute and ten confirmation attempts per source per minute. Registration retains its existing source limits. Expired rows can be cleaned periodically; there is at most one per account. `reset-data` includes this table. SMTP is used only when verification is required or an activation email is explicitly resent. Live config is preserved by refresh, so add these options manually.
+
+Tests use a disposable MariaDB schema and local mail relay, never real recipients:
+
+```sh
+python3 tests/test_account_policy.py
+LINECLASH_WEB_RESET_TEST_CONFIG=/path/to/test-config.php python3 tests/test_email_verification.py
 ```

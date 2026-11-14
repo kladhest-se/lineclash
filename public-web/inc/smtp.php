@@ -73,3 +73,13 @@ function smtp_send(array $s,string $recipient,string $subject,string $body): voi
         try{smtp_command($socket,'QUIT',[221]);}catch(Throwable $ignored){}
     }finally{fclose($socket);}
 }
+
+function account_mail_settings(): ?array {
+    $path=web_config_path();if(!is_file($path))return null;
+    $config=require $path;if(!is_array($config))return null;$smtp=smtp_settings($config);
+    $url=$config['public_url']??'https://lineclash.kladhest.se';
+    if(!$smtp || !is_string($url) || strlen($url)>512 || !filter_var($url,FILTER_VALIDATE_URL))return null;
+    $parts=parse_url($url);
+    if(($parts['scheme']??'')!=='https' || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']))return null;
+    return ['smtp'=>$smtp,'url'=>rtrim($url,'/')];
+}

@@ -53,6 +53,7 @@ void sdl_render_game(ClientCtx *c){begin(c->nick);if(c->state==CS_IN_LOBBY){text
  text(8,230,c->status,5);if(c->chat_input.active)text(160,230,c->chat_input.text,1);overlay(c);end();}
 
 void sdl_render_accounts(ClientCtx *c){begin("ACCOUNT");int busy=account_https_busy();const int x=112,w=416;
+ if(!busy && button(360,26,148,"Activation help"))snprintf(c->account_message,sizeof(c->account_message),"Resend: lineclash.kladhest.se/account/verify/");
  if(!busy && button(516,26,100,"Back"))client_accounts_action(c,ACCOUNT_BACK);
  if(client_account_ready(c)){
   text(x,66,"You're signed in.",5);text(x,96,c->central_profile,1);char email[53];snprintf(email,sizeof(email),"%.52s",c->account.email);text(x,120,email,3);

@@ -10,12 +10,13 @@ try {
         if(in_array($action,['login','register'],true)){
             account_limit($db,'account-login');$handle=(string)($_POST['handle']??'');$email=(string)($_POST['email']??'');$password=(string)($_POST['password']??'');if($action!=='login')account_password($password);elseif(strlen($password)>72 || str_contains($password,"\0"))throw new InvalidArgumentException('Sign-in details did not match.');
             if($action==='register'){
-                $user=account_register($db,$handle,$email,$password);$notice='Account created.';session_regenerate_id(true);$_SESSION['account_id']=$user['id'];$_SESSION['auth_version']=1;
+                $user=account_register($db,$handle,$email,$password);$notice=$user['email_pending']?'Check your email to activate your account, then sign in.':'Account created.';
+                if(!$user['email_pending']){session_regenerate_id(true);$_SESSION['account_id']=$user['id'];$_SESSION['auth_version']=1;}
             }else{
-                $user=account_lookup($db,$email!==''?$email:$handle);
-                $valid=$user && password_verify($password,$user['password_hash']);
+                $candidate=account_lookup($db,$email!==''?$email:$handle);
+                $valid=$candidate && password_verify($password,$candidate['password_hash']);
                 if(!$valid){password_verify($password,'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.');throw new InvalidArgumentException('Sign-in details did not match.');}
-                session_regenerate_id(true);$_SESSION['account_id']=$user['id'];$_SESSION['auth_version']=(int)$user['auth_version'];
+                account_assert_verified($candidate);$user=$candidate;session_regenerate_id(true);$_SESSION['account_id']=$user['id'];$_SESSION['auth_version']=(int)$user['auth_version'];
             }
         }
         if($action==='approve'){
@@ -38,7 +39,7 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <?php account_fields($code);?>
 <label for="account-email">Email</label>
 <input id="account-email" name="email" type="email" maxlength="254" autocomplete="email" aria-describedby="account-email-help" value="<?=site_h(is_string($_POST['email']??null)?$_POST['email']:'')?>">
-<small id="account-email-help">Required for new accounts. Use your email to sign in.</small>
+<small id="account-email-help">Required for new accounts. Use your email to sign in. <?=account_email_verification_required()?'Check your inbox to activate a new account.':''?></small>
 <label for="account-handle">Username (new accounts)</label>
 <input id="account-handle" name="handle" minlength="3" maxlength="14" autocomplete="username" pattern="[A-Za-z][A-Za-z0-9_]{2,13}" aria-describedby="account-handle-help" value="<?=site_h(is_string($_POST['handle']??null)?$_POST['handle']:'')?>">
 <small id="account-handle-help">Public game identity: 3–14 letters, numbers or underscores. Start with a letter. Existing accounts can still sign in by username.</small>
@@ -47,10 +48,12 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <small id="account-password-help"><?=site_h(account_password_hint())?> Maximum 72 bytes.</small>
 <button name="action" value="login">Sign in</button><button name="action" value="register">Create account</button>
 <a href="pin/">Sign in a client with a PIN</a>
+<a href="verify/">Resend activation email</a>
 </form></section>
 <?php if(account_recovery_settings()):?><p><a href="recover/">Forgot password?</a></p><?php else:?><p>Email password recovery is disabled because SMTP is not configured.</p><?php endif;?>
 <?php else:?>
-<p><a href="pin/">Sign in a client with a PIN</a></p>
+<p><a href="pin/">Sign in a client with a PIN</a>
+ · <a href="verify/">Resend activation email</a></p>
 <p>Your central player identity is <strong>@<?=site_h($user['handle'])?></strong>. Server permissions and bans remain under each server operator's control.</p>
 <?php if($device):?><section class="community-section"><h2>Approve this connection?</h2><p>Server: <strong><?=site_h($device['name'])?></strong> — <?=site_h($device['host'])?>:<?=(int)$device['port']?></p><p>Approve only if this is the code currently shown in your game: <strong><?=site_h($code)?></strong>.</p><form method="post"><?php account_fields($code);?><button name="action" value="approve">Approve sign-in</button></form></section>
 <?php else:?><form method="get" class="account-form"><label>Game sign-in code<input name="code" maxlength="8" autocomplete="off" required></label><button>Continue</button></form><?php endif;?>

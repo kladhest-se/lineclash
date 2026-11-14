@@ -4,7 +4,9 @@
 return ['dsn'=>'mysql:host=127.0.0.1;dbname=lineclash;charset=utf8mb4',
         'user'=>'lineclash', 'password'=>'CHANGE-ME', 'ttl'=>180,
         // Minimum characters for new/reset central passwords (1-72; default 12).
-        'account_password_min_length'=>12,
+        'account_password_min_length'=>12, // Set e.g. 6 to allow shorter passwords.
+        // Require email confirmation for new registrations. Enable after SMTP works.
+        'account_require_email_verification'=>false,
         // Canonical HTTPS website URL used in email links (never taken from Host).
         'public_url'=>'https://lineclash.kladhest.se',
         // Optional SMTP. Leave host/from_address empty to disable password recovery.

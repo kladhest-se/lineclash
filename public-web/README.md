@@ -41,3 +41,8 @@ Configure `public_url` and the `smtp` block in `config.inc.php` using the sample
 ## Client PIN sign-in
 
 `/account/pin/` lets users enter a client PIN, sign in with username/email and password, and approve their desktop or Amiga client. Direct password login remains available. Refresh the website and run `php bin/manage.php migrate` to add `account_client_pins`; the runtime database account needs SELECT, INSERT, UPDATE and DELETE on it. PINs last five minutes, require a separate private device secret for redemption, and create ordinary twelve-hour native sessions. SMTP is not required. See the repository web-service guide for deployment and limits.
+
+
+## Password policy and email activation
+
+Set `account_password_min_length` (1–72 characters; default 12, for example 6 for shorter passwords) in `config.inc.php`. Set `account_require_email_verification` to `true` to require activation for new registrations, or `false` to turn it off (default). Required activation needs working SMTP; registration fails clearly if a message cannot be submitted. Run `php bin/manage.php migrate` to add the pending gate and `account_email_verifications`, with SELECT/INSERT/UPDATE/DELETE runtime grants on that table. Existing accounts keep access. New waiting accounts receive a single-use, 24-hour link to `/account/verify/` and remain signed out until confirmed; both password and PIN authentication enforce the gate. Confirmation never re-enables an administrator-disabled account. The refresh script preserves the live config, so add these settings manually. Deployment details and tests are in the repository web-service guide.

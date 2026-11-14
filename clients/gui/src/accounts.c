@@ -9,7 +9,7 @@ void account_erase(void *data,size_t size){volatile unsigned char *p=data;while(
    error pages or accept success tokens carried by a failed HTTP response. */
 int account_http_reply(long status,char *reply,int capacity){
     if(!strncmp(reply,"central-error ",14) || !strncmp(reply,"central-expired ",16))return -1;
-    if(status==200 && (!strncmp(reply,"central-session ",16) || !strncmp(reply,"central-registered ",19) || !strncmp(reply,"central-joined ",15) || !strcmp(reply,"central-signed-out") || !strncmp(reply,"central-pin ",12) || !strcmp(reply,"central-pending") || !strcmp(reply,"central-slow-down")))return 1;
+    if(status==200 && (!strncmp(reply,"central-session ",16) || !strncmp(reply,"central-registered ",19) || !strncmp(reply,"central-joined ",15) || !strcmp(reply,"central-signed-out") || !strncmp(reply,"central-verification-required ",30) || !strncmp(reply,"central-pin ",12) || !strcmp(reply,"central-pending") || !strcmp(reply,"central-slow-down")))return 1;
     const char *message;
     if(status==503 && strstr(reply,"migration required"))message="Website database migration required: run php bin/manage.php migrate";
     else if(status==503)message="Account service unavailable (HTTP 503). Run website migrations and check the Apache error log.";
@@ -190,6 +190,11 @@ void client_accounts_tick(ClientCtx *c){
             account_erase(c->account_pin_secret,sizeof(c->account_pin_secret));
             snprintf(c->account_message,sizeof(c->account_message),"%.255s",!strncmp(reply,"central-error ",14)?reply+14:"PIN sign-in failed. Request a new PIN.");account_erase(reply,sizeof(reply));return;
         }
+    }
+    if(kind==4 && result>0 && !strncmp(reply,"central-verification-required ",30)){
+        c->account_create_mode=0;passwords_clear(c);c->tf_account_handle.focused=0;c->tf_account_email.focused=1;
+        snprintf(c->account_message,sizeof(c->account_message),"%.255s",reply+30);
+        account_erase(reply,sizeof(reply));return;
     }
     if(kind==1 || kind==4 || kind==6){char token[65]={0},handle[15]={0},email[255]={0};long long expires=0;
         /* Accept older registration replies during a rolling website update,

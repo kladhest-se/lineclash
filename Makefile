@@ -59,6 +59,7 @@ web-test: server
 	$(PYTHON) tests/test_smtp.py
 	$(PYTHON) tests/test_password_recovery.py
 	$(PYTHON) tests/test_web_pins.py
+	$(PYTHON) tests/test_email_verification.py
 	$(PYTHON) tests/test_web_accounts.py
 	$(PYTHON) tests/test_web_reset.py
 	$(PYTHON) tests/test_directory_e2e.py
@@ -66,3 +67,4 @@ web-test: server
 web-js-test:
 	node tests/test_web_downloads.js
 	node tests/test_password_recovery.js
+	node tests/test_email_verification.js

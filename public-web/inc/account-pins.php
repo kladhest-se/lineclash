@@ -43,7 +43,7 @@ function account_pin_api(PDO $db,array $a): string {
         if((int)$pin['last_poll']>time()-5){$db->commit();return 'central-slow-down';}
         $db->prepare('UPDATE account_client_pins SET last_poll=? WHERE device_hash=?')->execute([time(),$hash]);
         if($pin['state']==='pending'){$db->commit();return 'central-pending';}
-        $q=$db->prepare('SELECT id,handle,email,auth_version FROM accounts WHERE id=? AND active=1 AND auth_version=? FOR UPDATE');$q->execute([$pin['account_id'],$pin['auth_version']]);$user=$q->fetch();
+        $q=$db->prepare('SELECT id,handle,email,auth_version FROM accounts WHERE id=? AND active=1 AND auth_version=?'.account_verification_sql().' FOR UPDATE');$q->execute([$pin['account_id'],$pin['auth_version']]);$user=$q->fetch();
         $db->prepare("UPDATE account_client_pins SET state='used' WHERE device_hash=?")->execute([$hash]);
         if(!$user){$db->commit();return 'central-error Account changed; start PIN sign-in again';}
         $session=account_native_session($db,$user);$db->commit();

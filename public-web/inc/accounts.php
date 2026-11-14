@@ -9,9 +9,22 @@ function account_session(): void {
 }
 function account_current(PDO $db): ?array {
     if(empty($_SESSION['account_id']))return null;
-    $q=$db->prepare('SELECT id,handle,email,created_at,auth_version FROM accounts WHERE id=? AND active=1');$q->execute([$_SESSION['account_id']]);$user=$q->fetch();
+    $q=$db->prepare('SELECT id,handle,email,created_at,auth_version FROM accounts WHERE id=? AND active=1'.account_verification_sql());$q->execute([$_SESSION['account_id']]);$user=$q->fetch();
     if(!$user || (int)$user['auth_version']!==(int)($_SESSION['auth_version']??0)){unset($_SESSION['account_id'],$_SESSION['auth_version']);return null;}
     return $user;
+}
+// active is the administrator's switch; email_pending is the activation gate.
+function account_email_verification_required(): bool {
+    $path=web_config_path();if(!is_file($path))return false;
+    $config=require $path;$required=$config['account_require_email_verification']??false;
+    if(!is_bool($required))throw new RuntimeException('account_require_email_verification must be true or false');
+    return $required;
+}
+function account_verification_sql(string $alias=''): string {
+    return account_email_verification_required()?' AND '.($alias!==''?$alias.'.':'').'email_pending=0':'';
+}
+function account_assert_verified(array $user): void {
+    if(account_email_verification_required() && !empty($user['email_pending']))throw new InvalidArgumentException('Verify your email before signing in. Resend at https://lineclash.kladhest.se/account/verify/');
 }
 function account_csrf(): void {
     if(!is_string($_POST['csrf']??null)||!hash_equals($_SESSION['csrf'],$_POST['csrf']))throw new InvalidArgumentException('This form expired. Try again.');
@@ -56,7 +69,7 @@ function account_api(PDO $db,array $a): string {
     if(!$device || (int)$device['expires']<time())return 'central-error Sign-in expired';
     if($device['state']==='pending')return 'central-pending';
     if($device['state']!=='approved')return 'central-error Sign-in unavailable';
-    $q=$db->prepare('SELECT id,handle FROM accounts WHERE id=? AND active=1');$q->execute([$device['account_id']]);$user=$q->fetch();
+    $q=$db->prepare('SELECT id,handle FROM accounts WHERE id=? AND active=1'.account_verification_sql());$q->execute([$device['account_id']]);$user=$q->fetch();
     if(!$user)return 'central-error Account unavailable';
     $q=$db->prepare("UPDATE account_devices SET state='used' WHERE request_hash=? AND state='approved'");$q->execute([$request]);
     if($q->rowCount()!==1)return 'central-error Sign-in already used';
@@ -75,15 +88,30 @@ function account_lookup(PDO $db,string $login): array|false {
 }
 function account_register(PDO $db,string $handle,string $email,string $password): array {
     $handle=account_handle($handle);$email=account_email($email);account_password($password);
-    $id=bin2hex(random_bytes(16));
+    $pending=account_email_verification_required();
+    if($pending){
+        require_once __DIR__.'/email-verification.php';
+        if(!account_mail_settings())throw new InvalidArgumentException('Email verification is required but email delivery is not configured. Try again later.');
+    }
+    $id=bin2hex(random_bytes(16));$ownTransaction=!$db->inTransaction();
+    if($ownTransaction)$db->beginTransaction();
     try {
-        $q=$db->prepare('INSERT INTO accounts(id,handle,email,password_hash,recovery_hash,created_at) VALUES(?,?,?,?,?,?)');$q->execute([$id,$handle,$email,password_hash($password,PASSWORD_DEFAULT),'',time()]);
-    }catch(PDOException $e){if($e->getCode()==='23000')throw new InvalidArgumentException('Username or email is already registered.');throw $e;}
-    return ['id'=>$id,'handle'=>$handle,'email'=>$email,'auth_version'=>1];
+        $q=$db->prepare('INSERT INTO accounts(id,handle,email,password_hash,recovery_hash,created_at,email_pending) VALUES(?,?,?,?,?,?,?)');$q->execute([$id,$handle,$email,password_hash($password,PASSWORD_DEFAULT),'',time(),$pending?1:0]);
+        if($pending)account_verification_send($db,$id,$email);
+        if($ownTransaction)$db->commit();
+    }catch(Throwable $e){
+        if($ownTransaction && $db->inTransaction())$db->rollBack();
+        if($e instanceof PDOException && $e->getCode()==='23000')throw new InvalidArgumentException('Username or email is already registered.');
+        throw $e;
+    }
+    return ['id'=>$id,'handle'=>$handle,'email'=>$email,'auth_version'=>1,'email_pending'=>$pending?1:0];
 }
 function account_native_session(PDO $db,array $user): string {
     $token=bin2hex(random_bytes(32));$expires=time()+43200;
-    $q=$db->prepare('INSERT INTO account_sessions(token_hash,account_id,auth_version,expires) VALUES(?,?,?,?)');$q->execute([hash('sha256',$token),$user['id'],$user['auth_version'],$expires]);
+    // Check eligibility again when issuing a session, including after browser PIN approval.
+    $q=$db->prepare('INSERT INTO account_sessions(token_hash,account_id,auth_version,expires) SELECT ?,id,auth_version,? FROM accounts WHERE id=? AND active=1 AND auth_version=?'.account_verification_sql());
+    $q->execute([hash('sha256',$token),$expires,$user['id'],$user['auth_version']]);
+    if($q->rowCount()!==1)throw new InvalidArgumentException('Account changed or email verification is required. Sign in again.');
     return $token.' '.$user['handle'].' '.$expires;
 }
 function account_client_api(PDO $db,array $a): string {
@@ -95,6 +123,7 @@ function account_client_api(PDO $db,array $a): string {
         $db->beginTransaction();
         try {
             $user=account_register($db,is_string($a['handle']??null)?$a['handle']:'',is_string($a['email']??null)?$a['email']:'',is_string($a['password']??null)?$a['password']:'');
+            if($user['email_pending']){$db->commit();return 'central-verification-required Check your email to activate your account, then sign in.';}
             $session=account_native_session($db,$user);$db->commit();
             return 'central-session '.$session.' '.$user['email'];
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
@@ -108,11 +137,12 @@ function account_client_api(PDO $db,array $a): string {
         $hash=$user['password_hash']??'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
         $valid=strlen($password)<=72 && !str_contains($password,"\0") && password_verify($password,$hash);
         if(!$user || !$valid){http_response_code(401);return 'central-error Incorrect email, username or password';}
+        if(account_email_verification_required() && !empty($user['email_pending'])){http_response_code(403);return 'central-error Verify your email before signing in. Resend at https://lineclash.kladhest.se/account/verify/';}
         return 'central-session '.account_native_session($db,$user).' '.($user['email']??'-');
     }
     $token=text_value($a,'session',64);
     if(!preg_match('/^[a-f0-9]{64}$/D',$token)){http_response_code(401);return 'central-expired Sign in to your account again';}
-    $q=$db->prepare('SELECT a.id,a.handle FROM account_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.revoked=0 AND s.expires>=? AND a.active=1 AND s.auth_version=a.auth_version');$q->execute([hash('sha256',$token),time()]);$user=$q->fetch();
+    $q=$db->prepare('SELECT a.id,a.handle FROM account_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.revoked=0 AND s.expires>=? AND a.active=1 AND s.auth_version=a.auth_version'.account_verification_sql('a'));$q->execute([hash('sha256',$token),time()]);$user=$q->fetch();
     if(!$user){http_response_code(401);return 'central-expired Sign in to your account again';}
     if($action==='account-client-logout'){
         $q=$db->prepare('UPDATE account_sessions SET revoked=1 WHERE token_hash=?');$q->execute([hash('sha256',$token)]);return 'central-signed-out';

@@ -2899,9 +2899,10 @@ void sdl_render_accounts(ClientCtx *c){
         if(dbtn(x,submit,w,44,label,busy?BS_DISABLED:BS_ACTIVE) && !busy)client_accounts_action(c,creating?ACCOUNT_REGISTER:ACCOUNT_SIGNIN);
         if(dbtn(x,creating?642:526,w,36,creating?"Already have an account? Sign in":"Create a new account",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,creating?ACCOUNT_LOGIN_MODE:ACCOUNT_CREATE_MODE);
         if(creating)dt(x,694,"Your username is public. Your email stays private.",COL_GRAY,1);
-        else if(dbtn(x,626,w,32,"Forgot password?",busy?BS_DISABLED:BS_NORMAL) && !busy)music_link("https://lineclash.kladhest.se/account/recover/");
+        else if(dbtn(x,626,(w-10)/2,32,"Forgot password?",busy?BS_DISABLED:BS_NORMAL) && !busy)music_link("https://lineclash.kladhest.se/account/recover/");
+        if(!creating && dbtn(x+(w+10)/2,626,(w-10)/2,32,"Resend activation",busy?BS_DISABLED:BS_NORMAL) && !busy)music_link("https://lineclash.kladhest.se/account/verify/");
         if(!creating && dbtn(x,576,w,36,"Sign in with a PIN",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_PIN_START);
-        if(!busy)account_notice(x,creating?714:680,w,c->account_message,!strncmp(c->account_message,"Signed out",10)?COL_GRAY:0xe78284ff);
+        if(!busy)account_notice(x,creating?714:680,w,c->account_message,(!strncmp(c->account_message,"Signed out",10) || !strncmp(c->account_message,"Check your email",16))?COL_GRAY:0xe78284ff);
     }
     dtc(WIN_W/2,WIN_H-28,"LINECLASH / v" TETRINETZ_VERSION,0x7489a6ff,1);
     SDL_RenderPresent(g_rend);

@@ -4,7 +4,7 @@ if(PHP_SAPI!=='cli') { http_response_code(404); exit; }
 require __DIR__.'/../inc/service.php';
 // Child tables precede their parents; DELETE keeps foreign keys and rollback intact.
 function reset_website_data(PDO $db,bool $confirmed): void {
-    $tables=['account_client_pins','account_password_resets','account_sessions','account_devices','directory_players','directory_games',
+    $tables=['account_email_verifications','account_client_pins','account_password_resets','account_sessions','account_devices','directory_players','directory_games',
              'directory_registration_limits','accounts','directory_servers'];
     $database=$db->query('SELECT DATABASE()')->fetchColumn();
     if(!is_string($database) || $database==='')throw new RuntimeException('No database selected in the site configuration');

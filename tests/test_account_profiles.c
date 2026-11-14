@@ -50,6 +50,14 @@ int main(int argc,char **argv){
     assert(account_http_reply(401,error,sizeof(error))==-1 && !strstr(error,token));
     strcpy(error,"<html>upstream failure</html>");assert(account_http_reply(500,error,sizeof(error))==-1 && !strstr(error,"<html>"));
     c.state=CS_ACCOUNT;c.account_job=4;snprintf(response,sizeof(response),"central-error Website database migration required: run php bin/manage.php migrate");reply_ready=1;pending=1;client_accounts_tick(&c);assert(strstr(c.account_message,"migration required"));
+    logout(&c);client_accounts_open(&c,1);client_accounts_action(&c,ACCOUNT_CREATE_MODE);
+    strcpy(c.tf_account_handle.text,"delta");c.tf_account_handle.len=5;strcpy(c.tf_account_email.text,"delta@example.test");c.tf_account_email.len=18;
+    strcpy(c.tf_account_password.text,"secret");c.tf_account_password.len=6;strcpy(c.tf_account_confirm.text,"secret");c.tf_account_confirm.len=6;
+    client_accounts_action(&c,ACCOUNT_REGISTER);assert(pending);previous_connects=connects;
+    reply(&c,"central-verification-required Check your email to activate your account, then sign in.");
+    assert(!client_account_ready(&c) && !c.account_create_mode && c.state==CS_ACCOUNT && c.account_join_after && connects==previous_connects);
+    assert(strstr(c.account_message,"Check your email") && !c.tf_account_password.text[0] && !strcmp(c.tf_account_email.text,"delta@example.test"));
+    login(&c,"delta",'e');assert(client_account_ready(&c) && connects==previous_connects+1);
     logout(&c);client_accounts_open(&c,1);client_accounts_action(&c,ACCOUNT_PIN_START);
     assert(pending && c.account_pin_mode && strstr(request,"account-client-pin-begin") && !strstr(request,"password"));
     char pin_reply[192];snprintf(pin_reply,sizeof(pin_reply),"central-pin %s 12345678 %lld",token,(long long)time(NULL)+300);reply(&c,pin_reply);
@@ -64,5 +72,5 @@ int main(int argc,char **argv){
     client_accounts_action(&c,ACCOUNT_PIN_START);reply(&c,pin_reply);c.account_pin_next=time(NULL)-1;client_accounts_tick(&c);
     previous_connects=connects;reply(&c,registered);assert(client_account_ready(&c) && !c.account_pin_mode && !c.account_pin_secret[0] && connects==previous_connects+1);
     f=fopen(argv[1],"r");assert(f);memset(saved,0,sizeof(saved));fread(saved,1,sizeof(saved)-1,f);fclose(f);assert(!strstr(saved,token) && !strstr(saved,"12345678"));
-    client_accounts_shutdown(&c);assert(!c.account.handle[0] && !c.account_pin_secret[0]);puts("PASS: one remembered account, legacy import, automatic login, logout, secret disposal, registration, PIN polling/expiry/cancellation/automatic login and stale join protection");return 0;
+    client_accounts_shutdown(&c);assert(!c.account.handle[0] && !c.account_pin_secret[0]);puts("PASS: one remembered account, legacy import, automatic login, logout, secret disposal, registration/activation pending, PIN polling/expiry/cancellation/automatic login and stale join protection");return 0;
 }

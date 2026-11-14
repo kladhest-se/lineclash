@@ -19,7 +19,7 @@ try{
             $found=account_lookup($db,$login);
             $hash=$found['password_hash']??'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
             if(strlen($password)>72 || str_contains($password,"\0") || !password_verify($password,$hash) || !$found)throw new InvalidArgumentException('Sign-in details did not match.');
-            session_regenerate_id(true);$_SESSION['account_id']=$found['id'];$_SESSION['auth_version']=(int)$found['auth_version'];$user=account_current($db);
+            account_assert_verified($found);session_regenerate_id(true);$_SESSION['account_id']=$found['id'];$_SESSION['auth_version']=(int)$found['auth_version'];$user=account_current($db);
         }elseif($action==='approve' || $action==='deny'){
             if(!$user)throw new InvalidArgumentException('Sign in before approving this client.');
             account_pin_decide($db,$pin,$user,$action==='approve');
@@ -44,7 +44,7 @@ function pin_fields(string $pin): void {echo '<input type="hidden" name="csrf" v
 <label for="pin-login">Username or email</label><input id="pin-login" name="login" maxlength="254" autocomplete="username" required>
 <label for="pin-password">Password</label><input id="pin-password" type="password" name="password" maxlength="72" autocomplete="current-password" required>
 <button name="action" value="login">Sign in</button></form>
-<p><a href="../">Create an account</a> · <a href="../recover/">Forgot password?</a></p>
+<p><a href="../">Create an account</a> · <a href="../recover/">Forgot password?</a> · <a href="../verify/">Resend activation email</a></p>
 <?php else:?>
 <p>Sign this client in as <strong>@<?=site_h($user['handle'])?></strong>?</p>
 <form method="post" class="account-form"><?php pin_fields($pin);?><button name="action" value="approve">Approve client</button><button name="action" value="deny">Decline</button><button name="action" value="switch">Use another account</button></form>
