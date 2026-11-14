@@ -6,6 +6,7 @@ if(in_array($mode,['recover','activation'],true)){
 }
 require_once __DIR__.'/../inc/account-layout.php';
 require_once __DIR__.'/../inc/accounts.php';require_once __DIR__.'/../inc/account-profile.php';require_once __DIR__.'/../inc/password-recovery.php';require_once __DIR__.'/../inc/site.php';account_session();
+$avatarJson=$_SERVER['REQUEST_METHOD']==='POST' && ($_POST['action']??'')==='avatar' && ($_POST['format']??'')==='json';
 $error='';$notice=is_string($_SESSION['account_notice']??null)?$_SESSION['account_notice']:'';unset($_SESSION['account_notice']);$user=null;$code=strtoupper(trim((string)($_POST['code']??$_GET['code']??'')));
 if($_SERVER['REQUEST_METHOD']==='GET' && preg_match('/^[A-F0-9]{8}$/D',$code)){header('Location: ../pin/?code='.rawurlencode($code),true,303);exit;}
 try {
@@ -13,7 +14,7 @@ try {
     if($_SERVER['REQUEST_METHOD']==='POST'){
         account_csrf();$action=$_POST['action']??'';
         if($action==='avatar'){
-            if(!$user)throw new InvalidArgumentException('Sign in first.');
+            if(!$user){if($avatarJson)http_response_code(401);throw new InvalidArgumentException('Sign in first.');}
             account_profile_avatar($db,$user,is_string($_POST['avatar']??null)?$_POST['avatar']:'');$notice='Avatar saved.';
         }
         if(in_array($action,['password','email','delete'],true)){
@@ -49,7 +50,9 @@ try {
         if($action==='approve')throw new InvalidArgumentException('Authenticate the client through /pin/.');
     }
     $user=account_current($db);
-}catch(InvalidArgumentException $e){$error=$e->getMessage();}catch(Throwable $e){error_log('LineClash account error: '.$e->getMessage());$error='Account service unavailable. Try again later.';}
+}catch(InvalidArgumentException $e){if($avatarJson && http_response_code()<400)http_response_code(400);$error=$e->getMessage();}catch(Throwable $e){if($avatarJson)http_response_code(503);error_log('LineClash account error: '.$e->getMessage());$error='Account service unavailable. Try again later.';}
+if($avatarJson && $error==='' && !$user){http_response_code(401);$error='Sign in again to save your avatar.';}
+if($avatarJson){header('Content-Type: application/json');header('Cache-Control: no-store');echo json_encode($error!==''?['error'=>$error]:['avatar'=>$user['avatar']],JSON_THROW_ON_ERROR);exit;}
 $profileStats=null;
 if($user){try{$profileStats=account_profile_statistics($db,$user['id']);}catch(Throwable $e){error_log('LineClash profile statistics: '.$e->getMessage());}}
 $register=($_SERVER['REQUEST_METHOD']==='POST'?($_POST['action']??''):($_GET['mode']??$_GET['view']??''))==='register';
@@ -58,7 +61,7 @@ site_header('Account','account');
 function account_fields(string $code): void {echo '<input type="hidden" name="csrf" value="'.site_h($_SESSION['csrf']).'"><input type="hidden" name="code" value="'.site_h($code).'">';}
 ?>
 <main id="main" class="community-shell<?=empty($user)?' account-auth':' account-profile'?>"><p class="eyebrow">LineClash account</p><h1><?=!empty($user)?'Your player profile':($register?'Create account':'Sign in')?></h1>
-<?php if(empty($user)):account_intro();else:?><p class="profile-intro">Your account, ready for your next game.</p><?php endif;?>
+<?php if(!empty($user)):?><p class="profile-intro">Your account, ready for your next game.</p><?php endif;?>
 <?php if($error):?><p class="account-error" role="alert"><?=site_h($error)?></p><?php endif;?>
 <?php if($notice):?><p class="account-notice" role="status"><?=site_h($notice)?></p><?php endif;?>
 
@@ -80,13 +83,13 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 </form>
 
 <?php else:?>
-<div class="profile-identity"><span class="profile-identity-avatar" aria-hidden="true"><?=account_avatar_markup($user['avatar'],$user['handle'])?></span><p>Signed in as <strong>@<?=site_h($user['handle'])?></strong>.</p><form class="profile-signout" method="post" action="logout/"><input type="hidden" name="csrf" value="<?=site_h($_SESSION['csrf'])?>"><button type="submit">Sign out</button></form></div>
+<div class="profile-identity"><span class="profile-identity-avatar" data-avatar-current aria-hidden="true"><?=account_avatar_markup($user['avatar'],$user['handle'])?></span><p>Signed in as <strong>@<?=site_h($user['handle'])?></strong>.</p><form class="profile-signout" method="post" action="logout/"><input type="hidden" name="csrf" value="<?=site_h($_SESSION['csrf'])?>"><button type="submit">Sign out</button></form></div>
 <section class="profile-panel" aria-labelledby="player-settings-heading"><h2 id="player-settings-heading">Player settings</h2><p class="profile-hint">Choose your avatar for the website.</p>
-<div class="profile-player-settings"><form method="post" class="profile-avatar-form"><?php account_fields('');?>
+<div class="profile-player-settings"><form method="post" class="profile-avatar-form"><?php account_fields('');?><input type="hidden" name="action" value="avatar">
 <fieldset><legend>Avatar</legend><div class="avatar-choices">
 <?php foreach(account_avatars() as $key=>[$label]):?><label class="avatar-choice"><input type="radio" name="avatar" value="<?=site_h($key)?>"<?=$user['avatar']===$key?' checked':''?>><span class="avatar-tile"><span class="avatar-choice-icon" aria-hidden="true"><?=account_avatar_markup($key,$user['handle'])?></span><span><?=site_h($label)?></span></span></label><?php endforeach;?>
-</div></fieldset><button name="action" value="avatar">Save avatar</button></form>
-<div class="profile-player-card"><span class="profile-card-avatar" aria-hidden="true"><?=account_avatar_markup($user['avatar'],$user['handle'])?></span><strong>@<?=site_h($user['handle'])?></strong><span>LineClash player</span></div></div></section>
+</div></fieldset><p class="avatar-save-status" data-avatar-status role="status" aria-live="polite"></p><noscript><button>Save avatar</button></noscript></form>
+<div class="profile-player-card"><span class="profile-card-avatar" data-avatar-current aria-hidden="true"><?=account_avatar_markup($user['avatar'],$user['handle'])?></span><strong>@<?=site_h($user['handle'])?></strong><span>LineClash player</span></div></div></section>
 <section class="profile-matches" aria-labelledby="profile-matches-heading"><h2 id="profile-matches-heading">Your public matches</h2>
 <?php if($profileStats):?><dl class="profile-metrics"><?php foreach(['matches_played'=>'Matches played','wins'=>'Wins','lines_cleared'=>'Lines cleared','specials_sent'=>'Specials sent'] as $key=>$label):?><div><dt><?=site_h($label)?></dt><dd><?=number_format((int)$profileStats[$key])?></dd></div><?php endforeach;?></dl><p class="profile-hint">Results reported by public servers.</p>
 <?php else:?><p class="profile-hint">Your match statistics are temporarily unavailable.</p><?php endif;?></section>
@@ -101,9 +104,8 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <label for="password-new">New password</label><input id="password-new" name="new_password" type="password" minlength="<?=account_password_min_length()?>" maxlength="72" autocomplete="new-password" required>
 <label for="password-confirm">Confirm new password</label><input id="password-confirm" name="confirm_password" type="password" maxlength="72" autocomplete="new-password" required><button name="action" value="password">Change password</button></form></details></div></div></section>
 <details class="profile-disclosure profile-delete"<?=($_POST['action']??'')==='delete'?' open':''?>><summary>Delete account</summary><div class="account-danger">
-<p>This permanently erases your central account, email, password and sign-in tokens. Your name is removed from this website's statistics and replays. Match scores, placements, team results and wins remain; your entries display as <strong>DELETED PLAYER</strong>.</p>
-<p>Independent game-server records, existing downloads and operator backups have separate retention. This cannot be undone.</p>
+<p>This permanently erases your central account, email, password and sign-in tokens.</p>
 <form method="post" class="account-form"><?php account_fields('');?>
 <label for="delete-password">Current password</label><input id="delete-password" name="current_password" type="password" maxlength="72" autocomplete="current-password" required>
 <label for="delete-confirmation">Type DELETE to confirm</label><input id="delete-confirmation" name="confirmation" autocomplete="off" pattern="DELETE" required><button name="action" value="delete">Permanently delete account</button></form></div></details>
-<?php endif;account_navigation();?></main><?php site_footer();?>
+<?php endif;account_navigation();?></main><?php if($user):?><script src="../assets/profile-avatar.js" defer></script><?php endif;site_footer();?>

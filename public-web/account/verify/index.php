@@ -22,7 +22,7 @@ try{
 catch(Throwable $e){error_log('LineClash email activation: '.$e->getMessage());http_response_code(503);$error='Email activation is temporarily unavailable. Try again later.';}
 site_header('Verify email','account',$siteRoot);
 ?>
-<main id="main" class="community-shell account-auth"><p class="eyebrow">LineClash account</p><h1>Activate your account</h1><?php account_intro();?>
+<main id="main" class="community-shell account-auth"><p class="eyebrow">LineClash account</p><h1>Activate your account</h1>
 <?php if($error):?><p class="account-error" role="alert"><?=site_h($error)?></p><?php endif;?>
 <?php if($notice):?><p class="account-notice" role="status"><?=site_h($notice)?></p><?php endif;?>
 <?php if(!$notice || $error):?>

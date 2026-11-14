@@ -24,7 +24,7 @@ try{
 catch(Throwable $e){error_log('LineClash recovery service: '.$e->getMessage());$error='Recovery service unavailable. Try again later.';}
 site_header('Password recovery','account',$siteRoot);
 ?>
-<main id="main" class="community-shell account-auth"><p class="eyebrow">LineClash account</p><h1>Reset your password</h1><?php account_intro();?>
+<main id="main" class="community-shell account-auth"><p class="eyebrow">LineClash account</p><h1>Reset your password</h1>
 <?php if($error):?><p class="account-error" role="alert"><?=site_h($error)?></p><?php endif;?>
 <?php if($notice):?><p class="account-notice" role="status"><?=site_h($notice)?></p><?php endif;?>
 <?php if(!$enabled):?><p>Email password recovery is disabled because SMTP is not configured.</p>

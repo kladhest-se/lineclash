@@ -69,6 +69,16 @@ with tempfile.TemporaryDirectory(prefix='lineclash-profile-') as folder, tempfil
    assert 'avatar-blocks' in call('/source/')[1].split('<main',1)[0]
    assert rows('SELECT avatar FROM accounts WHERE id=?',identities['alice'])[0]['avatar']=='t'
    assert rows('SELECT avatar FROM accounts WHERE id=?',identities['bob'])[0]['avatar']=='initial'
+   csrf='0'*64
+   status,body=call(data=dict(action='avatar',avatar='z',format='json'))
+   assert status==400 and 'This form expired' in json.loads(body)['error']
+   call()
+   status,body=call(data=dict(action='avatar',avatar='z',format='json'))
+   assert status==200 and json.loads(body)==dict(avatar='z')
+   status,body=call(data=dict(action='avatar',avatar='external-url',format='json'))
+   assert status==400 and 'error' in json.loads(body)
+   assert rows('SELECT avatar FROM accounts WHERE id=?',identities['alice'])[0]['avatar']=='z'
+
 
    sql('INSERT INTO account_email_verifications(account_id,token_hash,email,expires) VALUES(?,?,?,?)',identities['alice'],'a'*64,'alice@example.test',int(time.time()+86400))
    csrf='0'*64
@@ -141,6 +151,8 @@ with tempfile.TemporaryDirectory(prefix='lineclash-profile-') as folder, tempfil
    after=rows('SELECT COUNT(*) AS n,SUM(lines_cleared) AS cleared,SUM(specials_sent) AS specials,SUM(blocks_placed) AS blocks,SUM(won) AS wins FROM directory_players')[0]
    assert before==after and get('/api/?action=teams')['teams']==teams
    assert 'Your account: @alice' not in call()[1]
+   status,body=call(data=dict(action='avatar',avatar='o',format='json'))
+   assert status==401 and 'error' in json.loads(body)
    assert api('account-client-logout',session=alice_session)[0]==401
    assert call('/api/?action=player&server=fixture&nick=%40alice')[0]==404
    for number in (1,2,3):

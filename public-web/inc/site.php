@@ -32,7 +32,7 @@ function site_header(string $title,string $active='home',string $base='../'): vo
 <div class="nav-actions">
 <?php if($navUser):?>
 <a class="nav-account" href="<?=site_h($base)?>account/" aria-label="Your account: @<?=site_h($navUser['handle'])?>" title="Your profile"<?=$active==='account'?' aria-current="page"':''?>>
-<span class="nav-avatar" aria-hidden="true"><?=account_avatar_markup($navUser['avatar']??'initial',$navUser['handle'])?></span></a>
+<span class="nav-avatar" data-avatar-current aria-hidden="true"><?=account_avatar_markup($navUser['avatar']??'initial',$navUser['handle'])?></span></a>
 <?php endif;?>
 <a class="nav-btn" href="<?=site_h($base)?>#get">Get the game</a>
 </div>

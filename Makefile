@@ -66,6 +66,7 @@ web-test: server
 	$(PYTHON) tests/test_directory_e2e.py
 
 web-js-test:
+	node tests/test_profile_avatar.js
 	node tests/test_web_downloads.js
 	node tests/test_password_recovery.js
 	node tests/test_email_verification.js

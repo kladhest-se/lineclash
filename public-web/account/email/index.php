@@ -11,7 +11,7 @@ try{
 }catch(InvalidArgumentException $e){$error=$e->getMessage();}catch(Throwable $e){error_log('LineClash email change: '.$e->getMessage());$error='Account service unavailable. Try again later.';}
 site_header('Confirm email change','account',$siteRoot);
 ?>
-<main id="main" class="community-shell account-auth"><p class="eyebrow">LineClash account</p><h1>Confirm email change</h1><?php account_intro();?>
+<main id="main" class="community-shell account-auth"><p class="eyebrow">LineClash account</p><h1>Confirm email change</h1>
 <?php if($error):?><p class="account-error" role="alert"><?=site_h($error)?></p><?php endif;?>
 <?php if($done):?><p role="status">Email changed. Sign in with your new email or username.</p>
 <?php else:?><p>Your current email stays active until you confirm. Confirm only if you requested this change.</p>
