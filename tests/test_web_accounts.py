@@ -70,8 +70,10 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   for path in ('/','/source/','/documentation/','/account/','/account/?mode=register','/account/?mode=recover','/account/?mode=activation'):
    page=call(path)[1]
    assert 'class="nav-avatar"' in page and 'Your account: @'+handle in page,path
-   assert 'account/logout/' in page and 'aria-label="Account help"' not in page,path
-   if path=='/account/':assert 'Sign out' not in page.split('<main',1)[1].split('</main>',1)[0]
+   assert 'aria-label="Account help"' not in page,path
+   header=page.split('<main',1)[0]
+   assert 'Sign out' not in header and 'nav-account-name' not in header,path
+   if path=='/account/':assert 'class="profile-signout"' in page.split('<main',1)[1].split('</main>',1)[0]
   assert call('/account/logout/')[0]==405
   assert '@'+handle in call()[1]
   csrf='0'*64

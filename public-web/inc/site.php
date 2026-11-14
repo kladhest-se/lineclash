@@ -31,9 +31,8 @@ function site_header(string $title,string $active='home',string $base='../'): vo
 <ul class="nav-links"><?php foreach($links as $key=>$label): ?><li><a href="<?=site_h($base.($key==='home'?'':$key.'/'))?>"<?=$active===$key?' aria-current="page"':''?>><?=site_h($label)?></a></li><?php endforeach; ?></ul>
 <div class="nav-actions">
 <?php if($navUser):?>
-<a class="nav-account" href="<?=site_h($base)?>account/" aria-label="Your account: @<?=site_h($navUser['handle'])?>" title="Signed in as @<?=site_h($navUser['handle'])?>"<?=$active==='account'?' aria-current="page"':''?>>
-<span class="nav-avatar" aria-hidden="true"><?=account_avatar_markup($navUser['avatar']??'initial',$navUser['handle'])?></span><span class="nav-account-name">@<?=site_h($navUser['handle'])?></span></a>
-<form class="nav-signout" method="post" action="<?=site_h($base)?>account/logout/"><input type="hidden" name="csrf" value="<?=site_h($_SESSION['csrf'])?>"><button type="submit">Sign out</button></form>
+<a class="nav-account" href="<?=site_h($base)?>account/" aria-label="Your account: @<?=site_h($navUser['handle'])?>" title="Your profile"<?=$active==='account'?' aria-current="page"':''?>>
+<span class="nav-avatar" aria-hidden="true"><?=account_avatar_markup($navUser['avatar']??'initial',$navUser['handle'])?></span></a>
 <?php endif;?>
 <a class="nav-btn" href="<?=site_h($base)?>#get">Get the game</a>
 </div>

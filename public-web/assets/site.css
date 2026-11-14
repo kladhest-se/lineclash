@@ -1123,14 +1123,12 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 .nav-account:hover{text-decoration:none;color:var(--mauve)}
 .nav-account[aria-current=page]{color:var(--mauve)}
 .nav-avatar{position:relative;display:grid;place-items:center;width:34px;height:34px;flex-shrink:0;border-radius:50%;background:var(--mantle);border:1px solid var(--teal);color:var(--teal);font-family:var(--mono);font-size:15px}
-.nav-avatar::after{content:"";position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border:2px solid var(--crust);border-radius:50%;background:var(--green)}
-.nav-signout{margin:0;display:flex}
-.nav-signout button{font:inherit;font-size:13px;color:var(--subtext1);background:none;border:1px solid var(--surface0);border-radius:6px;padding:7px 10px;cursor:pointer;white-space:nowrap}
-.nav-signout button:hover{color:var(--text);border-color:var(--overlay1)}
-.nav-signout button:focus-visible{outline:2px solid var(--mauve);outline-offset:3px}
-@media(max-width:1080px){.nav-inner.has-account{flex-wrap:wrap}.has-account .nav-links{display:flex;order:3;width:100%;overflow-x:auto;white-space:nowrap;padding:4px 0 2px}.has-account .nav-actions{margin-left:auto}}
+.profile-signout{margin:0 0 0 auto;display:flex}
+.profile-signout button{font:inherit;font-size:13px;color:var(--subtext1);background:none;border:1px solid var(--surface0);border-radius:6px;padding:7px 10px;cursor:pointer;white-space:nowrap}
+.profile-signout button:hover{color:var(--text);border-color:var(--overlay1)}
+.profile-signout button:focus-visible{outline:2px solid var(--mauve);outline-offset:3px}
 @media(max-width:760px){.nav-actions{margin-left:auto}}
-@media(max-width:520px){.nav-account-name{display:none}.nav-actions{gap:10px}.has-account .nav-btn{font-size:10px;padding:8px 12px}.nav-signout button{font-size:12px;padding:7px 8px}.nav-inner.has-account{gap:12px}}
+@media(max-width:520px){.nav-actions{gap:10px}.has-account .nav-btn{font-size:10px;padding:8px 12px}.profile-signout button{font-size:12px;padding:7px 8px}.nav-inner.has-account{gap:12px}}
 
 /* Signed-in player profile. */
 .avatar-blocks{display:block;width:100%;height:100%}
@@ -1140,10 +1138,8 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 .profile-intro,.profile-hint{color:var(--subtext1)}
 .profile-intro{margin-bottom:26px}
 .profile-hint{font-size:14px;line-height:1.65;margin-top:8px}
-.profile-identity{display:flex;align-items:center;gap:14px;padding:22px 0 28px;border-bottom:1px solid var(--surface0);margin-bottom:30px}
+.profile-identity{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:22px 0 28px;border-bottom:1px solid var(--surface0);margin-bottom:30px}
 .profile-identity-avatar{display:grid;place-items:center;width:44px;height:44px;border:1px solid var(--surface1);background:var(--mantle);border-radius:10px;color:var(--teal)}
-.profile-signed-in{margin-left:auto;color:var(--teal);font-size:13px}
-.profile-signed-in::before{content:"";display:inline-block;width:7px;height:7px;background:var(--teal);border-radius:50%;margin-right:8px}
 .profile-panel{padding:28px;border:1px solid var(--surface0);background:rgba(41,44,60,.72);margin:30px 0}
 .profile-player-settings{display:grid;grid-template-columns:1.3fr 1fr;gap:44px;margin-top:26px;align-items:center}
 .profile-avatar-form fieldset{border:0;min-width:0}
@@ -1178,4 +1174,4 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 .profile-delete{margin-top:24px;border-bottom:1px solid var(--surface0)}
 .profile-delete .account-danger{padding-bottom:20px}
 .profile-delete .account-form{max-width:480px}
-@media(max-width:760px){.profile-player-settings,.profile-details-grid{grid-template-columns:1fr;gap:24px}.profile-panel{padding:22px}.profile-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.account-profile{padding-top:36px}.profile-signed-in{display:none}}
+@media(max-width:760px){.profile-player-settings,.profile-details-grid{grid-template-columns:1fr;gap:24px}.profile-panel{padding:22px}.profile-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.account-profile{padding-top:36px}}

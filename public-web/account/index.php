@@ -80,7 +80,7 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 </form>
 
 <?php else:?>
-<div class="profile-identity"><span class="profile-identity-avatar" aria-hidden="true"><?=account_avatar_markup($user['avatar'],$user['handle'])?></span><p>Signed in as <strong>@<?=site_h($user['handle'])?></strong>.</p><span class="profile-signed-in">Signed in</span></div>
+<div class="profile-identity"><span class="profile-identity-avatar" aria-hidden="true"><?=account_avatar_markup($user['avatar'],$user['handle'])?></span><p>Signed in as <strong>@<?=site_h($user['handle'])?></strong>.</p><form class="profile-signout" method="post" action="logout/"><input type="hidden" name="csrf" value="<?=site_h($_SESSION['csrf'])?>"><button type="submit">Sign out</button></form></div>
 <section class="profile-panel" aria-labelledby="player-settings-heading"><h2 id="player-settings-heading">Player settings</h2><p class="profile-hint">Choose your avatar for the website.</p>
 <div class="profile-player-settings"><form method="post" class="profile-avatar-form"><?php account_fields('');?>
 <fieldset><legend>Avatar</legend><div class="avatar-choices">
