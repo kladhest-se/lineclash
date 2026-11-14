@@ -53,7 +53,7 @@ site_header('Authenticate a client','account','../../');
 <label for="pin-login">Username or email</label><input id="pin-login" name="login" maxlength="254" autocomplete="username" required>
 <label for="pin-password">Password</label><input id="pin-password" type="password" name="password" maxlength="72" autocomplete="current-password" required>
 <button>Sign in and authenticate client</button></form>
-<p><a href="/account/">Create an account</a> · <a href="/account/recover/">Forgot password?</a> · <a href="/account/verify/">Resend activation email</a></p>
+<p><a href="/account/?mode=register">Create an account</a> · <a href="/account/recover/">Forgot password?</a> · <a href="/account/verify/">Resend activation email</a></p>
 <p><a href="/account/pin/">Enter another PIN</a></p></section>
 <?php elseif(!$notice):?>
 <p>Enter the PIN shown in your LineClash client.</p>

@@ -91,6 +91,7 @@ function account_lookup(PDO $db,string $login): array|false {
     $q=$db->prepare('SELECT * FROM accounts WHERE '.$field.'=? AND active=1');$q->execute([$login]);return $q->fetch();
 }
 function account_register(PDO $db,string $handle,string $email,string $password): array {
+    if(trim($handle)==='' || trim($email)==='' || $password==='')throw new InvalidArgumentException('Username, email and password are required.');
     $handle=account_handle($handle);$email=account_email($email);account_password($password);
     $pending=account_email_verification_required();
     if($pending){

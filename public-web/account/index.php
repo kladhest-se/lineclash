@@ -35,7 +35,11 @@ try {
         if($action==='logout'){account_logout();header('Location: ./',true,303);exit;}
         if($action==='recover')throw new InvalidArgumentException('Recovery codes are no longer supported. Use the email password recovery page.');
         if(in_array($action,['login','register'],true)){
-            account_limit($db,'account-login');$handle=(string)($_POST['handle']??'');$email=(string)($_POST['email']??'');$password=(string)($_POST['password']??'');if($action!=='login')account_password($password);elseif(strlen($password)>72 || str_contains($password,"\0"))throw new InvalidArgumentException('Sign-in details did not match.');
+            account_limit($db,'account-login');
+            $handle=is_string($_POST['handle']??null)?$_POST['handle']:'';
+            $email=is_string($_POST['email']??null)?$_POST['email']:'';
+            $password=is_string($_POST['password']??null)?$_POST['password']:'';
+            if($action==='login' && (strlen($password)>72 || str_contains($password,"\0")))throw new InvalidArgumentException('Sign-in details did not match.');
             if($action==='register'){
                 $user=account_register($db,$handle,$email,$password);$notice=$user['email_pending']?'Check your email to activate your account, then sign in.':'Account created.';
                 if(!$user['email_pending']){session_regenerate_id(true);$_SESSION['account_id']=$user['id'];$_SESSION['auth_version']=1;}

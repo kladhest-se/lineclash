@@ -35,6 +35,12 @@ int main(int argc,char **argv){
     strcpy(c.tf_account_handle.text,"gamma");c.tf_account_handle.len=5;strcpy(c.tf_account_email.text,"gamma@example.test");c.tf_account_email.len=18;
     strcpy(c.tf_account_password.text,"new-password-value");c.tf_account_password.len=18;
     strcpy(c.tf_account_confirm.text,"different");c.tf_account_confirm.len=9;
+    TextField *required[]={&c.tf_account_handle,&c.tf_account_email,&c.tf_account_password};
+    for(int i=0;i<3;i++){
+        TextField saved=*required[i];memset(required[i],0,sizeof(*required[i]));c.account_message[0]=0;
+        client_accounts_action(&c,ACCOUNT_REGISTER);assert(!pending && c.account_message[0] && !strstr(c.account_message,"do not match"));
+        *required[i]=saved;
+    }
     client_accounts_action(&c,ACCOUNT_REGISTER);assert(!pending && strstr(c.account_message,"do not match"));
     strcpy(c.tf_account_confirm.text,c.tf_account_password.text);c.tf_account_confirm.len=c.tf_account_password.len;c.account_join_after=1;
     client_accounts_action(&c,ACCOUNT_REGISTER);assert(pending && strstr(request,"account-client-register") && strstr(request,"gamma@example.test"));assert(!c.tf_account_password.text[0] && !c.tf_account_confirm.text[0]);

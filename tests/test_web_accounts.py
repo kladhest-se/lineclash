@@ -42,6 +42,23 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   assert 'name="handle"' not in page and '?mode=register' in page
   signup_page=call('/account/?mode=register')[1]
   assert '<h1>Create account</h1>' in signup_page and 'autocomplete="new-password"' in signup_page
+  for field in ('handle','email','password'):
+   assert re.search(r'<input[^>]*name="'+field+r'"[^>]*\brequired\b',signup_page),field
+  # Missing fields are rejected even when HTML validation is bypassed.
+  original_peer=test_peer
+  for index,field in enumerate(('handle','email','password')):
+   test_peer='198.18.40.'+str(index+1)
+   payload=dict(handle='requireduser',email='requireduser@example.test',password=password)
+   payload[field]=''
+   invalid=call(data=dict(action='register',**payload))[1]
+   assert 'Username, email and password are required.' in invalid and 'Account created.' not in invalid
+   assert 'role="alert"' in invalid
+   test_peer='198.18.41.'+str(index+1)
+   payload.pop(field)
+   status,invalid=call('/api/',dict(action='account-client-register',format='session',**payload),True)
+   assert status==400 and 'Username, email and password are required.' in invalid
+  test_peer=original_peer
+
   short=secrets.token_hex(5)+'x'
   invalid=call(data=dict(action='register',handle=handle,password=short))[1]
   assert 'Password is too short. Use at least 12 characters.' in invalid
@@ -125,7 +142,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   status,error=call('/api/',dict(signup,format='legacy'),True)
   assert status==400 and 'Update the client' in error
   assert call('/api/',dict(action='account-client-login',login=native_email,password=password),True)[0]==401
-  status,error=call('/api/',dict(signup,email=''),True)
+  status,error=call('/api/',dict(signup,email='not-an-email'),True)
   assert status==400 and 'valid email' in error
   status,error=call('/api/',dict(signup,password='short'),True)
   assert status==400 and 'at least 12' in error

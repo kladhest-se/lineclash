@@ -63,7 +63,8 @@ with tempfile.TemporaryDirectory(prefix='lineclash-pin-') as folder, tempfile.Te
    assert api('account-client-pin-poll',device='0'*64)[1].startswith('central-error ')
    assert poll(secret)==(200,'central-pending')
    assert api('account-client-pin-poll',device=secret)==(200,'central-slow-down')
-   assert 'Username or email' in call(data=dict(action='lookup',pin=pin[:4]+' '+pin[4:]))[1]
+   page=call(data=dict(action='lookup',pin=pin[:4]+' '+pin[4:]))[1]
+   assert 'Username or email' in page and 'href="/account/?mode=register">Create an account' in page
    assert 'Sign-in details did not match' in call(data=dict(action='authenticate',pin=pin,login='pinuser',password='wrong'))[1]
    assert poll(secret)==(200,'central-pending')
    csrf='0'*64
