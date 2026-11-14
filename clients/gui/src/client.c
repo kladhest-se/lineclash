@@ -1,5 +1,8 @@
 /* client.c - LineClash client logic */
 #include "client.h"
+#ifdef PLATFORM_TVOS
+#include "tvos_platform.h"
+#endif
 /* Ping uses a simple monotonic tick counter to avoid platform overflow issues */
 static unsigned long g_ping_tick = 0; /* incremented each client_tick call */
 #include <stdio.h>
@@ -123,6 +126,8 @@ static const char *server_list_path(void) {
     static char path[512];
 #if defined(PLATFORM_AMIGA)
     snprintf(path,sizeof(path),"PROGDIR:LineClash.servers");
+#elif defined(PLATFORM_TVOS)
+    lc_tvos_data_path(path,sizeof(path),"servers");
 #elif defined(PLATFORM_WINDOWS)
     char appdata[MAX_PATH];
     if (SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, appdata) != S_OK) {
@@ -149,6 +154,8 @@ static const char *settings_path(void) {
     static char path[512];
 #if defined(PLATFORM_AMIGA)
     snprintf(path,sizeof(path),"PROGDIR:LineClash.settings");
+#elif defined(PLATFORM_TVOS)
+    lc_tvos_data_path(path,sizeof(path),"settings");
 #elif defined(PLATFORM_WINDOWS)
     char appdata[MAX_PATH];
     if (SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, appdata) != S_OK) {
@@ -2701,7 +2708,7 @@ void client_network_tick(ClientCtx *c) {
  * Main run loop
  * ============================================================ */
 void client_run_gui(void) {
-#ifdef PLATFORM_AMIGA
+#if defined(PLATFORM_AMIGA) || defined(PLATFORM_TVOS)
     static ClientCtx c; /* Keep the large UI context off the classic Amiga stack. */
 #else
     ClientCtx c;

@@ -72,3 +72,20 @@ web-js-test:
 	node tests/test_email_verification.js
 	node tests/test_email_change.js
 	node tests/test_web_replay_privacy.js
+
+.PHONY: tvos
+tvos:
+	bash scripts/build-tvos.sh simulator
+
+.PHONY: tvos-focus-test server-update-test
+tvos-focus-test:
+	$(CC) -Wall -Wextra -Werror tests/test_tvos_focus.c clients/tvos/focus.c -o /tmp/lineclash-tvos-focus-test
+	/tmp/lineclash-tvos-focus-test
+server-update-test: server
+	$(PYTHON) tests/test_server_update.py
+	$(PYTHON) tests/test_server_stdin.py
+
+.PHONY: tvos-ui-test
+tvos-ui-test: client
+	$(CC) -Wall -Wextra -Wno-unused-variable -O2 -DPLATFORM_POSIX $(VERSION_CFLAGS) $$(sdl2-config --cflags) -Iclients/tvos tests/test_tvos_ui.c clients/tvos/focus.c clients/gui/src/client.o clients/gui/src/directory.o clients/gui/src/accounts.o clients/gui/src/account_https.o clients/gui/src/sound.o clients/gui/src/music.o clients/gui/src/music_decoder.o clients/gui/src/mod.o clients/gui/build/*.o -o /tmp/lineclash-tvos-ui-test $$(sdl2-config --libs | sed 's/-lSDL2main//g') -lcurl -lm
+	/tmp/lineclash-tvos-ui-test

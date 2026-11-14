@@ -97,3 +97,5 @@ For your Leap 16 / Apache and remote MariaDB hosts, follow [the Kladhest deploym
 The native GUI now uses antialiased Roboto typography and a unified slate/mint theme. See [the modern server browser](docs/images/gui-modern-empty.png). Restart the rebuilt client to use the new renderer.
 
 Windows x64: see [native build and packaging instructions](docs/WINDOWS.md).
+
+Apple TV: see [Apple TV (Preview)](docs/TVOS.md) for simulator/device builds and Apple remote/gamepad controls.

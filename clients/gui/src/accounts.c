@@ -1,5 +1,8 @@
 /* One remembered account, memory-only session, and HTTPS authentication. */
 #include "client.h"
+#ifdef PLATFORM_TVOS
+#include "tvos_platform.h"
+#endif
 #include <ctype.h>
 #ifndef PLATFORM_WINDOWS
 #include <sys/stat.h>
@@ -28,6 +31,8 @@ static const char *account_path(void){
     static char path[1024];
 #ifdef PLATFORM_AMIGA
     snprintf(path,sizeof(path),"PROGDIR:LineClash.accounts");
+#elif defined(PLATFORM_TVOS)
+    lc_tvos_data_path(path,sizeof(path),"accounts");
 #elif defined(PLATFORM_WINDOWS)
     const char *base=getenv("APPDATA");snprintf(path,sizeof(path),"%s\\LineClash\\accounts",base?base:".");
 #else

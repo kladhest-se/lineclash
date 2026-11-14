@@ -4,8 +4,13 @@
 #include "../../shared/include/lineclash.h"
 
 /* ---- Window constants ---- */
+#ifdef PLATFORM_TVOS
+#define WIN_W            1424
+#define WIN_H            800
+#else
 #define WIN_W            1060
 #define WIN_H            800
+#endif
 #define BLOCK_SIZE       24
 #define MINI_BLOCK       10
 #define OWN_FIELD_X      12

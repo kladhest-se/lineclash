@@ -5,6 +5,8 @@
 #ifdef PLATFORM_WINDOWS
 #include <windows.h>
 #include <winhttp.h>
+#elif defined(PLATFORM_TVOS)
+#include "tvos_platform.h"
 #else
 #include <curl/curl.h>
 #endif
@@ -20,7 +22,7 @@ int directory_url_valid(const char *url,int local) {
     }
     return 0;
 }
-#ifndef PLATFORM_WINDOWS
+#if !defined(PLATFORM_WINDOWS) && !defined(PLATFORM_TVOS)
 static size_t receive_body(char *ptr,size_t size,size_t count,void *unused) {
     (void)unused; size_t n=size*count;
     if(n>=sizeof(job.body)-job.used || memchr(ptr,0,n)) return 0;
@@ -49,6 +51,9 @@ static int fetch(void *unused) {
         }
     }
     if(request)WinHttpCloseHandle(request);if(connection)WinHttpCloseHandle(connection);if(session)WinHttpCloseHandle(session);
+#elif defined(PLATFORM_TVOS)
+    char url[2048];snprintf(url,sizeof(url),"%s?action=servers&format=text",job.url);
+    ok=lc_tvos_http(url,NULL,job.body,sizeof(job.body),6000)==200;
 #else
     CURL *c=curl_easy_init();
     if(c) {
@@ -114,7 +119,7 @@ int directory_start(const char *url,char *message,int length) {
     job.lan=0;
     const char *allow=SDL_getenv("LINECLASH_DIRECTORY_ALLOW_LOCAL");
     if(!directory_url_valid(url,allow && !strcmp(allow,"1"))){snprintf(message,length,"Public discovery is not configured. Add a server to get started.");return 0;}
-#ifndef PLATFORM_WINDOWS
+#if !defined(PLATFORM_WINDOWS) && !defined(PLATFORM_TVOS)
     if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)return 0;
 #endif
     memset(job.body,0,sizeof(job.body));job.used=0;job.error[0]=0;SDL_AtomicSet(&job.done,0);snprintf(job.url,sizeof(job.url),"%s",url);

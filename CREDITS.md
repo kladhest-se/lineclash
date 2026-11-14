@@ -4,6 +4,8 @@
 
 LineClash by Tommy Frössman (frossmant / styrbjorn). Game source code is licensed under GPL-3.0-or-later; see [LICENSE.md](LICENSE.md). The soundtrack retains its separate licenses below.
 
+The Apple TV scene and HTTPS integration derives from OpenFP (MIT). The TV bundle includes OpenFP and SDL2 notices; see [Apple TV third-party notices](clients/tvos/THIRD-PARTY-NOTICES.md).
+
 ## Title music
 
 ### Sci-fi Theme

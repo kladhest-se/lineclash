@@ -74,3 +74,32 @@ Updated servers detect their own external IPv4 over HTTPS, cache it for ten minu
 This no longer needs `local_public` mapping or a shared website/game-server internet connection. `public_ip` can override automatic detection with a public IPv4 when routing requires it. The external game port must match the configured game port. Port forwarding remains necessary. If the directory and game server share a LAN, the directory must also be able to reach the public endpoint, usually using NAT reflection.
 
 Clients can choose **Local network** to discover servers directly over UDP 31459 and connect using their LAN address, without NAT reflection for the players. Discovery is limited to the local IPv4 broadcast network and is not routed across VLANs. Allow UDP 31459 for discovery and TCP on the game port for play. `lan_discovery = off` disables announcements independently of `public_server`.
+
+## Linux installation and updates with systemd
+
+The updater downloads the public main branch into `/root/lineclash`, compiles a clean copy and installs the daemon and administration tool under `/opt/lineclash/bin`. It creates or updates `lineclashd.service`, running as the dedicated `lineclash` user.
+
+On openSUSE, run as root:
+
+```sh
+zypper install -y git gcc make sqlite3-devel libcurl-devel python3
+curl -fL https://raw.githubusercontent.com/kladhest-se/lineclash/main/scripts/update-server.sh -o /root/update-lineclash.sh
+chmod 700 /root/update-lineclash.sh
+/root/update-lineclash.sh
+```
+
+Stop any manually started server with Ctrl+C first. The updater refuses an occupied game port when the systemd service is not running. Existing tracked source edits or a non-main checkout also stop the update.
+
+Existing `/etc/lineclashd.cfg` contents are retained. If missing, the sample is installed with database/log paths under `/var/lib/lineclashd`. Existing configurations must use an absolute database path under `/var/lib/lineclashd`; the log must be there or at `/var/log/lineclashd.log`. The service account receives write access to its state, configuration and log.
+
+Compilation finishes before stopping a running service. Before replacing binaries, the script saves the configuration, previous unit/binaries, a consistent SQLite backup and directory key under `/opt/lineclash/backups/`. It restarts and checks the service. If startup fails, consult the printed backup path and journal; restoration is manual. Existing rounds end when the service restarts.
+
+```sh
+systemctl status lineclashd
+journalctl -u lineclashd -f
+systemctl stop lineclashd
+systemctl start lineclashd
+systemctl restart lineclashd
+```
+
+Run `/root/update-lineclash.sh` again for subsequent source updates. Firewall/NAT configuration and statistics-uploader credentials remain operator-managed.

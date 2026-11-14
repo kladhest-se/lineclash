@@ -67,6 +67,8 @@ make -j4 server
     <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="tab-macos"   onclick="showTab(this,'macos')">macOS</button>
     <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-linux" onclick="showTab(this,'linux')">Linux</button>
     <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-windows" onclick="showTab(this,'windows')">Windows</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-amiga" onclick="showTab(this,'amiga')">AmigaOS (Preview)</button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-tvos" onclick="showTab(this,'tvos')">Apple TV (Preview)</button>
   </div>
 
   <div id="tab-macos" class="tab-panel active" role="tabpanel">
@@ -117,14 +119,21 @@ make -j4 client
 </pre>
 
 </div>
-</div>
-
-
-<section class="community-section"><h2>AmigaOS 3.x preview</h2><p>The native 68020 client uses Intuition, bsdsocket.library and AmiSSL for HTTPS directory discovery. No SDL or FPU is required. This is an experimental build; audio playback is not implemented.</p>
+<div id="tab-amiga" class="tab-panel" role="tabpanel">
 <pre class="code-block">make amiga
 # A different installed cross-toolchain:
-make -C clients/amiga AMIGA_TOOLS=/path/to/m68k-amigaos-toolchain
-</pre><p>Run <code>clients/amiga/LineClash</code> on AmigaOS 3.x with a running Roadshow, AmiTCP or Miami stack. For public discovery, install AmiSSL 4.10 or newer with its certificates and assigns. Keep the executable named <code>LineClash</code> so its directory worker can launch.</p></section>
+make -C clients/amiga AMIGA_TOOLS=/path/to/m68k-amigaos-toolchain</pre>
+</div>
+<div id="tab-tvos" class="tab-panel" role="tabpanel">
+<pre class="code-block"># Install Xcode and select its developer tools first.
+brew install cmake
+bash scripts/build-tvos.sh simulator
+
+# Build for an Apple TV device
+bash scripts/build-tvos.sh device</pre>
+</div>
+</div>
+
 
 <script>
 /* ── Tab switching ─────────────────────────────────────── */

@@ -40,7 +40,25 @@ server shutdown cancel
 <h3 id="server-start-automatic-verified-discovery">Automatic verified discovery</h3>
 <p>Updated servers detect their own external IPv4 over HTTPS, cache it for ten minutes and announce it every minute. The directory connects to the advertised game TCP port with a fresh random challenge. Only a server holding the matching directory key can produce the required HMAC response. A failed check does not publish or refresh the listing. The registration key is never sent through the public game connection.</p>
 <p>This no longer needs <code>local_public</code> mapping or a shared website/game-server internet connection. <code>public_ip</code> can override automatic detection with a public IPv4 when routing requires it. The external game port must match the configured game port. Port forwarding remains necessary. If the directory and game server share a LAN, the directory must also be able to reach the public endpoint, usually using NAT reflection.</p>
-<p>Clients can choose <strong>Local network</strong> to discover servers directly over UDP 31459 and connect using their LAN address, without NAT reflection for the players. Discovery is limited to the local IPv4 broadcast network and is not routed across VLANs. Allow UDP 31459 for discovery and TCP on the game port for play. <code>lan_discovery = off</code> disables announcements independently of <code>public_server</code>.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>
+<p>Clients can choose <strong>Local network</strong> to discover servers directly over UDP 31459 and connect using their LAN address, without NAT reflection for the players. Discovery is limited to the local IPv4 broadcast network and is not routed across VLANs. Allow UDP 31459 for discovery and TCP on the game port for play. <code>lan_discovery = off</code> disables announcements independently of <code>public_server</code>.</p>
+<h3 id="server-start-linux-installation-and-updates-with-systemd">Linux installation and updates with systemd</h3>
+<p>The updater downloads the public main branch into <code>/root/lineclash</code>, compiles a clean copy and installs the daemon and administration tool under <code>/opt/lineclash/bin</code>. It creates or updates <code>lineclashd.service</code>, running as the dedicated <code>lineclash</code> user.</p>
+<p>On openSUSE, run as root:</p>
+<pre><code class="language-sh">zypper install -y git gcc make sqlite3-devel libcurl-devel python3
+curl -fL https://raw.githubusercontent.com/kladhest-se/lineclash/main/scripts/update-server.sh -o /root/update-lineclash.sh
+chmod 700 /root/update-lineclash.sh
+/root/update-lineclash.sh
+</code></pre>
+<p>Stop any manually started server with Ctrl+C first. The updater refuses an occupied game port when the systemd service is not running. Existing tracked source edits or a non-main checkout also stop the update.</p>
+<p>Existing <code>/etc/lineclashd.cfg</code> contents are retained. If missing, the sample is installed with database/log paths under <code>/var/lib/lineclashd</code>. Existing configurations must use an absolute database path under <code>/var/lib/lineclashd</code>; the log must be there or at <code>/var/log/lineclashd.log</code>. The service account receives write access to its state, configuration and log.</p>
+<p>Compilation finishes before stopping a running service. Before replacing binaries, the script saves the configuration, previous unit/binaries, a consistent SQLite backup and directory key under <code>/opt/lineclash/backups/</code>. It restarts and checks the service. If startup fails, consult the printed backup path and journal; restoration is manual. Existing rounds end when the service restarts.</p>
+<pre><code class="language-sh">systemctl status lineclashd
+journalctl -u lineclashd -f
+systemctl stop lineclashd
+systemctl start lineclashd
+systemctl restart lineclashd
+</code></pre>
+<p>Run <code>/root/update-lineclash.sh</code> again for subsequent source updates. Firewall/NAT configuration and statistics-uploader credentials remain operator-managed.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>
 <section class="documentation-chapter" id="configuration"><h2 id="configuration-configure-a-game-server">Configure a game server</h2>
 <p>Settings are read at startup. Restart after editing the configuration. Room settings saved in SQLite can override initial defaults; use room controls to update an existing room.</p>
 <h3 id="configuration-file-format-and-options">File format and options</h3>

@@ -284,6 +284,7 @@ a:focus-visible { outline: 2px solid var(--mauve); outline-offset: 3px; border-r
 /* ── Build tabs ───────────────────────────────────────────── */
 .tab-bar {
   display: flex;
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--surface0);
   margin-bottom: -1px;
   gap: 0;

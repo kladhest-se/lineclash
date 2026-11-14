@@ -1,6 +1,10 @@
 #include "client.h"
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
+#ifdef PLATFORM_TVOS
+#include "tvos_platform.h"
+#include "focus.h"
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -20,6 +24,28 @@ static SDL_Texture *g_ui_font = NULL;
 static int g_popup_blocked = 0; /* when 1: dbtn suppresses hover+click */
 static MouseState    g_mouse = {0,0,0,0};
 static uint32_t      g_rtick = 0; /* increments every render frame */
+
+#ifdef PLATFORM_TVOS
+static int g_tv_actions,tv_account_form,tv_room_options;
+static Uint32 g_remote_held,g_remote_repeat[3];
+static float g_tv_touch_x,g_tv_touch_y;
+static int tv_context(ClientCtx *c){
+    return (tv_account_form+2*tv_room_options)*2097152+g_tv_actions*1048576+(int)c->state + 16*(c->server_popup_open+4*c->keymap_popup_open+8*c->about_popup_open+16*c->music_player_open+32*c->game_options_popup_open+64*c->ai_players_popup_open+128*c->team_popup_open+256*c->kick_popup_open+512*c->motd_popup_open+1024*c->license_popup_open+2048*c->account_create_mode+4096*c->account_pin_mode+8192*c->server_tab);
+}
+static int tv_menu(ClientCtx *c){return g_tv_actions || c->state!=CS_PLAYING || c->paused || c->keymap_popup_open || c->about_popup_open || c->music_player_open || c->game_options_popup_open || c->ai_players_popup_open || c->team_popup_open || c->kick_popup_open;}
+static void tv_add(int x,int y,int w,int h){if(!g_popup_blocked)lc_focus_add(x,y,w,h);}
+static void tv_begin(ClientCtx *c){if(c->state!=CS_PLAYING)g_tv_actions=0;lc_focus_begin(tv_context(c));}
+static void tv_select(void){LCFocusRect r;if(lc_focus_current(&r)){g_mouse.x=r.x+r.w/2;g_mouse.y=r.y+r.h/2;g_mouse.clicked=1;}}
+static void tv_present(void){
+    lc_focus_finish();LCFocusRect r;
+    if(lc_focus_current(&r)){SDL_SetRenderDrawColor(g_rend,0x76,0xe0,0xc1,255);for(int i=1;i<=3;i++){SDL_Rect box={r.x-i,r.y-i,r.w+2*i,r.h+2*i};SDL_RenderDrawRect(g_rend,&box);}}
+    SDL_RenderPresent(g_rend);
+}
+#else
+#define tv_add(x,y,w,h) ((void)0)
+#define tv_begin(c) ((void)0)
+#define tv_present() SDL_RenderPresent(g_rend)
+#endif
 
 /* ============================== FONT ============================== */
 #define FW 7
@@ -195,6 +221,7 @@ typedef enum{BS_NORMAL,BS_HOVER,BS_ACTIVE,BS_DISABLED,BS_TOGON}BtnStyle;
 
 /* Returns 1 if clicked this frame */
 static int dbtn(int x,int y,int w,int h,const char*lbl,BtnStyle sty){
+    if(sty!=BS_DISABLED)tv_add(x,y,w,h);
     int hov=(!g_popup_blocked)&&pt_in(g_mouse.x,g_mouse.y,x,y,w,h);
     int clk=hov&&g_mouse.clicked&&(sty!=BS_DISABLED);
     if(clk) g_mouse.clicked=0; /* consume click so no other button fires */
@@ -206,9 +233,38 @@ static int dbtn(int x,int y,int w,int h,const char*lbl,BtnStyle sty){
     default:bg=hov?0x303951ff:0x20283bff;bo=hov?0x7383a5ff:0x39445eff;tc=0xdce6f3ff;
     }
     surface(x,y,w,h,bg,bo);
+#ifdef PLATFORM_TVOS
+    int size=h>=48?2:1;
+    dtc(x+w/2,y+(h-FH*size)/2,lbl,tc,size);
+#else
     dtc(x+w/2,y+(h-FH)/2,lbl,tc,1);
+#endif
     return clk;
 }
+#ifdef PLATFORM_TVOS
+static void tv_target(ClientCtx *c,int direction){
+    for(int n=0;n<MAX_PLAYERS;n++){
+        c->attack_target=(c->attack_target+MAX_PLAYERS-1+direction)%MAX_PLAYERS+1;
+        if(c->opp_nicks[c->attack_target-1][0])break;
+    }
+}
+static void tv_actions(ClientCtx *c){
+    if(!g_tv_actions)return;
+    fr(0,0,WIN_W,WIN_H,0x101a29ff);g_popup_blocked=0;
+    dt(64,64,"Game actions",COL_WHITE,4);
+    char label[128];const char *name=c->attack_target>0?c->opp_nicks[c->attack_target-1]:"";
+    snprintf(label,sizeof(label),"Target: %.14s",name[0]?name:"choose a player");dt(64,290,label,COL_LTGRAY,2);
+    if(dbtn(64,180,600,64,c->paused?"Resume round":"Return to game",BS_ACTIVE)){if(c->paused)client_on_button(c,BTN_RESUME);g_tv_actions=0;}
+    if(dbtn(746,180,600,64,"Use special",BS_NORMAL)){client_on_button(c,BTN_FIRE_SPECIAL);g_tv_actions=0;}
+    if(dbtn(64,350,600,64,"Previous target",BS_NORMAL))tv_target(c,-1);
+    if(dbtn(746,350,600,64,"Next target",BS_NORMAL))tv_target(c,1);
+    if(dbtn(64,470,600,64,c->paused?"Resume round":"Pause round",BS_NORMAL)){client_on_button(c,c->paused?BTN_RESUME:BTN_PAUSE);g_tv_actions=0;}
+    if(dbtn(746,470,600,64,"Settings",BS_NORMAL)){g_tv_actions=0;c->keymap_popup_open=1;}
+    if(dbtn(64,590,600,64,"Back to lobby",BS_NORMAL)){g_tv_actions=0;client_on_button(c,BTN_BACK_TO_LOBBIES);}
+    if(dbtn(746,590,600,64,"Music player",BS_NORMAL)){g_tv_actions=0;client_on_button(c,BTN_MUSIC_PLAYER);}
+    dt(64,720,"The round continues while this menu is open.",COL_GRAY,2);
+}
+#endif
 static int dtog(int x,int y,int w,int h,const char*loff,const char*lon,int on){
     return dbtn(x,y,w,h,on?lon:loff,on?BS_TOGON:BS_NORMAL);}
 
@@ -590,8 +646,12 @@ static void draw_winner(ClientCtx*c){
 
 /* ============================== TEXT FIELD ============================== */
 static int draw_textfield(int x,int y,int w,int h,TextField*tf,const char*placeholder){
+    tv_add(x,y,w,h);
     int hov=pt_in(g_mouse.x,g_mouse.y,x,y,w,h);
     int clicked=(hov&&g_mouse.clicked);
+#ifdef PLATFORM_TVOS
+    if(clicked && !g_popup_blocked)lc_tvos_edit(tf->text,sizeof(tf->text),&tf->len,0,placeholder);
+#endif
     uint32_t bg=tf->focused?0x1e1e3aff:0x141420ff;
     uint32_t bo=tf->focused?0x8080c0ff:0x3a3a6aff;
     fr(x,y,w,h,bg);dr(x,y,w,h,bo);
@@ -608,8 +668,12 @@ static int draw_textfield(int x,int y,int w,int h,TextField*tf,const char*placeh
 /* ============================== CONNECT SCREEN ============================== */
 /* Draw a password field — same as textfield but shows asterisks */
 static int draw_passfield(int x,int y,int w,int h,TextField*tf,const char*placeholder){
+    tv_add(x,y,w,h);
     int hov=pt_in(g_mouse.x,g_mouse.y,x,y,w,h);
     int clicked=(hov&&g_mouse.clicked);
+#ifdef PLATFORM_TVOS
+    if(clicked && !g_popup_blocked)lc_tvos_edit(tf->text,sizeof(tf->text),&tf->len,1,placeholder);
+#endif
     uint32_t bg=tf->focused?0x1e1e3aff:0x141420ff;
     uint32_t bo=tf->focused?0x8080c0ff:0x3a3a6aff;
     char stars[130];
@@ -708,6 +772,10 @@ static void render_keymap_popup(ClientCtx *c, int saved_click) {
     const char *tabs[]={"Display","Controls","Audio"};
     for(int tab=0;tab<3;tab++)if(dbtn(px+20+tab*156,py+76,148,30,tabs[tab],c->settings_tab==tab?BS_ACTIVE:BS_NORMAL)&&!capturing)c->settings_tab=tab;
     if(c->settings_tab==1) {
+#ifdef PLATFORM_TVOS
+        const char *lines[]={"APPLE REMOTE", "Left / Right: move   Down: soft drop", "Click: rotate   Up: hard drop", "Play/Pause: hold   Back: game menu", "", "GAMEPAD", "A / Cross: rotate   B / Circle: reverse", "X / Square: hold   Y / Triangle: hard drop", "Right shoulder: next target", "Right stick click: use special", "Back / Share: game menu   Start: pause"};
+        for(int i=0;i<11;i++)dt(px+20,py+126+i*30,lines[i],COL_LTGRAY,1);
+#else
 
     for(int i=0;i<NKEYS;i++){
         int bx=px+20, by=py+120+i*(ROW_H+ROW_PAD);
@@ -730,12 +798,17 @@ static void render_keymap_popup(ClientCtx *c, int saved_click) {
             c->keymap_capture_idx=i; g_mouse.clicked=0;
         }
     }
+#endif
     }
     if(c->settings_tab==0){
         char label[64];
+#ifndef PLATFORM_TVOS
         dt(px+20,py+132,"Window size",COL_WHITE,1);
         snprintf(label,sizeof(label),"%d%%",c->ui_scale?c->ui_scale:100);
         if(dbtn(px+310,py+122,170,34,label,BS_NORMAL))client_cycle_ui_scale(c);
+#else
+        dt(px+20,py+132,"Apple TV uses the full display.",COL_GRAY,1);
+#endif
         dt(px+20,py+190,"Piece patterns",COL_WHITE,1);
         if(dtog(px+310,py+180,170,34,"Off","On",c->piece_patterns)){c->piece_patterns=!c->piece_patterns;sdl_set_ui_options(c->ui_scale,c->piece_patterns,c->high_contrast);client_save_settings(c);}
         dt(px+20,py+248,"High contrast text",COL_WHITE,1);
@@ -845,6 +918,7 @@ static void render_music_popup(ClientCtx *c,int saved_click) {
         int i=1+c->music_scroll+row_index;
         const MusicTrack *item=music_track(i); int row=py+238+row_index*46;
         int selected=p.index==i;
+        tv_add(px+22,row,pw-44,42);
         fr(px+22,row,pw-44,42,selected?0x203952ff:0x16182cff);
         dr(px+22,row,pw-44,42,selected?COL_PIECE_I:COL_BORDER);
         if(g_mouse.clicked && pt_in(g_mouse.x,g_mouse.y,px+22,row,pw-44,42)) {
@@ -1032,7 +1106,15 @@ static void render_about_popup(ClientCtx *c, int saved_click) {
     }
 }
 
+#ifdef PLATFORM_TVOS
+#include "../../tvos/ui.inc"
+#endif
+
 void sdl_render_server_list(ClientCtx*c){
+    tv_begin(c);
+#ifdef PLATFORM_TVOS
+    tv_servers(c);return;
+#endif
     BtnId action=BTN_NONE;
     const int CX    = WIN_W/2;
     const int LSX   = 32;
@@ -1072,7 +1154,11 @@ void sdl_render_server_list(ClientCtx*c){
     if(dbtn(32,146,166,30,"Public servers",c->server_tab==0?BS_ACTIVE:BS_NORMAL))action=BTN_PUBLIC_SERVERS;
     if(dbtn(208,146,166,30,"Saved servers",c->server_tab==1?BS_ACTIVE:BS_NORMAL))action=BTN_SAVED_SERVERS;
     if(dbtn(384,146,166,30,"Local network",c->server_tab==2?BS_ACTIVE:BS_NORMAL))action=BTN_LAN_SERVERS;
-    if(dbtn(WIN_W-96,22,64,28,"Quit",BS_NORMAL))        action=BTN_QUIT;
+    #ifdef PLATFORM_TVOS
+    if(dbtn(WIN_W-96,22,64,28,"Controls",BS_NORMAL))action=BTN_KEYMAP_POPUP;
+#else
+    if(dbtn(WIN_W-96,22,64,28,"Quit",BS_NORMAL))action=BTN_QUIT;
+#endif
     if(dbtn(WIN_W-166,22,62,28,"About",BS_NORMAL))      action=BTN_SRV_ABOUT;
     if(dbtn(WIN_W-498,22,104,28,client_account_ready(c)?c->central_profile:"Account",BS_NORMAL))client_accounts_open(c,0);
     if(dbtn(WIN_W-238,22,64,28,"Settings",BS_NORMAL))     action=BTN_KEYMAP_POPUP;
@@ -1176,6 +1262,7 @@ void sdl_render_server_list(ClientCtx*c){
 
         /* Click left area = select; selected + click = connect (if allowed) */
         int cw = LSW - BUTTONS_W - 6;
+        tv_add(LSX,ry,cw,ROW_H-1);
         if(pt_in(g_mouse.x,g_mouse.y,LSX,ry,cw,ROW_H-1)&&g_mouse.clicked){
             if(is_cur && !blocked) action=BTN_SRV_CONNECT;
             else { c->server_cursor=i; c->srv_page=vi/SRVS_PER_PAGE; }
@@ -1295,6 +1382,10 @@ void sdl_render_server_list(ClientCtx*c){
             uint32_t fbg=testing?0x080810ff:foc?0x1a1a38ff:0x0e0e1eff;
             uint32_t fbo=testing?0x1a1a28ff:foc?0x7070c0ff:0x222244ff;
             fr(px+14,fy+16,fw2,26,fbg); dr(px+14,fy+16,fw2,26,fbo);
+            if(!testing)tv_add(px+14,fy+16,fw2,26);
+#ifdef PLATFORM_TVOS
+            if(!testing && g_mouse.clicked && pt_in(g_mouse.x,g_mouse.y,px+14,fy+16,fw2,26))lc_tvos_edit(tfs[fi]->text,sizeof(tfs[fi]->text),&tfs[fi]->len,is_pass[fi],lbls[fi]);
+#endif
             if(!testing&&pt_in(g_mouse.x,g_mouse.y,px+14,fy+16,fw2,26)&&g_mouse.clicked)
                 c->tf_srv_focus=fi;
             {char disp[130]="";
@@ -1380,9 +1471,13 @@ void sdl_render_server_list(ClientCtx*c){
 
     done_srv_list:;
     if(action!=BTN_NONE) client_on_button(c,action);
-    SDL_RenderPresent(g_rend);
+    tv_present();
 }
 void sdl_render_connect(ClientCtx*c){
+    tv_begin(c);
+#ifdef PLATFORM_TVOS
+    tv_connect(c);return;
+#endif
     BtnId action = BTN_NONE;
     int is_authing = (c->state == CS_AUTH);
 
@@ -1534,11 +1629,15 @@ void sdl_render_connect(ClientCtx*c){
 
     dtc(cx,WIN_H-24,"Tab = next field     Enter = connect",COL_DKGRAY,1);
     if(action!=BTN_NONE) client_on_button(c,action);
-    SDL_RenderPresent(g_rend);
+    tv_present();
 }
 
 /* ============================== LOBBY SELECT ============================== */
 void sdl_render_lobby_select(ClientCtx*c){
+    tv_begin(c);
+#ifdef PLATFORM_TVOS
+    tv_rooms(c);return;
+#endif
     int i;
     BtnId action=BTN_NONE;
 
@@ -1660,6 +1759,7 @@ void sdl_render_lobby_select(ClientCtx*c){
         int is_full = (lb->player_count >= max_p);
         BtnId rbid  = (BtnId)(BTN_LOBBY_ROW_0+i);
 
+        tv_add(list_x,ry,list_w,row_h-2);
         /* Row bg + click */
         {int hov = pt_in(g_mouse.x,g_mouse.y, list_x,ry, list_w,row_h-2);
          uint32_t bg = is_cur?0x22224aff:hov?0x1a1a38ff:(i%2?0x12121cff:0x0f0f18ff);
@@ -2029,14 +2129,23 @@ void sdl_render_lobby_select(ClientCtx*c){
     if(c->keymap_popup_open) { render_keymap_popup(c, saved_click_ls); }
 
     if(action!=BTN_NONE) client_on_button(c,action);
-    SDL_RenderPresent(g_rend);
+    tv_present();
 }
 
 /* ============================== GAME SCREEN ============================== */
 void sdl_render_game(ClientCtx*c){
+    tv_begin(c);
+#ifdef PLATFORM_TVOS
+    if(c->paused && c->state==CS_PLAYING)g_tv_actions=1;
+    if(c->state==CS_PLAYING)tv_play(c);else tv_room(c);return;
+#endif
     int any_popup_g = (c->kick_popup_open||c->team_popup_open||
                        c->game_options_popup_open||c->ai_players_popup_open||
-                       c->keymap_popup_open||c->about_popup_open||c->music_player_open);
+                       c->keymap_popup_open||c->about_popup_open||c->music_player_open
+#ifdef PLATFORM_TVOS
+                       ||g_tv_actions
+#endif
+                       );
     int saved_click_g = g_mouse.clicked;
     g_popup_blocked = any_popup_g;
     if(any_popup_g) g_mouse.clicked=0;
@@ -2557,6 +2666,7 @@ void sdl_render_game(ClientCtx*c){
         #define OPT_ROW(label,state_on,sc_on,sc_off,btn_id,row_y) \
         { int on=(state_on); uint32_t sc=on?(sc_on):(sc_off); \
           int bx=px+12,by2=(row_y),bw2=pw-24,bh2=36; \
+          tv_add(bx,by2,bw2,bh2); \
           int hv=pt_in(g_mouse.x,g_mouse.y,bx,by2,bw2,bh2); \
           fr(bx,by2,bw2,bh2,on?0x061006ff:0x160606ff); \
           if(hv) fr(bx,by2,bw2,bh2,0xffffff18); \
@@ -2566,6 +2676,7 @@ void sdl_render_game(ClientCtx*c){
           if(hv&&g_mouse.clicked){action=(btn_id);g_mouse.clicked=0;} }
         #define CYC_ROW(label,val_label,sc,btn_id,row_y) \
         { int bx=px+12,by2=(row_y),bw2=pw-24,bh2=36; \
+          tv_add(bx,by2,bw2,bh2); \
           int hv=pt_in(g_mouse.x,g_mouse.y,bx,by2,bw2,bh2); \
           fr(bx,by2,bw2,bh2,0x080820ff); \
           if(hv) fr(bx,by2,bw2,bh2,0xffffff18); \
@@ -2655,9 +2766,12 @@ void sdl_render_game(ClientCtx*c){
     /* ── KEYMAP POPUP (game room) ── */
     if(c->keymap_popup_open) { render_keymap_popup(c, saved_click_g); }
 
+#ifdef PLATFORM_TVOS
+    if(g_tv_actions){g_mouse.clicked=saved_click_g;tv_actions(c);}
+#endif
     g_popup_blocked=0;
     if(action!=BTN_NONE) client_on_button(c,action);
-    SDL_RenderPresent(g_rend);
+    tv_present();
 }
 
 /* SDL maps Xbox / PlayStation buttons to one portable layout. */
@@ -2686,11 +2800,33 @@ static void controller_tick(ClientCtx *c){
         if(x < -16000)buttons|=1u<<SDL_CONTROLLER_BUTTON_DPAD_LEFT;
         if(x > 16000)buttons|=1u<<SDL_CONTROLLER_BUTTON_DPAD_RIGHT;
         if(y > 16000)buttons|=1u<<SDL_CONTROLLER_BUTTON_DPAD_DOWN;
+        if(y < -16000)buttons|=1u<<SDL_CONTROLLER_BUTTON_DPAD_UP;
     }
     int blocked=c->keymap_popup_open||c->about_popup_open||c->music_player_open||c->game_options_popup_open||c->ai_players_popup_open||c->team_popup_open||c->kick_popup_open;
     int context=(int)c->state*2+blocked;
+#ifdef PLATFORM_TVOS
+    context=tv_context(c);
+#endif
     if(context!=g_pad_context){g_pad_buttons=buttons;memset(g_pad_repeat,0,sizeof(g_pad_repeat));g_pad_context=context;return;}
     Uint32 pressed=buttons&~g_pad_buttons;g_pad_buttons=buttons;
+#ifdef PLATFORM_TVOS
+    if(lc_tvos_editing())return;
+    if(tv_menu(c)){
+        const int keys[]={SDL_CONTROLLER_BUTTON_DPAD_LEFT,SDL_CONTROLLER_BUTTON_DPAD_RIGHT,SDL_CONTROLLER_BUTTON_DPAD_UP,SDL_CONTROLLER_BUTTON_DPAD_DOWN};
+        const int dx[]={-1,1,0,0},dy[]={0,0,-1,1};
+        static Uint32 repeat_at;
+        for(int i=0;i<4;i++)if((pressed&(1u<<keys[i])) || ((buttons&(1u<<keys[i])) && (Sint32)(now-repeat_at)>=0)){
+            lc_focus_move(dx[i],dy[i]);repeat_at=now+180;
+        }
+        if(pressed&(1u<<SDL_CONTROLLER_BUTTON_START) && c->paused)client_on_button(c,BTN_RESUME);
+        if(pressed&(1u<<SDL_CONTROLLER_BUTTON_A))tv_select();
+        if(pressed&(1u<<SDL_CONTROLLER_BUTTON_B)){if(g_tv_actions)g_tv_actions=0;else if(tv_room_options)tv_room_options=0;else if(c->state==CS_ACCOUNT && tv_account_form)tv_account_form=0;else if(c->state!=CS_SERVER_LIST || blocked || c->server_popup_open)client_on_key(c,41,27,0,NULL);}
+        return;
+    }
+    if(pressed&(1u<<SDL_CONTROLLER_BUTTON_BACK)){g_tv_actions=1;return;}
+    if(pressed&(1u<<SDL_CONTROLLER_BUTTON_RIGHTSHOULDER))tv_target(c,1);
+    if(pressed&(1u<<SDL_CONTROLLER_BUTTON_RIGHTSTICK))client_on_button(c,BTN_FIRE_SPECIAL);
+#endif
     if(blocked)return;
     if(c->state==CS_PLAYING){
         for(int i=0;i<SDL_CONTROLLER_BUTTON_MAX;i++)if(pressed&(1u<<i)){int key=controller_key(c,i);if(key)client_on_key(c,key,0,0,NULL);}
@@ -2712,9 +2848,57 @@ int sdl_poll_events(ClientCtx *c) {
         switch (ev.type) {
         case SDL_QUIT: return 0;
         case SDL_KEYDOWN:
+#ifdef PLATFORM_TVOS
+            if(lc_tvos_editing())break;
+            if(tv_menu(c)){
+                switch(ev.key.keysym.sym){
+                case SDLK_LEFT:lc_focus_move(-1,0);break;
+                case SDLK_RIGHT:lc_focus_move(1,0);break;
+                case SDLK_UP:lc_focus_move(0,-1);break;
+                case SDLK_DOWN:lc_focus_move(0,1);break;
+                case SDLK_RETURN:case SDLK_SPACE:tv_select();break;
+                case SDLK_ESCAPE:case SDLK_AC_BACK:
+                    if(g_tv_actions){g_tv_actions=0;break;}
+                    if(tv_room_options){tv_room_options=0;break;}
+                    if(c->state==CS_ACCOUNT && tv_account_form){tv_account_form=0;break;}
+                    if(c->state!=CS_SERVER_LIST || c->keymap_popup_open || c->about_popup_open || c->server_popup_open)client_on_key(c,41,27,0,NULL);
+                    break;
+                default:client_on_key(c,ev.key.keysym.scancode,ev.key.keysym.sym,0,NULL);break;
+                }
+                break;
+            }
+            if(ev.key.keysym.sym==SDLK_ESCAPE || ev.key.keysym.sym==SDLK_AC_BACK){g_tv_actions=1;break;}
+            if(ev.key.keysym.sym==SDLK_RETURN){client_on_key(c,c->km.rotate_cw,0,0,NULL);break;}
+            if(ev.key.keysym.sym==SDLK_PAUSE || ev.key.keysym.sym==SDLK_AUDIOPLAY){client_on_key(c,c->km.hold,0,0,NULL);break;}
+            if(ev.key.keysym.sym==SDLK_UP){client_on_key(c,c->km.hard_drop,0,0,NULL);break;}
+            {int i=ev.key.keysym.sym==SDLK_LEFT?0:ev.key.keysym.sym==SDLK_RIGHT?1:ev.key.keysym.sym==SDLK_DOWN?2:-1;
+             if(i>=0){int keys[]={c->km.move_left,c->km.move_right,c->km.soft_drop};
+                 if(!(g_remote_held&(1u<<i))){g_remote_held|=1u<<i;g_remote_repeat[i]=SDL_GetTicks()+160;client_on_key(c,keys[i],0,0,NULL);}break;}}
+#endif
             client_on_key(c, ev.key.keysym.scancode, ev.key.keysym.sym, 0, NULL);
             break;
+#ifdef PLATFORM_TVOS
+        case SDL_FINGERDOWN:g_tv_touch_x=ev.tfinger.x;g_tv_touch_y=ev.tfinger.y;break;
+        case SDL_FINGERMOTION:{
+            if(lc_tvos_editing())break;
+            float dx=ev.tfinger.x-g_tv_touch_x,dy=ev.tfinger.y-g_tv_touch_y;
+            if(fabsf(dx)<.08f && fabsf(dy)<.08f)break;
+            int x=fabsf(dx)>fabsf(dy)?(dx>0?1:-1):0,y=x?0:(dy>0?1:-1);
+            g_tv_touch_x=ev.tfinger.x;g_tv_touch_y=ev.tfinger.y;
+            if(tv_menu(c))lc_focus_move(x,y);
+            else if(c->state==CS_PLAYING)client_on_key(c,x<0?c->km.move_left:x>0?c->km.move_right:y>0?c->km.soft_drop:c->km.hard_drop,0,0,NULL);
+            break;
+        }
+        case SDL_KEYUP:{
+            int i=ev.key.keysym.sym==SDLK_LEFT?0:ev.key.keysym.sym==SDLK_RIGHT?1:ev.key.keysym.sym==SDLK_DOWN?2:-1;
+            if(i>=0)g_remote_held&=~(1u<<i);break;
+        }
+        case SDL_APP_WILLENTERBACKGROUND:g_remote_held=0;g_pad_buttons=0;break;
+#endif
         case SDL_TEXTINPUT:
+#ifdef PLATFORM_TVOS
+            break; /* UIKit owns text input on TV, including hardware keyboards. */
+#endif
             client_on_key(c, 0, 0, 1, ev.text.text);
             break;
         case SDL_MOUSEWHEEL: {
@@ -2735,6 +2919,9 @@ int sdl_poll_events(ClientCtx *c) {
             g_mouse.y = ev.motion.y;
             break;
         case SDL_MOUSEBUTTONDOWN:
+#ifdef PLATFORM_TVOS
+            if(ev.button.which==SDL_TOUCH_MOUSEID)break;
+#endif
             if (ev.button.button == SDL_BUTTON_LEFT) {
                 g_mouse.x = ev.button.x;
                 g_mouse.y = ev.button.y;
@@ -2748,6 +2935,11 @@ int sdl_poll_events(ClientCtx *c) {
         default: break;
         }
     }
+#ifdef PLATFORM_TVOS
+    if(tv_menu(c) || lc_tvos_editing() || !(SDL_GetWindowFlags(g_win)&SDL_WINDOW_INPUT_FOCUS))g_remote_held=0;
+    else {int keys[]={c->km.move_left,c->km.move_right,c->km.soft_drop};Uint32 now=SDL_GetTicks();
+        for(int i=0;i<3;i++)if((g_remote_held&(1u<<i)) && (Sint32)(now-g_remote_repeat[i])>=0){client_on_key(c,keys[i],0,0,NULL);g_remote_repeat[i]=now+(i==2?45:65);}}
+#endif
     controller_tick(c);
     return c->running;
 }
@@ -2756,7 +2948,11 @@ int sdl_poll_events(ClientCtx *c) {
 void sdl_set_ui_options(int scale,int patterns,int contrast){
     g_patterns=patterns;g_high_contrast=contrast;
     if(scale!=75&&scale!=100&&scale!=125&&scale!=150)scale=100;
-    if(g_win && scale!=g_ui_scale){
+    if(g_win && scale!=g_ui_scale
+#ifdef PLATFORM_TVOS
+       && 0
+#endif
+    ){
         SDL_Rect bounds={0,0,WIN_W*2,WIN_H*2};int display=SDL_GetWindowDisplayIndex(g_win);
         SDL_GetDisplayUsableBounds(display<0?0:display,&bounds);
         int w=WIN_W*scale/100,h=WIN_H*scale/100;
@@ -2769,6 +2965,11 @@ int sdl_init(void) {
     g_ui_scale=100;
     /* The game owns its entry point on every platform, including WinMain. */
     SDL_SetMainReady();
+#ifdef PLATFORM_TVOS
+    SDL_SetHint(SDL_HINT_TV_REMOTE_AS_JOYSTICK,"0");
+    SDL_SetHint(SDL_HINT_APPLE_TV_CONTROLLER_UI_EVENTS,"0");
+    SDL_SetHint(SDL_HINT_ENABLE_SCREEN_KEYBOARD,"0");
+#endif
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 0;
@@ -2781,6 +2982,9 @@ int sdl_init(void) {
         SDL_Quit();
         return 0;
     }
+#ifdef PLATFORM_TVOS
+    lc_tvos_attach_window(g_win);
+#endif
     g_rend = SDL_CreateRenderer(g_win, -1,
                                 SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!g_rend) {
@@ -2798,7 +3002,9 @@ int sdl_init(void) {
     SDL_RenderSetLogicalSize(g_rend, WIN_W, WIN_H);
     SDL_SetRenderDrawBlendMode(g_rend, SDL_BLENDMODE_NONE);
     ui_font_init();
+#ifndef PLATFORM_TVOS
     SDL_StartTextInput();
+#endif
     return 1;
 }
 
@@ -2839,7 +3045,9 @@ const char *sdl_get_res_dir(void) {
 }
 
 void sdl_text_start(void) {
+#ifndef PLATFORM_TVOS
     SDL_StartTextInput();
+#endif
 }
 
 static void account_notice(int x,int y,int width,const char *message,uint32_t colour){
@@ -2854,6 +3062,10 @@ static void account_notice(int x,int y,int width,const char *message,uint32_t co
     }
 }
 void sdl_render_accounts(ClientCtx *c){
+    tv_begin(c);
+#ifdef PLATFORM_TVOS
+    tv_account(c);return;
+#endif
     int busy=account_https_busy(),ready=client_account_ready(c),creating=c->account_create_mode;
     const int x=(WIN_W-420)/2,w=420;
     SDL_SetRenderDrawColor(g_rend,0x0d,0x0d,0x1a,0xff);SDL_RenderClear(g_rend);
@@ -2905,5 +3117,5 @@ void sdl_render_accounts(ClientCtx *c){
         if(!busy)account_notice(x,creating?714:680,w,c->account_message,(!strncmp(c->account_message,"Signed out",10) || !strncmp(c->account_message,"Check your email",16))?COL_GRAY:0xe78284ff);
     }
     dtc(WIN_W/2,WIN_H-28,"LINECLASH / v" TETRINETZ_VERSION,0x7489a6ff,1);
-    SDL_RenderPresent(g_rend);
+    tv_present();
 }

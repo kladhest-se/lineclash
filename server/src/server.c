@@ -2136,6 +2136,9 @@ void server_run(int port, const char *cfg_path) {
     log_info("LineClash server started on port %d", port);
     log_info("%d lobbies available", g_server.lobby_count);
     log_info("Press Ctrl+C to stop. Type 'help' for console commands.");
+#ifdef PLATFORM_POSIX
+    int console_open=1;
+#endif
     server_api_init();
     g_cfg.port=port;server_directory_start();server_lan_start();
 
@@ -2202,7 +2205,7 @@ void server_run(int port, const char *cfg_path) {
 
         /* Watch stdin for console commands (POSIX only — Windows uses a thread) */
 #if defined(PLATFORM_POSIX)
-        FD_SET(0, &read_fds);  /* STDIN_FILENO = 0 */
+        if(console_open)FD_SET(0, &read_fds);  /* EOF is permanent for systemd /dev/null. */
         if ((sock_t)0 > max_fd) max_fd = (sock_t)0;
 #endif
 
@@ -2349,7 +2352,7 @@ void server_run(int port, const char *cfg_path) {
 
         /* ---- Server console (stdin) ---- */
 #if defined(PLATFORM_POSIX)
-        if (FD_ISSET(0, &read_fds)) {
+        if (console_open && FD_ISSET(0, &read_fds)) {
             /* Simple in-memory command history (non-persistent) */
             static char hist[64][512];
             static int  hist_count=0, hist_pos=-1;
@@ -2370,7 +2373,7 @@ void server_run(int port, const char *cfg_path) {
                     server_console_command(console_line); /* slash stripped inside */
                 }
                 (void)hist_pos;
-            }
+            } else console_open=0;
         }
 #endif
         /* API status port */

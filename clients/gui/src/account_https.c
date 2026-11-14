@@ -4,11 +4,13 @@
 #ifdef PLATFORM_WINDOWS
 #include <windows.h>
 #include <winhttp.h>
+#elif defined(PLATFORM_TVOS)
+#include "tvos_platform.h"
 #else
 #include <curl/curl.h>
 #endif
 static struct {SDL_Thread *thread;SDL_atomic_t done;char body[1024],reply[512];size_t used;int ok;} auth;
-#ifndef PLATFORM_WINDOWS
+#if !defined(PLATFORM_WINDOWS) && !defined(PLATFORM_TVOS)
 static size_t auth_read(char *data,size_t size,size_t count,void *unused){(void)unused;size_t n=size*count;if(n>=sizeof(auth.reply)-auth.used || memchr(data,0,n))return 0;memcpy(auth.reply+auth.used,data,n);auth.used+=n;auth.reply[auth.used]=0;return n;}
 #endif
 static int auth_work(void *unused){
@@ -25,6 +27,9 @@ static int auth_work(void *unused){
         }
     }
     if(r)WinHttpCloseHandle(r);if(c)WinHttpCloseHandle(c);if(s)WinHttpCloseHandle(s);
+#elif defined(PLATFORM_TVOS)
+    status=lc_tvos_http("https://lineclash.kladhest.se/api/",auth.body,auth.reply,sizeof(auth.reply),15000);
+    completed=status>0;
 #else
     CURL *c=curl_easy_init();if(c){
         struct curl_slist *headers=curl_slist_append(NULL,"Content-Type: application/json");
@@ -41,7 +46,7 @@ static int auth_work(void *unused){
 int account_https_busy(void){return auth.thread!=NULL;}
 int account_https_start(const char *body){
     if(auth.thread || strlen(body)>=sizeof(auth.body))return 0;
-#ifndef PLATFORM_WINDOWS
+#if !defined(PLATFORM_WINDOWS) && !defined(PLATFORM_TVOS)
     if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)return 0;
 #endif
     auth.used=0;auth.ok=0;auth.reply[0]=0;snprintf(auth.body,sizeof(auth.body),"%s",body);SDL_AtomicSet(&auth.done,0);auth.thread=SDL_CreateThread(auth_work,"account HTTPS",NULL);
