@@ -3,14 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const script = fs.readFileSync('public-web/assets/password-recovery.js', 'utf8');
-function run(hash, form = true) {
+function run(hash, form = true, search = '', pathname = '/account/recover/') {
     const nodes = {
         'reset-token': {value: ''}, 'recovery-request': {hidden: false},
         'recovery-reset': {hidden: true}, 'reset-password': {focus() {this.focused = true;}}
     };
     const cleared = [];
     vm.runInNewContext(script, {
-        location: {hash, pathname: '/account/recover/'},
+        location: {hash, pathname, search},
         history: {replaceState(...args) {cleared.push(args);}},
         document: {getElementById(id) {return form ? nodes[id] : null;}}
     });
@@ -29,4 +29,5 @@ assert.equal(result.nodes['recovery-request'].hidden, false);
 assert.equal(result.cleared.length, 1);
 assert.equal(run('').cleared.length, 0);
 assert.equal(run('#' + token, false).cleared.length, 1);
+assert.equal(run('#' + token, true, '?mode=recover', '/account/').cleared[0][2], '/account/?mode=recover');
 console.log('PASS: reset fragments move into POST form, leave the address bar, and handle disabled/malformed links');

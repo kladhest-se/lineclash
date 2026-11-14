@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-recovery-') as folder, tempfi
   # Simulate trusted proxy addresses for isolated rate-limit assertions.
   php('$c=require web_config_path();$c["trusted_proxies"]=["127.0.0.1"];file_put_contents(web_config_path(),"<?php return ".var_export($c,true).";");',environment=local)
   app=subprocess.Popen(['php','-d','opcache.enable=0','-S',f'127.0.0.1:{port}','-t',str(ROOT/'public-web'),str(ROOT/'public-web/dev-router.php')],env=local,stdout=log,stderr=log)
-  def call(path='/account/recover/',data=None,api=False):
+  def call(path='/account/?mode=recover',data=None,api=False):
    global cookie,csrf
    headers={'Cookie':cookie,'X-Forwarded-For':peer};body=None
    if data is not None:
@@ -52,8 +52,12 @@ with tempfile.TemporaryDirectory(prefix='lineclash-recovery-') as folder, tempfi
    configure()
    assert 'disabled because SMTP' in call()[1]
    assert 'name="email"' not in call()[1]
+   for path in ('/account/?mode=recover','/account/recover/'):
+    page=call(path)[1]
+    assert all(link in page for link in ('Create an account','>Sign in</a>','Resend activation email','Forgot password?'))
+    assert 'Back to sign in' not in page and 'account-auth' in page
    page=call('/account/')[1]
-   assert all(link in page for link in ('Create an account','>Sign in</a>','Resend activation email','href="recover/">Forgot password?'))
+   assert all(link in page for link in ('Create an account','>Sign in</a>','Resend activation email','?mode=recover">Forgot password?'))
    for invalid_url in ('http://bad.example','https://user:pass@example.test','https://example.test/?bad=1'):
     configure(dict(host='localhost',from_address='sender@example.test'),invalid_url)
     assert 'disabled because SMTP' in call()[1]

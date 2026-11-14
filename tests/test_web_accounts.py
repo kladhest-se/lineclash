@@ -39,8 +39,8 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   assert 'Save your recovery code' not in call()[1] and 'name="recovery"' not in call()[1]
   page=call()[1]
   assert '<h1>Sign in</h1>' in page and 'name="login"' in page
-  assert 'name="handle"' not in page and '?view=register' in page
-  signup_page=call('/account/?view=register')[1]
+  assert 'name="handle"' not in page and '?mode=register' in page
+  signup_page=call('/account/?mode=register')[1]
   assert '<h1>Create account</h1>' in signup_page and 'autocomplete="new-password"' in signup_page
   short=secrets.token_hex(5)+'x'
   invalid=call(data=dict(action='register',handle=handle,password=short))[1]
@@ -137,7 +137,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   status,legacy_session=call('/api/',dict(action='account-client-login',handle=legacy,password=password),True)
   assert status==200 and legacy_session.endswith(' -')
   policy_minimum(6)
-  page=call('/account/?view=register')[1]
+  page=call('/account/?mode=register')[1]
   assert 'minlength="6"' in page, re.findall(r'<h1>.*?</h1>|minlength="[^"]*"|role="alert">[^<]*',page)
   short_handle='v'+secrets.token_hex(5);short_password=secrets.token_hex(3)
   assert 'Use at least 6 characters.' in call(data=dict(action='register',handle=short_handle,password=short_password[:5]))[1]

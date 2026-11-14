@@ -1117,3 +1117,5 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 .account-links a:hover{text-decoration:underline;text-underline-offset:4px}
 .account-auth .account-error,.account-auth .account-notice{margin-bottom:28px}
 @media(max-width:700px){.account-auth{padding-top:44px;padding-bottom:56px}.account-auth h1{margin-bottom:28px}.account-intro{font-size:16px;margin-bottom:24px}.account-links{gap:14px 22px}}
+
+.account-auth .community-section{margin:0}

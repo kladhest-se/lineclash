@@ -1,4 +1,10 @@
 <?php
+// Account modes share the same address, layout and persistent navigation.
+$mode=is_string($_GET['mode']??null)?$_GET['mode']:'';
+if(in_array($mode,['recover','activation'],true)){
+    $accountModePage=true;require __DIR__.($mode==='recover'?'/recover/index.php':'/verify/index.php');exit;
+}
+require_once __DIR__.'/../inc/account-layout.php';
 require_once __DIR__.'/../inc/accounts.php';require_once __DIR__.'/../inc/account-profile.php';require_once __DIR__.'/../inc/password-recovery.php';require_once __DIR__.'/../inc/site.php';account_session();
 $error='';$notice='';$user=null;$code=strtoupper(trim((string)($_POST['code']??$_GET['code']??'')));
 if($_SERVER['REQUEST_METHOD']==='GET' && preg_match('/^[A-F0-9]{8}$/D',$code)){header('Location: ../pin/?code='.rawurlencode($code),true,303);exit;}
@@ -40,13 +46,13 @@ try {
     }
     $user=account_current($db);
 }catch(InvalidArgumentException $e){$error=$e->getMessage();}catch(Throwable $e){error_log('LineClash account error: '.$e->getMessage());$error='Account service unavailable. Try again later.';}
-$register=($_SERVER['REQUEST_METHOD']==='POST'?($_POST['action']??''):($_GET['view']??''))==='register';
+$register=($_SERVER['REQUEST_METHOD']==='POST'?($_POST['action']??''):($_GET['mode']??$_GET['view']??''))==='register';
 if($notice!=='' && !$error)$register=false;
 site_header('Account','account');
 function account_fields(string $code): void {echo '<input type="hidden" name="csrf" value="'.site_h($_SESSION['csrf']).'"><input type="hidden" name="code" value="'.site_h($code).'">';}
 ?>
 <main id="main" class="community-shell<?=empty($user)?' account-auth':''?>"><p class="eyebrow">LineClash account</p><h1><?=!empty($user)?'@'.site_h($user['handle']):($register?'Create account':'Sign in')?></h1>
-<?php if(empty($user)):?><p class="account-intro">One account for public servers, your player identity and match statistics. Private servers can use their own local accounts.</p><?php endif;?>
+<?php if(empty($user))account_intro();?>
 <?php if($error):?><p class="account-error" role="alert"><?=site_h($error)?></p><?php endif;?>
 <?php if($notice):?><p class="account-notice" role="status"><?=site_h($notice)?></p><?php endif;?>
 
@@ -66,12 +72,7 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <input id="account-password" type="password" name="password" required <?=$register?'minlength="'.account_password_min_length().'" ':''?>maxlength="72" autocomplete="<?=$register?'new-password':'current-password'?>">
 <button name="action" value="<?=$register?'register':'login'?>"><?=$register?'Create account':'Sign in'?></button>
 </form>
-<nav class="account-links" aria-label="Account help">
-<a href="?view=register">Create an account</a>
-<a href="./">Sign in</a>
-<a href="verify/">Resend activation email</a>
-<a href="recover/">Forgot password?</a>
-</nav>
+
 <?php else:?>
 <p>Your central player identity is <strong>@<?=site_h($user['handle'])?></strong>. Server permissions and bans remain under each server operator's control.</p>
 <section class="community-section"><h2>Profile settings</h2>
@@ -90,4 +91,4 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <label for="delete-password">Current password</label><input id="delete-password" name="current_password" type="password" maxlength="72" autocomplete="current-password" required>
 <label for="delete-confirmation">Type DELETE to confirm</label><input id="delete-confirmation" name="confirmation" autocomplete="off" pattern="DELETE" required><button name="action" value="delete">Permanently delete account</button></form></details></section>
 <form method="post" class="account-form"><?php account_fields('');?><button name="action" value="logout">Sign out</button></form>
-<?php endif;?></main><?php site_footer();?>
+<?php endif;account_navigation();?></main><?php site_footer();?>

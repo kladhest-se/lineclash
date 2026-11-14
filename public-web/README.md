@@ -50,6 +50,8 @@ Set `account_password_min_length` (1–72 characters; default 12, for example 6 
 
 ## Profile settings and account deletion
 
+The account page keeps the same Create an account, Sign in, Resend activation email and Forgot password links on every account screen. These use `/account/?mode=register`, `/account/`, `/account/?mode=activation` and `/account/?mode=recover`. Existing `/account/verify/`, `/account/recover/` and emailed fragment links remain supported. Confirmation and reset links still require explicit POST submission; opening a link does not change credentials or activate an account.
+
 Signed-in users can update email/password or permanently delete their central account through `/account/`. Current-password confirmation and CSRF protection are required. Email changes follow the configured verification policy. Deletion erases live personal account data and tokens, anonymizes names in results/replays and keeps scores, placements and team wins. Replay checksums are refreshed and deleted players display as `DELETED PLAYER`.
 
 Run `php bin/manage.php migrate` and update/restart `scripts/server_directory.py` on result-reporting servers. Central result uploads now need immutable account IDs; old or mismatched identities are anonymized so delayed uploads cannot restore deleted names. The runtime DB user needs project CRUD rights, including result UPDATE and account/token DELETE. Team totals are available through `/api/?action=teams` and Statistics. Independent servers, downloaded files and backups have separate retention. Full deployment and privacy behavior is documented in the repository web-service guide.

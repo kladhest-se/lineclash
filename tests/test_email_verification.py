@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-activation-') as folder, temp
   cookie='';csrf='';source=10;password='secret' # Six characters, enabled by the site policy.
   with socket.socket() as s:s.bind(('127.0.0.1',0));port=s.getsockname()[1]
   app=subprocess.Popen(['php','-d','opcache.enable=0','-S',f'127.0.0.1:{port}','-t',str(ROOT/'public-web'),str(ROOT/'public-web/dev-router.php')],env=local,stdout=log,stderr=log)
-  def call(path='/account/verify/',data=None,api=False):
+  def call(path='/account/?mode=activation',data=None,api=False):
    global cookie,csrf
    headers={'Cookie':cookie,'X-Forwarded-For':f'198.18.33.{source}'};body=None
    if data is not None:

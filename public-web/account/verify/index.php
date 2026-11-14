@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__.'/../../inc/account-layout.php';
+$siteRoot=!empty($accountModePage)?'../':'../../';$accountRoot=!empty($accountModePage)?'./':'../';
 require_once __DIR__.'/../../inc/email-verification.php';require_once __DIR__.'/../../inc/site.php';
 account_session();header('Cache-Control: no-store');header('Referrer-Policy: no-referrer');
 $enabled=account_email_verification_required();$error='';$notice='';$confirm=false;
@@ -15,9 +17,9 @@ try{
     }
 }catch(InvalidArgumentException $e){$error=$e->getMessage();}
 catch(Throwable $e){error_log('LineClash email activation: '.$e->getMessage());http_response_code(503);$error='Email activation is temporarily unavailable. Try again later.';}
-site_header('Verify email','account','../../');
+site_header('Verify email','account',$siteRoot);
 ?>
-<main id="main" class="community-shell"><p class="eyebrow">LineClash account</p><h1>Verify your email.</h1>
+<main id="main" class="community-shell account-auth"><p class="eyebrow">LineClash account</p><h1>Activate your account</h1><?php account_intro();?>
 <?php if($error):?><p class="account-error" role="alert"><?=site_h($error)?></p><?php endif;?>
 <?php if($notice):?><p class="account-notice" role="status"><?=site_h($notice)?></p><?php endif;?>
 <?php if(!$notice || $error):?>
@@ -30,6 +32,6 @@ site_header('Verify email','account','../../');
 <p>Confirm only if you created this LineClash account. Verifying the address activates your account; you will then sign in with the password you chose.</p>
 <form method="post" class="account-form"><input type="hidden" name="csrf" value="<?=site_h($_SESSION['csrf'])?>"><input type="hidden" name="action" value="confirm"><input id="verification-token" type="hidden" name="token" value="<?=site_h(is_string($_POST['token']??null)?$_POST['token']:'')?>"><button id="verify-email">Verify email</button></form></section>
 <noscript><p>Enable JavaScript to open the private activation link from your email.</p></noscript>
-<?php endif;?><p><a href="../">Back to sign in</a></p></main>
-<script src="../../assets/email-verification.js" defer></script>
-<?php site_footer('../../');?>
+<?php endif;?><?php account_navigation($accountRoot);?></main>
+<script src="<?=site_h($siteRoot)?>assets/email-verification.js" defer></script>
+<?php site_footer($siteRoot);?>

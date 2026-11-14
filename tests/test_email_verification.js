@@ -3,14 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const script = fs.readFileSync('public-web/assets/email-verification.js', 'utf8');
-function run(hash, form = true) {
+function run(hash, form = true, search = '', pathname = '/account/verify/') {
     const nodes = {
         'verification-token': {value: ''}, 'verification-request': {hidden: false},
         'verification-confirm': {hidden: true}, 'verify-email': {focus() {this.focused = true;}}
     };
     const cleared = [];
     vm.runInNewContext(script, {
-        location: {hash, pathname: '/account/verify/'},
+        location: {hash, pathname, search},
         history: {replaceState(...args) {cleared.push(args);}},
         document: {getElementById(id) {return form ? nodes[id] : null;}}
     });
@@ -29,4 +29,5 @@ assert.equal(result.nodes['verification-request'].hidden, false);
 assert.equal(result.cleared.length, 1);
 assert.equal(run('').cleared.length, 0);
 assert.equal(run('#' + token, false).cleared.length, 1);
+assert.equal(run('#' + token, true, '?mode=activation', '/account/').cleared[0][2], '/account/?mode=activation');
 console.log('PASS: activation fragments move into explicit POST forms without activating on GET');

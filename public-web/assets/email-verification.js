@@ -1,7 +1,7 @@
 // Verification is an explicit POST; mail scanners cannot activate accounts with GET.
 (() => {
     const token = location.hash.slice(1);
-    if (location.hash) history.replaceState(null, '', location.pathname);
+    if (location.hash) history.replaceState(null, '', location.pathname + (location.search || ''));
     if (!/^[a-f0-9]{64}$/.test(token)) return;
     const field = document.getElementById('verification-token');
     if (!field) return;
