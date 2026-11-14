@@ -29,7 +29,8 @@ try {
                 $user=account_register($db,$handle,$email,$password);$notice=$user['email_pending']?'Check your email to activate your account, then sign in.':'Account created.';
                 if(!$user['email_pending']){session_regenerate_id(true);$_SESSION['account_id']=$user['id'];$_SESSION['auth_version']=1;}
             }else{
-                $candidate=account_lookup($db,$email!==''?$email:$handle);
+                $login=is_string($_POST['login']??null)?$_POST['login']:($email!==''?$email:$handle);
+                $candidate=account_lookup($db,$login);
                 $valid=$candidate && password_verify($password,$candidate['password_hash']);
                 if(!$valid){password_verify($password,'$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.');throw new InvalidArgumentException('Sign-in details did not match.');}
                 account_assert_verified($candidate);$user=$candidate;session_regenerate_id(true);$_SESSION['account_id']=$user['id'];$_SESSION['auth_version']=(int)$user['auth_version'];
@@ -39,26 +40,37 @@ try {
     }
     $user=account_current($db);
 }catch(InvalidArgumentException $e){$error=$e->getMessage();}catch(Throwable $e){error_log('LineClash account error: '.$e->getMessage());$error='Account service unavailable. Try again later.';}
+$register=($_SERVER['REQUEST_METHOD']==='POST'?($_POST['action']??''):($_GET['view']??''))==='register';
+if($notice!=='' && !$error)$register=false;
 site_header('Account','account');
 function account_fields(string $code): void {echo '<input type="hidden" name="csrf" value="'.site_h($_SESSION['csrf']).'"><input type="hidden" name="code" value="'.site_h($code).'">';}
 ?>
-<main id="main" class="community-shell"><p class="eyebrow">LineClash account</p><h1><?=!empty($user)?'@'.site_h($user['handle']):'Sign in. Play anywhere.'?></h1>
+<main id="main" class="community-shell<?=empty($user)?' account-auth':''?>"><p class="eyebrow">LineClash account</p><h1><?=!empty($user)?'@'.site_h($user['handle']):($register?'Create account':'Sign in')?></h1>
+<?php if(empty($user)):?><p class="account-intro">One account for public servers, your player identity and match statistics. Private servers can use their own local accounts.</p><?php endif;?>
 <?php if($error):?><p class="account-error" role="alert"><?=site_h($error)?></p><?php endif;?>
 <?php if($notice):?><p class="account-notice" role="status"><?=site_h($notice)?></p><?php endif;?>
 
 <?php if(empty($user)):?>
-<section class="community-section"><form method="post" class="account-form" novalidate>
+<form method="post" class="account-form" novalidate>
 <?php account_fields($code);?>
+<?php if($register):?>
+<label for="account-handle">Username</label>
+<input id="account-handle" name="handle" minlength="3" maxlength="14" autocomplete="username" pattern="[A-Za-z][A-Za-z0-9_]{2,13}" required value="<?=site_h(is_string($_POST['handle']??null)?$_POST['handle']:'')?>">
 <label for="account-email">Email</label>
-<input id="account-email" name="email" type="email" maxlength="254" autocomplete="email" value="<?=site_h(is_string($_POST['email']??null)?$_POST['email']:'')?>">
-<label for="account-handle">Username (new accounts)</label>
-<input id="account-handle" name="handle" minlength="3" maxlength="14" autocomplete="username" pattern="[A-Za-z][A-Za-z0-9_]{2,13}" value="<?=site_h(is_string($_POST['handle']??null)?$_POST['handle']:'')?>">
+<input id="account-email" name="email" type="email" maxlength="254" autocomplete="email" required value="<?=site_h(is_string($_POST['email']??null)?$_POST['email']:'')?>">
+<?php else:?>
+<label for="account-login">Username or email</label>
+<input id="account-login" name="login" maxlength="254" autocomplete="username" required value="<?=site_h(is_string($_POST['login']??null)?$_POST['login']:'')?>">
+<?php endif;?>
 <label for="account-password">Password</label>
-<input id="account-password" type="password" name="password" required minlength="<?=account_password_min_length()?>" maxlength="72" autocomplete="current-password">
-<button name="action" value="login">Sign in</button><button name="action" value="register">Create account</button>
+<input id="account-password" type="password" name="password" required <?=$register?'minlength="'.account_password_min_length().'" ':''?>maxlength="72" autocomplete="<?=$register?'new-password':'current-password'?>">
+<button name="action" value="<?=$register?'register':'login'?>"><?=$register?'Create account':'Sign in'?></button>
+</form>
+<nav class="account-links" aria-label="Account help">
+<?php if($register):?><a href="./">Sign in</a><?php else:?><a href="?view=register">Create an account</a><?php endif;?>
 <a href="verify/">Resend activation email</a>
-</form></section>
-<?php if(account_recovery_settings()):?><p><a href="recover/">Forgot password?</a></p><?php else:?><p>Email password recovery is disabled because SMTP is not configured.</p><?php endif;?>
+<?php if(account_recovery_settings()):?><a href="recover/">Forgot password?</a><?php endif;?>
+</nav>
 <?php else:?>
 <p>Your central player identity is <strong>@<?=site_h($user['handle'])?></strong>. Server permissions and bans remain under each server operator's control.</p>
 <section class="community-section"><h2>Profile settings</h2>

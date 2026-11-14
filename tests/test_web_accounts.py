@@ -38,7 +38,10 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   assert csrf
   assert 'Save your recovery code' not in call()[1] and 'name="recovery"' not in call()[1]
   page=call()[1]
-  assert 'novalidate' in page
+  assert '<h1>Sign in</h1>' in page and 'name="login"' in page
+  assert 'name="handle"' not in page and '?view=register' in page
+  signup_page=call('/account/?view=register')[1]
+  assert '<h1>Create account</h1>' in signup_page and 'autocomplete="new-password"' in signup_page
   short=secrets.token_hex(5)+'x'
   invalid=call(data=dict(action='register',handle=handle,password=short))[1]
   assert 'Password is too short. Use at least 12 characters.' in invalid
@@ -61,8 +64,8 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   body=call('/api/',dict(request,action='account-poll'),True)[1];assert body.startswith('central-approved ') and body.endswith(' '+handle),body
   assert call('/api/',dict(request,action='account-poll'),True)[1].startswith('central-error')
   assert call('/api/',dict(request,action='account-poll',server_key='f'*64),True)[0]==403
-  call(data=dict(action='logout'));assert 'Sign in. Play anywhere.' in call()[1]
-  call(data=dict(action='login',handle=handle,password=password));assert '@'+handle in call()[1]
+  call(data=dict(action='logout'));assert '<h1>Sign in</h1>' in call()[1]
+  call(data=dict(action='login',login=handle,password=password));assert '@'+handle in call()[1]
   # Native profiles never send a browser session or a password to the game server.
   request_login=dict(action='account-client-login',handle=handle,password=password)
   status,bad=call('/api/',dict(request_login,password='incorrect-but-long'),True)
@@ -134,7 +137,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   status,legacy_session=call('/api/',dict(action='account-client-login',handle=legacy,password=password),True)
   assert status==200 and legacy_session.endswith(' -')
   policy_minimum(6)
-  page=call()[1]
+  page=call('/account/?view=register')[1]
   assert 'minlength="6"' in page, re.findall(r'<h1>.*?</h1>|minlength="[^"]*"|role="alert">[^<]*',page)
   short_handle='v'+secrets.token_hex(5);short_password=secrets.token_hex(3)
   assert 'Use at least 6 characters.' in call(data=dict(action='register',handle=short_handle,password=short_password[:5]))[1]

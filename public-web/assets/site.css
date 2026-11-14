@@ -1103,3 +1103,17 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 .account-danger{border-top:1px solid var(--red);padding-top:28px}
 .account-danger button{background:var(--red);color:var(--crust)}
 @media(max-width:700px){.account-settings{grid-template-columns:1fr;gap:12px}}
+
+/* Focused account entry, with registration on its own view. */
+.account-auth{padding-top:72px;padding-bottom:88px}
+.account-auth h1{font-size:clamp(52px,7vw,88px);line-height:1.05;letter-spacing:-.055em;margin:24px 0 44px}
+.account-intro{max-width:1000px;color:var(--subtext1);font-size:18px;line-height:1.75;margin:0 0 36px}
+.account-auth .account-form{max-width:640px;gap:12px;margin:0}
+.account-auth .account-form label{font-weight:600;margin-top:12px}
+.account-auth .account-form input{min-height:58px;padding:14px 16px;font-size:17px;border-radius:4px}
+.account-auth .account-form button{justify-self:start;min-width:116px;margin-top:12px;padding:15px 25px;font-weight:600;border-radius:4px}
+.account-links{display:flex;flex-wrap:wrap;gap:14px 28px;margin-top:34px}
+.account-links a{color:var(--mauve);text-decoration:none}
+.account-links a:hover{text-decoration:underline;text-underline-offset:4px}
+.account-auth .account-error,.account-auth .account-notice{margin-bottom:28px}
+@media(max-width:700px){.account-auth{padding-top:44px;padding-bottom:56px}.account-auth h1{margin-bottom:28px}.account-intro{font-size:16px;margin-bottom:24px}.account-links{gap:14px 22px}}
