@@ -52,7 +52,8 @@ with tempfile.TemporaryDirectory(prefix='lineclash-recovery-') as folder, tempfi
    configure()
    assert 'disabled because SMTP' in call()[1]
    assert 'name="email"' not in call()[1]
-   assert 'disabled because SMTP' in call('/account/')[1]
+   page=call('/account/')[1]
+   assert all(link in page for link in ('Create an account','>Sign in</a>','Resend activation email','href="recover/">Forgot password?'))
    for invalid_url in ('http://bad.example','https://user:pass@example.test','https://example.test/?bad=1'):
     configure(dict(host='localhost',from_address='sender@example.test'),invalid_url)
     assert 'disabled because SMTP' in call()[1]

@@ -67,9 +67,10 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <button name="action" value="<?=$register?'register':'login'?>"><?=$register?'Create account':'Sign in'?></button>
 </form>
 <nav class="account-links" aria-label="Account help">
-<?php if($register):?><a href="./">Sign in</a><?php else:?><a href="?view=register">Create an account</a><?php endif;?>
+<a href="?view=register">Create an account</a>
+<a href="./">Sign in</a>
 <a href="verify/">Resend activation email</a>
-<?php if(account_recovery_settings()):?><a href="recover/">Forgot password?</a><?php endif;?>
+<a href="recover/">Forgot password?</a>
 </nav>
 <?php else:?>
 <p>Your central player identity is <strong>@<?=site_h($user['handle'])?></strong>. Server permissions and bans remain under each server operator's control.</p>
