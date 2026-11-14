@@ -1,4 +1,4 @@
-// Verification is an explicit POST; mail scanners cannot activate accounts with GET.
+// Opening the email link submits its private fragment through a CSRF-protected POST.
 (() => {
     const token = location.hash.slice(1);
     if (location.hash) history.replaceState(null, '', location.pathname + (location.search || ''));
@@ -8,5 +8,5 @@
     field.value = token;
     document.getElementById('verification-request').hidden = true;
     document.getElementById('verification-confirm').hidden = false;
-    document.getElementById('verify-email').focus();
+    document.getElementById('verification-form').requestSubmit();
 })();

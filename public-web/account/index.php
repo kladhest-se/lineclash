@@ -6,7 +6,7 @@ if(in_array($mode,['recover','activation'],true)){
 }
 require_once __DIR__.'/../inc/account-layout.php';
 require_once __DIR__.'/../inc/accounts.php';require_once __DIR__.'/../inc/account-profile.php';require_once __DIR__.'/../inc/password-recovery.php';require_once __DIR__.'/../inc/site.php';account_session();
-$error='';$notice='';$user=null;$code=strtoupper(trim((string)($_POST['code']??$_GET['code']??'')));
+$error='';$notice=is_string($_SESSION['account_notice']??null)?$_SESSION['account_notice']:'';unset($_SESSION['account_notice']);$user=null;$code=strtoupper(trim((string)($_POST['code']??$_GET['code']??'')));
 if($_SERVER['REQUEST_METHOD']==='GET' && preg_match('/^[A-F0-9]{8}$/D',$code)){header('Location: ../pin/?code='.rawurlencode($code),true,303);exit;}
 try {
     $db=database();$user=account_current($db);

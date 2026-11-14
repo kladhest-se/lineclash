@@ -28,17 +28,25 @@ with tempfile.TemporaryDirectory(prefix='lineclash-activation-') as folder, temp
   cookie='';csrf='';source=10;password='secret' # Six characters, enabled by the site policy.
   with socket.socket() as s:s.bind(('127.0.0.1',0));port=s.getsockname()[1]
   app=subprocess.Popen(['php','-d','opcache.enable=0','-S',f'127.0.0.1:{port}','-t',str(ROOT/'public-web'),str(ROOT/'public-web/dev-router.php')],env=local,stdout=log,stderr=log)
+  class NoRedirect(urllib.request.HTTPRedirectHandler):
+   def redirect_request(self,*args,**kwargs):return None
+  opener=urllib.request.build_opener(NoRedirect)
   def call(path='/account/?mode=activation',data=None,api=False):
    global cookie,csrf
    headers={'Cookie':cookie,'X-Forwarded-For':f'198.18.33.{source}'};body=None
    if data is not None:
     headers['Content-Type']='application/json' if api else 'application/x-www-form-urlencoded'
     body=(json.dumps(data) if api else urllib.parse.urlencode(dict(csrf=csrf,**data))).encode()
-   try:r=urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{port}'+path,body,headers),timeout=5)
-   except urllib.error.HTTPError as e:r=e
-   for value in r.headers.get_all('Set-Cookie',[]):
-    c=http.cookies.SimpleCookie(value)
-    if 'lineclash_account' in c:cookie='lineclash_account='+c['lineclash_account'].value
+   url=f'http://127.0.0.1:{port}'+path
+   for _ in range(5):
+    try:r=opener.open(urllib.request.Request(url,body,headers),timeout=5)
+    except urllib.error.HTTPError as e:r=e
+    for value in r.headers.get_all('Set-Cookie',[]):
+     c=http.cookies.SimpleCookie(value)
+     if 'lineclash_account' in c:cookie='lineclash_account='+c['lineclash_account'].value
+    if r.code not in (302,303):break
+    url=urllib.parse.urljoin(url,r.headers['Location']);assert url.startswith(f'http://127.0.0.1:{port}/')
+    r.close();body=None;headers={'Cookie':cookie,'X-Forwarded-For':f'198.18.33.{source}'}
    text=r.read().decode();m=re.search(r'name="csrf" value="([a-f0-9]+)"',text)
    if m:csrf=m[1]
    return r.code,text,r.headers
@@ -100,10 +108,17 @@ with tempfile.TemporaryDirectory(prefix='lineclash-activation-') as folder, temp
    notice=call(data=dict(action='resend',email='pending@example.test'))[1];assert 'If an account is waiting' in notice
    second=token(relay);assert second!=first
    assert 'invalid or expired' in call(data=dict(action='confirm',token=first))[1]
-   assert 'Email verified.' in call(data=dict(action='confirm',token=second))[1]
+   # A successful link replaces any old browser identity, rotates the cookie and opens the profile.
+   call('/account/');assert '<h1>@legacy' in call('/account/',dict(action='login',login='legacy',password=password))[1]
+   old_cookie=cookie
+   page=call(data=dict(action='confirm',token=second))[1]
+   assert 'Email verified. You are now signed in.' in page and '<h1>@pending' in page
+   assert cookie!=old_cookie and second not in page
+   assert '<h1>@pending' in call('/account/')[1]
    assert rows("SELECT email_pending,auth_version FROM accounts WHERE handle='pending'")[0]==dict(email_pending=0,auth_version=2)
    assert not rows('SELECT * FROM account_email_verifications')
    call();assert 'invalid or expired' in call(data=dict(action='confirm',token=second))[1]
+   assert '<h1>@pending' in call('/account/')[1] # Failed/replayed links do not replace a valid session.
    assert api('account-client-login',login='pending@example.test',password=password)[0]==200
    assert api('account-client-logout',session=temporary_session)[0]==401
    source+=1
@@ -126,8 +141,14 @@ with tempfile.TemporaryDirectory(prefix='lineclash-activation-') as folder, temp
    source+=1;relay=Relay();configure(True,relay);assert register('changed')[0]==200
    changed_token=token(relay);sql("UPDATE accounts SET email='different@example.test' WHERE handle='changed'");call()
    assert 'invalid or expired' in call(data=dict(action='confirm',token=changed_token))[1]
+   # Existing emailed /account/verify/ links also establish a browser session.
+   source+=1;cookie='';relay=Relay();configure(True,relay);assert register('clicked')[0]==200
+   clicked_token=token(relay);call('/account/verify/')
+   page=call('/account/verify/',dict(action='confirm',token=clicked_token))[1]
+   assert '<h1>@clicked' in page and 'Email verified. You are now signed in.' in page
+   assert '<h1>@clicked' in call('/account/')[1]
    # Disabling the option restores immediate registration even without SMTP.
    source+=1;configure(False);assert register('disabled')[1].startswith('central-session ')
-   print('PASS: configurable six-character passwords, SMTP prerequisite/rollback, pending browser/native/PIN/legacy gates, hash-only 24-hour activation, CSRF, single use, expiry/resend/limits, disabled-account/email binding, migration compatibility and runtime opt-out')
+   print('PASS: configurable six-character passwords, SMTP prerequisite/rollback, pending browser/native/PIN/legacy gates, hash-only 24-hour activation, automatic website sign-in/redirect with rotated session, CSRF, single use, expiry/resend/limits, disabled-account/email binding, migration compatibility and runtime opt-out')
   finally:app.terminate();app.wait(timeout=5)
  finally:php('database()->exec("DROP DATABASE `".$argv[2]."`");',name)

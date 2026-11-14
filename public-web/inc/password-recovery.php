@@ -36,6 +36,7 @@ function account_recovery_reset(PDO $db,string $token,string $password): void {
         $q=$db->prepare("UPDATE accounts SET password_hash=?,auth_version=auth_version+1,recovery_hash='' WHERE id=?");$q->execute([$passwordHash,$reset['account_id']]);
         $q=$db->prepare('UPDATE account_sessions SET revoked=1 WHERE account_id=?');$q->execute([$reset['account_id']]);
         $q=$db->prepare("UPDATE account_devices SET state='used' WHERE account_id=?");$q->execute([$reset['account_id']]);
+        $db->prepare('DELETE FROM account_email_verifications WHERE account_id=?')->execute([$reset['account_id']]);
         $q=$db->prepare('DELETE FROM account_password_resets WHERE account_id=?');$q->execute([$reset['account_id']]);
         $db->commit();
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}

@@ -68,6 +68,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-recovery-') as folder, tempfi
    # An approved game connection must also become unusable after a password reset.
    server_key=secrets.token_hex(32);nonce=secrets.token_hex(32)
    account_id=json.loads(query('SELECT id FROM accounts'))[0]['id']
+   sql("INSERT INTO account_email_verifications(account_id,token_hash,email,expires) VALUES('"+account_id+"','"+'a'*64+"','"+email+"',"+str(int(time.time()+86400))+")")
    sql("INSERT INTO directory_servers(id,name,host,port,token_hash,last_seen,status_json) VALUES('recovery-fixture','Fixture','127.0.0.1',31457,'"+hashlib.sha256(server_key.encode()).hexdigest()+"',"+str(int(time.time()))+",'{}')")
    sql("INSERT INTO account_devices(request_hash,code,server_id,account_id,expires,state) VALUES('"+hashlib.sha256(nonce.encode()).hexdigest()+"','ABCDEF12','recovery-fixture','"+account_id+"',"+str(int(time.time())+300)+",'approved')")
    call('/account/');assert '@'+handle in call('/account/',dict(action='login',email=email,password=password))[1]
@@ -92,6 +93,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-recovery-') as folder, tempfi
    assert 'Password is too short' in call(data=dict(action='reset',token=token,password='x',confirm='x'))[1]
    assert 'invalid or expired' in call(data=dict(action='reset',token='0'*64,password=newpass,confirm=newpass))[1]
    assert 'Password changed.' in call(data=dict(action='reset',token=token,password=newpass,confirm=newpass))[1]
+   assert json.loads(query('SELECT * FROM account_email_verifications'))==[]
    call() # A successful reset rotates the CSRF token as well as the browser session.
    assert 'invalid or expired' in call(data=dict(action='reset',token=token,password=newpass,confirm=newpass))[1]
    cookie=browser_cookie

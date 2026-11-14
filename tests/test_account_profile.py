@@ -59,11 +59,14 @@ with tempfile.TemporaryDirectory(prefix='lineclash-profile-') as folder, tempfil
     native[handle]=body.split()[1];identities[handle]=rows('SELECT id FROM accounts WHERE handle=?',handle)[0]['id']
    assert 'Profile settings' in signin('alice')
    assert 'current-password' in call()[1] and 'Permanently delete account' in call()[1]
+   sql('INSERT INTO account_email_verifications(account_id,token_hash,email,expires) VALUES(?,?,?,?)',identities['alice'],'a'*64,'alice@example.test',int(time.time()+86400))
    csrf='0'*64
    assert 'This form expired' in call(data=dict(action='password',current_password=password,new_password=new_password,confirm_password=new_password))[1]
    assert 'current password' in call(data=dict(action='password',current_password='wrong',new_password=new_password,confirm_password=new_password))[1]
+   assert rows('SELECT account_id FROM account_email_verifications')
    assert 'do not match' in call(data=dict(action='password',current_password=password,new_password=new_password,confirm_password='different'))[1]
    assert 'Password changed.' in call(data=dict(action='password',current_password=password,new_password=new_password,confirm_password=new_password))[1]
+   assert not rows('SELECT account_id FROM account_email_verifications')
    assert '<h1>@alice' in call()[1]
    assert api('account-client-logout',session=native['alice'])[0]==401
    source+=1

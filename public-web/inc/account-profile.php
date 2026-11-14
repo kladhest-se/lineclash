@@ -16,7 +16,7 @@ function account_profile_revoke(PDO $db,string $id): void {
     $db->prepare('UPDATE accounts SET auth_version=auth_version+1 WHERE id=?')->execute([$id]);
     $db->prepare('UPDATE account_sessions SET revoked=1 WHERE account_id=?')->execute([$id]);
     $db->prepare("UPDATE account_devices SET state='used' WHERE account_id=?")->execute([$id]);
-    foreach(['account_password_resets','account_email_changes'] as $table)$db->prepare('DELETE FROM '.$table.' WHERE account_id=?')->execute([$id]);
+    foreach(['account_password_resets','account_email_changes','account_email_verifications'] as $table)$db->prepare('DELETE FROM '.$table.' WHERE account_id=?')->execute([$id]);
 }
 function account_profile_notice(?string $email,string $subject,string $body): void {
     $settings=account_mail_settings();if(!$settings || !$email)return;
