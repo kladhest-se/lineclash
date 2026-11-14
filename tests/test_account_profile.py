@@ -57,8 +57,19 @@ with tempfile.TemporaryDirectory(prefix='lineclash-profile-') as folder, tempfil
    for handle in ('alice','bob','alice2'):
     status,body=api('account-client-register',format='session',handle=handle,email=handle+'@example.test',password=password);assert status==200,body
     native[handle]=body.split()[1];identities[handle]=rows('SELECT id FROM accounts WHERE handle=?',handle)[0]['id']
-   assert 'Profile settings' in signin('alice')
+   assert 'Player settings' in signin('alice')
    assert 'current-password' in call()[1] and 'Permanently delete account' in call()[1]
+   assert rows('SELECT avatar FROM accounts WHERE id=?',identities['alice'])[0]['avatar']=='initial'
+   csrf='0'*64
+   assert 'This form expired' in call(data=dict(action='avatar',avatar='t'))[1]
+   assert 'available avatars' in call(data=dict(action='avatar',avatar='remote-image'))[1]
+   assert rows('SELECT avatar FROM accounts WHERE id=?',identities['alice'])[0]['avatar']=='initial'
+   page=call(data=dict(action='avatar',avatar='t',account_id=identities['bob']))[1]
+   assert 'Avatar saved.' in page and 'value="t" checked' in page
+   assert 'avatar-blocks' in call('/source/')[1].split('<main',1)[0]
+   assert rows('SELECT avatar FROM accounts WHERE id=?',identities['alice'])[0]['avatar']=='t'
+   assert rows('SELECT avatar FROM accounts WHERE id=?',identities['bob'])[0]['avatar']=='initial'
+
    sql('INSERT INTO account_email_verifications(account_id,token_hash,email,expires) VALUES(?,?,?,?)',identities['alice'],'a'*64,'alice@example.test',int(time.time()+86400))
    csrf='0'*64
    assert 'This form expired' in call(data=dict(action='password',current_password=password,new_password=new_password,confirm_password=new_password))[1]
@@ -67,7 +78,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-profile-') as folder, tempfil
    assert 'do not match' in call(data=dict(action='password',current_password=password,new_password=new_password,confirm_password='different'))[1]
    assert 'Password changed.' in call(data=dict(action='password',current_password=password,new_password=new_password,confirm_password=new_password))[1]
    assert not rows('SELECT account_id FROM account_email_verifications')
-   assert '<h1>@alice' in call()[1]
+   assert 'Your account: @alice' in call()[1]
    assert api('account-client-logout',session=native['alice'])[0]==401
    source+=1
    assert 'already in use' in call(data=dict(action='email',current_password=new_password,new_email='bob@example.test'))[1]
@@ -87,7 +98,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-profile-') as folder, tempfil
    assert b'To: <changed@example.test>' in notification.messages[0]
    call('/account/email/');assert 'invalid or expired' in call('/account/email/',dict(token=token))[1]
    configure(False);source+=1
-   assert '<h1>@alice' in signin('alice',new_password)
+   assert 'Your account: @alice' in signin('alice',new_password)
    status,body=api('account-client-login',login='fresh@example.test',password=new_password);assert status==200
    alice_session=body.split()[1]
    # A provisioned source reports three distinct, centrally authenticated players.
@@ -99,6 +110,10 @@ with tempfile.TemporaryDirectory(prefix='lineclash-profile-') as folder, tempfil
     return dict(game_id=number,room_id=1,started_at='start',ended_at='end',started_epoch=1000,ended_epoch=1100,ranked=1,input_protocol='input-v1',end_reason='completed',winner_nick='@'+winner,winner_account_id=identities[winner],winner_team=team,player_count=3,replay_gzip=base64.b64encode(gzip.compress(raw)).decode(),replay_sha256=hashlib.sha256(raw).hexdigest(),players=[dict(nick='@'+h,account_id=identities[h],lines_cleared=10+i,specials_sent=i,blocks_placed=20+i,placement=order.index(h)+1,won=1 if h==winner else 0) for i,h in enumerate(('alice','bob','alice2'))])
    def upload(g):return call('/api/',dict(server_id=server,token=key,database_id=database,status={},games=[g]),True)
    for g in (game(1),game(2,'bob','Blue'),game(3,'alice2','Red')):assert upload(g)[0]==200
+   profile=call()[1]
+   for label,value in [('Matches played',3),('Wins',1),('Lines cleared',30),('Specials sent',0)]:
+    assert '<dt>'+label+'</dt><dd>'+str(value)+'</dd>' in profile
+
    # An older replay-only reference contains escaped names and fields no longer permitted.
    legacy=json.dumps([dict(elapsed_ms=0,line='playerjoin 1 @alice fresh@example.test',private='fresh@example.test')]).replace('@alice','\\u0040alice')
    sql('UPDATE directory_games SET replay_json=?,replay_sha256=? WHERE game_id=3',legacy,hashlib.sha256(legacy.encode()).hexdigest())
@@ -125,7 +140,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-profile-') as folder, tempfil
     assert not rows('SELECT * FROM '+table+' WHERE account_id=?',identities['alice'])
    after=rows('SELECT COUNT(*) AS n,SUM(lines_cleared) AS cleared,SUM(specials_sent) AS specials,SUM(blocks_placed) AS blocks,SUM(won) AS wins FROM directory_players')[0]
    assert before==after and get('/api/?action=teams')['teams']==teams
-   assert '<h1>@alice' not in call()[1]
+   assert 'Your account: @alice' not in call()[1]
    assert api('account-client-logout',session=alice_session)[0]==401
    assert call('/api/?action=player&server=fixture&nick=%40alice')[0]==404
    for number in (1,2,3):
@@ -147,7 +162,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-profile-') as folder, tempfil
    for path in ('/statistics/','/matches/','/leaderboards/','/directory/'):
     text=call(path)[1];assert '@alice<' not in text and 'Team leaderboards' in call('/statistics/')[1]
    # Deleting two participants in one match must preserve separate results and team wins.
-   source+=1;assert '<h1>@bob' in signin('bob')
+   source+=1;assert 'Your account: @bob' in signin('bob')
    count=rows('SELECT COUNT(*) AS n FROM directory_players WHERE game_id=1')[0]['n'];teams=get('/api/?action=teams')['teams']
    assert 'Account deleted.' in call(data=dict(action='delete',current_password=password,confirmation='DELETE'))[1]
    assert rows('SELECT COUNT(*) AS n FROM directory_players WHERE game_id=1')[0]['n']==count
@@ -162,7 +177,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-profile-') as folder, tempfil
    fresh=get('/api/?action=replay&'+urllib.parse.urlencode(dict(server=server,database=database,game=6)));assert fresh['match']['winner_nick']=='@alice' and not fresh['match']['winner_deleted']
    # Private team labels keep a non-name grouping key across deletion and late uploads.
    assert upload(game(7,'alice','@alice crew'))[0]==200
-   source+=1;assert '<h1>@alice' in signin('alice')
+   source+=1;assert 'Your account: @alice' in signin('alice')
    assert 'Account deleted.' in call(data=dict(action='delete',current_password=password,confirmation='DELETE'))[1]
    private_team=get('/api/?action=match&'+urllib.parse.urlencode(dict(server=server,database=database,game=7)))['match']['winner_team']
    assert private_team.startswith('DELETED TEAM ') and '@alice' not in private_team
@@ -170,6 +185,6 @@ with tempfile.TemporaryDirectory(prefix='lineclash-profile-') as folder, tempfil
    repeated=get('/api/?action=match&'+urllib.parse.urlencode(dict(server=server,database=database,game=8)))['match']['winner_team']
    assert private_team==repeated
    assert next(team['wins'] for team in get('/api/?action=teams')['teams'] if team['winner_team']==private_team)==2
-   print('PASS: reauthenticated profile changes, confirmed email, session revocation, atomic permanent deletion, replay-only and escaped references, valid replay hashes, separate anonymous results, preserved team wins, late-upload suppression and handle reuse isolation')
+   print('PASS: saved allowlisted avatars, own-account match totals, reauthenticated profile changes, confirmed email, session revocation, atomic permanent deletion, replay-only and escaped references, valid replay hashes, separate anonymous results, preserved team wins, late-upload suppression and handle reuse isolation')
   finally:app.terminate();app.wait(timeout=5)
  finally:php('database()->exec("DROP DATABASE `".$argv[2]."`");',name)

@@ -1,10 +1,23 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__.'/service.php';
+require_once __DIR__.'/account-avatars.php';
 function site_h(mixed $value): string { return htmlspecialchars((string)$value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'); }
+function site_account_user(): ?array {
+    static $loaded=false,$user=null;
+    if($loaded)return $user;$loaded=true;
+    // Anonymous public pages do not need a session or database connection.
+    if(session_status()!==PHP_SESSION_ACTIVE && !isset($_COOKIE['lineclash_account']))return null;
+    require_once __DIR__.'/accounts.php';account_session();
+    if(empty($_SESSION['account_id']))return null;
+    try{$user=account_current(database());}
+    catch(Throwable $e){error_log('LineClash navigation account: '.$e->getMessage());}
+    return $user;
+}
 function site_header(string $title,string $active='home',string $base='../'): void {
-    header('Cache-Control: no-store');
+    header('Cache-Control: no-store');$navUser=site_account_user();
     $links=['home'=>'Home','servers'=>'Servers','statistics'=>'Statistics','documentation'=>'Documentation','source'=>'Source','account'=>'Account'];
+    if($navUser)unset($links['account']);
     if(in_array($active,['leaderboards','matches','directory'],true))$active='statistics';
 ?><!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
@@ -13,10 +26,17 @@ function site_header(string $title,string $active='home',string $base='../'): vo
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="<?=site_h($base)?>assets/site.css"></head><body><canvas id="block-background" aria-hidden="true"></canvas>
 <a class="skip-link" href="#main">Skip to content</a>
-<nav class="nav" aria-label="Main"><div class="nav-inner">
+<nav class="nav" aria-label="Main"><div class="nav-inner<?=$navUser?' has-account':''?>">
 <a class="nav-logo" href="<?=site_h($base)?>">Line<span class="clash">Clash</span></a>
 <ul class="nav-links"><?php foreach($links as $key=>$label): ?><li><a href="<?=site_h($base.($key==='home'?'':$key.'/'))?>"<?=$active===$key?' aria-current="page"':''?>><?=site_h($label)?></a></li><?php endforeach; ?></ul>
+<div class="nav-actions">
+<?php if($navUser):?>
+<a class="nav-account" href="<?=site_h($base)?>account/" aria-label="Your account: @<?=site_h($navUser['handle'])?>" title="Signed in as @<?=site_h($navUser['handle'])?>"<?=$active==='account'?' aria-current="page"':''?>>
+<span class="nav-avatar" aria-hidden="true"><?=account_avatar_markup($navUser['avatar']??'initial',$navUser['handle'])?></span><span class="nav-account-name">@<?=site_h($navUser['handle'])?></span></a>
+<form class="nav-signout" method="post" action="<?=site_h($base)?>account/logout/"><input type="hidden" name="csrf" value="<?=site_h($_SESSION['csrf'])?>"><button type="submit">Sign out</button></form>
+<?php endif;?>
 <a class="nav-btn" href="<?=site_h($base)?>#get">Get the game</a>
+</div>
 </div></nav>
 <?php }
 function site_footer(string $base='../'): void { ?>

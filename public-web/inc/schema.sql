@@ -121,3 +121,6 @@ CREATE TABLE IF NOT EXISTS account_email_changes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 ALTER TABLE directory_games ADD COLUMN IF NOT EXISTS replay_redacted TINYINT NOT NULL DEFAULT 0;
+
+-- Website avatars are allowlisted local block icons; no remote image is fetched.
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS avatar VARCHAR(16) CHARACTER SET ascii NOT NULL DEFAULT 'initial';

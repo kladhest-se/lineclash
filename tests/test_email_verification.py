@@ -78,7 +78,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-activation-') as folder, temp
    assert api('account-client-login',login='pending',password='wrong')[0]==401
    assert api('account-client-login',login='pending',password=password)[0]==403
    call('/account/');page=call('/account/',dict(action='login',email='pending@example.test',password=password))[1]
-   assert 'Verify your email' in page and '<h1>@pending' not in page
+   assert 'Verify your email' in page and 'Your account: @pending' not in page
    status,pin_reply=api('account-client-pin-begin');device,pin=pin_reply.split()[1:3]
    call('/pin/');call('/pin/',dict(action='lookup',pin=pin))
    page=call('/pin/',dict(action='authenticate',pin=pin,login='pending',password=password))[1]
@@ -87,10 +87,10 @@ with tempfile.TemporaryDirectory(prefix='lineclash-activation-') as folder, temp
    configure(False)
    status,body=api('account-client-login',login='pending',password=password);assert status==200
    temporary_session=body.split()[1]
-   call('/account/');assert '<h1>@pending' in call('/account/',dict(action='login',email='pending@example.test',password=password))[1]
+   call('/account/');assert 'Your account: @pending' in call('/account/',dict(action='login',email='pending@example.test',password=password))[1]
    call('/pin/');assert 'Client authenticated' in call('/pin/',dict(action='authenticate',pin=pin,login='pending',password=password))[1]
    configure(True)
-   assert '<h1>@pending' not in call('/account/')[1]
+   assert 'Your account: @pending' not in call('/account/')[1]
    assert api('account-client-logout',session=temporary_session)[0]==401
    sql('UPDATE account_client_pins SET last_poll=0')
    assert api('account-client-pin-poll',device=device)[1].startswith('central-error ')
@@ -109,16 +109,16 @@ with tempfile.TemporaryDirectory(prefix='lineclash-activation-') as folder, temp
    second=token(relay);assert second!=first
    assert 'invalid or expired' in call(data=dict(action='confirm',token=first))[1]
    # A successful link replaces any old browser identity, rotates the cookie and opens the profile.
-   call('/account/');assert '<h1>@legacy' in call('/account/',dict(action='login',login='legacy',password=password))[1]
+   call('/account/');assert 'Your account: @legacy' in call('/account/',dict(action='login',login='legacy',password=password))[1]
    old_cookie=cookie
    page=call(data=dict(action='confirm',token=second))[1]
-   assert 'Email verified. You are now signed in.' in page and '<h1>@pending' in page
+   assert 'Email verified. You are now signed in.' in page and 'Your account: @pending' in page
    assert cookie!=old_cookie and second not in page
-   assert '<h1>@pending' in call('/account/')[1]
+   assert 'Your account: @pending' in call('/account/')[1]
    assert rows("SELECT email_pending,auth_version FROM accounts WHERE handle='pending'")[0]==dict(email_pending=0,auth_version=2)
    assert not rows('SELECT * FROM account_email_verifications')
    call();assert 'invalid or expired' in call(data=dict(action='confirm',token=second))[1]
-   assert '<h1>@pending' in call('/account/')[1] # Failed/replayed links do not replace a valid session.
+   assert 'Your account: @pending' in call('/account/')[1] # Failed/replayed links do not replace a valid session.
    assert api('account-client-login',login='pending@example.test',password=password)[0]==200
    assert api('account-client-logout',session=temporary_session)[0]==401
    source+=1
@@ -134,7 +134,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-activation-') as folder, temp
    assert 'could not be sent' in page and not rows("SELECT * FROM accounts WHERE handle='webfail'")
    source+=1;cookie='';call('/account/');relay=Relay();configure(True,relay)
    page=call('/account/',dict(action='register',handle='browser',email='browser@example.test',password=password))[1]
-   browser_token=token(relay);assert 'Check your email' in page and '<h1>@browser' not in page
+   browser_token=token(relay);assert 'Check your email' in page and 'Your account: @browser' not in page
    sql("UPDATE accounts SET active=0 WHERE handle='browser'");call()
    assert 'invalid or expired' in call(data=dict(action='confirm',token=browser_token))[1]
    assert rows("SELECT active FROM accounts WHERE handle='browser'")[0]['active']==0
@@ -145,8 +145,8 @@ with tempfile.TemporaryDirectory(prefix='lineclash-activation-') as folder, temp
    source+=1;cookie='';relay=Relay();configure(True,relay);assert register('clicked')[0]==200
    clicked_token=token(relay);call('/account/verify/')
    page=call('/account/verify/',dict(action='confirm',token=clicked_token))[1]
-   assert '<h1>@clicked' in page and 'Email verified. You are now signed in.' in page
-   assert '<h1>@clicked' in call('/account/')[1]
+   assert 'Your account: @clicked' in page and 'Email verified. You are now signed in.' in page
+   assert 'Your account: @clicked' in call('/account/')[1]
    # Disabling the option restores immediate registration even without SMTP.
    source+=1;configure(False);assert register('disabled')[1].startswith('central-session ')
    print('PASS: configurable six-character passwords, SMTP prerequisite/rollback, pending browser/native/PIN/legacy gates, hash-only 24-hour activation, automatic website sign-in/redirect with rotated session, CSRF, single use, expiry/resend/limits, disabled-account/email binding, migration compatibility and runtime opt-out')

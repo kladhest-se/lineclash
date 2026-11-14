@@ -79,7 +79,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-pin-') as folder, tempfile.Te
    assert api('account-client-logout',session=session.split()[1])==(200,'central-signed-out')
    # Account menus have no approval UI; an existing browser session is insufficient.
    call('/account/');profile=call('/account/',dict(action='login',email=email,password=password))[1]
-   assert '<h1>@pinuser' in profile and 'Approve a game connection' not in profile and 'Sign in a client with a PIN' not in profile
+   assert 'Your account: @pinuser' in profile and 'Approve a game connection' not in profile and 'Sign in a client with a PIN' not in profile
    secret,pin=begin();page=call(data=dict(action='lookup',pin=pin))[1]
    assert 'Username or email' in page and 'Sign in and authenticate client' in page
    assert 'Sign-in details did not match' in call(data=dict(action='authenticate',pin=pin))[1]

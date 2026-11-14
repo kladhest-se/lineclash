@@ -2,8 +2,21 @@
 // SPDX-License-Identifier: MIT
 declare(strict_types=1);
 require_once __DIR__.'/accounts.php';
+require_once __DIR__.'/account-avatars.php';
 require_once __DIR__.'/smtp.php';
 require_once __DIR__.'/account-privacy.php';
+function account_profile_avatar(PDO $db,array $user,string $avatar): void {
+    if(!isset(account_avatars()[$avatar]))throw new InvalidArgumentException('Choose one of the available avatars.');
+    account_limit($db,'account-avatar',30);$db->beginTransaction();
+    try{
+        $q=$db->prepare('SELECT id FROM accounts WHERE id=? AND auth_version=? AND active=1'.account_verification_sql().' FOR UPDATE');$q->execute([$user['id'],$user['auth_version']]);
+        if(!$q->fetchColumn())throw new InvalidArgumentException('Sign in again to save your avatar.');
+        $db->prepare('UPDATE accounts SET avatar=? WHERE id=?')->execute([$avatar,$user['id']]);$db->commit();
+    }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+}
+function account_profile_statistics(PDO $db,string $id): array {
+    $q=$db->prepare('SELECT COUNT(*) AS matches_played,COALESCE(SUM(won),0) AS wins,COALESCE(SUM(lines_cleared),0) AS lines_cleared,COALESCE(SUM(specials_sent),0) AS specials_sent FROM directory_players WHERE account_id=? AND deleted=0');$q->execute([$id]);return $q->fetch();
+}
 function account_profile_lock(PDO $db,array $sessionUser,string $password): array {
     $q=$db->prepare('SELECT * FROM accounts WHERE id=? AND auth_version=? AND active=1'.account_verification_sql().' FOR UPDATE');$q->execute([$sessionUser['id'],$sessionUser['auth_version']]);$user=$q->fetch();
     if(!$user || strlen($password)>72 || str_contains($password,"\0") || !password_verify($password,$user['password_hash']))throw new InvalidArgumentException('Enter your current password to confirm this change.');

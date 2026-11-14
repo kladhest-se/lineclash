@@ -66,6 +66,22 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   assert call('/api/',dict(request,action='account-poll',server_key='f'*64),True)[0]==403
   call(data=dict(action='logout'));assert '<h1>Sign in</h1>' in call()[1]
   call(data=dict(action='login',login=handle,password=password));assert '@'+handle in call()[1]
+  # Signed-in navigation is shared by public pages and account modes.
+  for path in ('/','/source/','/documentation/','/account/','/account/?mode=register','/account/?mode=recover','/account/?mode=activation'):
+   page=call(path)[1]
+   assert 'class="nav-avatar"' in page and 'Your account: @'+handle in page,path
+   assert 'account/logout/' in page and 'aria-label="Account help"' not in page,path
+   if path=='/account/':assert 'Sign out' not in page.split('<main',1)[1].split('</main>',1)[0]
+  assert call('/account/logout/')[0]==405
+  assert '@'+handle in call()[1]
+  csrf='0'*64
+  assert call('/account/logout/',dict())[0]==403
+  assert '@'+handle in call()[1]
+  call('/account/logout/',dict())
+  page=call()[1];assert '<h1>Sign in</h1>' in page and 'class="nav-avatar"' not in page
+  assert 'Create an account' in page and 'Forgot password?' in page
+  call(data=dict(action='login',login=handle,password=password))
+
   # Native profiles never send a browser session or a password to the game server.
   request_login=dict(action='account-client-login',handle=handle,password=password)
   status,bad=call('/api/',dict(request_login,password='incorrect-but-long'),True)

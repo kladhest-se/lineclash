@@ -1098,11 +1098,8 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 .account-error{color:var(--red);background:var(--mantle)}
 .account-notice{color:var(--green);background:var(--mantle)}
 
-.account-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:48px;align-items:start}
-.account-settings .account-form{max-width:none}
 .account-danger{border-top:1px solid var(--red);padding-top:28px}
 .account-danger button{background:var(--red);color:var(--crust)}
-@media(max-width:700px){.account-settings{grid-template-columns:1fr;gap:12px}}
 
 /* Focused account entry, with registration on its own view. */
 .account-auth{padding-top:72px;padding-bottom:88px}
@@ -1119,3 +1116,66 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 @media(max-width:700px){.account-auth{padding-top:44px;padding-bottom:56px}.account-auth h1{margin-bottom:28px}.account-intro{font-size:16px;margin-bottom:24px}.account-links{gap:14px 22px}}
 
 .account-auth .community-section{margin:0}
+
+/* The header carries the browser account across the public website. */
+.nav-actions{display:flex;align-items:center;gap:16px;flex-shrink:0}
+.nav-account{display:inline-flex;align-items:center;gap:9px;color:var(--text);font-size:13px;font-weight:600;white-space:nowrap}
+.nav-account:hover{text-decoration:none;color:var(--mauve)}
+.nav-account[aria-current=page]{color:var(--mauve)}
+.nav-avatar{position:relative;display:grid;place-items:center;width:34px;height:34px;flex-shrink:0;border-radius:50%;background:var(--mantle);border:1px solid var(--teal);color:var(--teal);font-family:var(--mono);font-size:15px}
+.nav-avatar::after{content:"";position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border:2px solid var(--crust);border-radius:50%;background:var(--green)}
+.nav-signout{margin:0;display:flex}
+.nav-signout button{font:inherit;font-size:13px;color:var(--subtext1);background:none;border:1px solid var(--surface0);border-radius:6px;padding:7px 10px;cursor:pointer;white-space:nowrap}
+.nav-signout button:hover{color:var(--text);border-color:var(--overlay1)}
+.nav-signout button:focus-visible{outline:2px solid var(--mauve);outline-offset:3px}
+@media(max-width:1080px){.nav-inner.has-account{flex-wrap:wrap}.has-account .nav-links{display:flex;order:3;width:100%;overflow-x:auto;white-space:nowrap;padding:4px 0 2px}.has-account .nav-actions{margin-left:auto}}
+@media(max-width:760px){.nav-actions{margin-left:auto}}
+@media(max-width:520px){.nav-account-name{display:none}.nav-actions{gap:10px}.has-account .nav-btn{font-size:10px;padding:8px 12px}.nav-signout button{font-size:12px;padding:7px 8px}.nav-inner.has-account{gap:12px}}
+
+/* Signed-in player profile. */
+.avatar-blocks{display:block;width:100%;height:100%}
+.avatar-initial{font-family:var(--mono);font-weight:700}
+.account-profile{padding-top:56px;padding-bottom:80px}
+.account-profile h1{font-size:clamp(36px,5vw,54px);letter-spacing:-.04em;margin-bottom:10px}
+.profile-intro,.profile-hint{color:var(--subtext1)}
+.profile-intro{margin-bottom:26px}
+.profile-hint{font-size:14px;line-height:1.65;margin-top:8px}
+.profile-identity{display:flex;align-items:center;gap:14px;padding:22px 0 28px;border-bottom:1px solid var(--surface0);margin-bottom:30px}
+.profile-identity-avatar{display:grid;place-items:center;width:44px;height:44px;border:1px solid var(--surface1);background:var(--mantle);border-radius:10px;color:var(--teal)}
+.profile-signed-in{margin-left:auto;color:var(--teal);font-size:13px}
+.profile-signed-in::before{content:"";display:inline-block;width:7px;height:7px;background:var(--teal);border-radius:50%;margin-right:8px}
+.profile-panel{padding:28px;border:1px solid var(--surface0);background:rgba(41,44,60,.72);margin:30px 0}
+.profile-player-settings{display:grid;grid-template-columns:1.3fr 1fr;gap:44px;margin-top:26px;align-items:center}
+.profile-avatar-form fieldset{border:0;min-width:0}
+.profile-avatar-form legend{font-size:14px;font-weight:600;margin-bottom:16px}
+.avatar-choices{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.avatar-choice{position:relative;cursor:pointer;min-width:0}
+.avatar-choice input{position:absolute;opacity:0;width:1px;height:1px}
+.avatar-tile{display:flex;align-items:center;flex-direction:column;gap:10px;padding:12px 6px;border:1px solid transparent;border-radius:6px;font-size:11px;color:var(--subtext1)}
+.avatar-choice-icon{display:grid;place-items:center;width:48px;height:48px;background:var(--crust);border-radius:5px;color:var(--teal);font-size:23px}
+.avatar-choice input:checked+.avatar-tile{border-color:var(--mauve);background:var(--base);color:var(--text)}
+.avatar-choice input:focus-visible+.avatar-tile{outline:2px solid var(--mauve);outline-offset:3px}
+.profile-avatar-form button{margin-top:22px;border:0;border-radius:5px;background:var(--mauve);color:var(--crust);font:inherit;font-size:13px;font-weight:600;padding:11px 18px;cursor:pointer}
+.profile-player-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:220px;border:1px solid var(--surface0);background:var(--crust);padding:24px;text-align:center}
+.profile-card-avatar{display:grid;place-items:center;width:100px;height:100px;color:var(--teal);font-size:52px}
+.profile-player-card>span:last-child{font-size:13px;color:var(--subtext1)}
+.profile-matches{margin:36px 0}
+.profile-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:18px}
+.profile-metrics>div{padding:18px;background:var(--mantle)}
+.profile-metrics dt{font-size:12px;color:var(--subtext1)}
+.profile-metrics dd{font-size:30px;font-weight:600;margin-top:4px}
+.profile-details-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:36px;margin-top:26px}
+.profile-detail{min-height:76px}
+.profile-detail dt{font-size:12px;color:var(--subtext1)}
+.profile-detail small{display:block;font-size:11px;margin-top:2px}
+.profile-detail dd{font-size:15px;font-weight:600;margin-top:8px;overflow-wrap:anywhere}
+.profile-disclosure{border-top:1px solid var(--surface0);margin-top:18px}
+.profile-disclosure summary{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:18px 0;cursor:pointer;list-style:none;font-size:14px;font-weight:600}
+.profile-disclosure summary::-webkit-details-marker{display:none}
+.profile-disclosure summary::after{content:"+";font-size:22px;font-weight:400}
+.profile-disclosure[open]>summary::after{content:"−"}
+.profile-disclosure .account-form{max-width:none}
+.profile-delete{margin-top:24px;border-bottom:1px solid var(--surface0)}
+.profile-delete .account-danger{padding-bottom:20px}
+.profile-delete .account-form{max-width:480px}
+@media(max-width:760px){.profile-player-settings,.profile-details-grid{grid-template-columns:1fr;gap:24px}.profile-panel{padding:22px}.profile-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.account-profile{padding-top:36px}.profile-signed-in{display:none}}

@@ -7,9 +7,13 @@ function account_session(): void {
     session_set_cookie_params(['secure'=>true,'httponly'=>true,'samesite'=>'Lax','path'=>'/']);session_start();
     if(!isset($_SESSION['csrf']))$_SESSION['csrf']=bin2hex(random_bytes(32));
 }
+function account_logout(): void {
+    $_SESSION=[];session_destroy();$params=session_get_cookie_params();unset($params['lifetime']);
+    setcookie(session_name(),'',array_merge($params,['expires'=>time()-3600]));
+}
 function account_current(PDO $db): ?array {
     if(empty($_SESSION['account_id']))return null;
-    $q=$db->prepare('SELECT id,handle,email,created_at,auth_version FROM accounts WHERE id=? AND active=1'.account_verification_sql());$q->execute([$_SESSION['account_id']]);$user=$q->fetch();
+    $q=$db->prepare('SELECT id,handle,email,created_at,auth_version,avatar FROM accounts WHERE id=? AND active=1'.account_verification_sql());$q->execute([$_SESSION['account_id']]);$user=$q->fetch();
     if(!$user || (int)$user['auth_version']!==(int)($_SESSION['auth_version']??0)){unset($_SESSION['account_id'],$_SESSION['auth_version']);return null;}
     return $user;
 }
