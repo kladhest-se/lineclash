@@ -873,7 +873,7 @@ static void render_music_popup(ClientCtx *c,int saved_click) {
 }
 
 /* ── Shared about popup render ── */
-void sdl_open_account_code(const char *code){char url[128];snprintf(url,sizeof(url),"https://lineclash.kladhest.se/account/%s%s",code[0]?"?code=":"",code);music_link(url);}
+void sdl_open_account_code(const char *code){char url[128];snprintf(url,sizeof(url),"https://lineclash.kladhest.se/pin/%s%s",code[0]?"?code=":"",code);music_link(url);}
 
 static void render_about_popup(ClientCtx *c, int saved_click) {
     int pw=640, ph=540, px=(WIN_W-pw)/2, py=(WIN_H-ph)/2;
@@ -2871,14 +2871,14 @@ void sdl_render_accounts(ClientCtx *c){
     }else if(c->account_pin_mode){
         dt(x,170,"Sign in with a PIN.",COL_WHITE,3);
         dt(x,234,"Open this page on a phone or computer:",COL_LTGRAY,1);
-        dt(x,268,"lineclash.kladhest.se/account/pin",0xbba5f4ff,1);
-        dt(x,318,"Enter the PIN, sign in, then approve this client.",COL_LTGRAY,1);
+        dt(x,268,"lineclash.kladhest.se/pin",0xbba5f4ff,1);
+        dt(x,318,"Enter the PIN, then sign in to authenticate.",COL_LTGRAY,1);
         if(c->account_pin[0]){
             char display[16];snprintf(display,sizeof(display),"%.4s %.4s",c->account_pin,c->account_pin+4);dtc(WIN_W/2,370,display,0x75dabbff,3);
             char remaining[64];int seconds=(int)(c->account_pin_expires-time(NULL));if(seconds<0)seconds=0;
             snprintf(remaining,sizeof(remaining),"PIN expires in %d:%02d",seconds/60,seconds%60);dt(x,432,remaining,COL_GRAY,1);
         }
-        if(dbtn(x,474,w,36,"Open sign-in page",BS_NORMAL))music_link("https://lineclash.kladhest.se/account/pin/");
+        if(dbtn(x,474,w,36,"Open sign-in page",BS_NORMAL))music_link("https://lineclash.kladhest.se/pin/");
         if(dbtn(x,524,w,36,"Use username / password instead",BS_NORMAL))client_accounts_action(c,ACCOUNT_PIN_CANCEL);
         if(!c->account_pin_secret[0] && !busy && dbtn(x,574,w,36,"Get a new PIN",BS_NORMAL))client_accounts_action(c,ACCOUNT_PIN_START);
         account_notice(x,640,w,c->account_message,COL_GRAY);

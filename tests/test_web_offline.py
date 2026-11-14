@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryFile() as log:
   assert 'href="./" aria-current="page">Home</a>' in home
   for path in ['/servers/','/leaderboards/','/matches/','/statistics/']:
    code,body=get(path);assert code==503 and 'aria-label="Main"' in body and 'temporarily unavailable' in body,path
-  code,body=get('/account/pin/');assert code==503 and 'temporarily unavailable' in body
+  code,body=get('/pin/');assert code==200 and 'Enter the PIN shown' in body
   code,body=get('/account/verify/');assert code==200 and 'not required' in body
   assert get('/assets/email-verification.js')[0]==200
   code,body=get('/account/recover/');assert code==200 and 'disabled because SMTP' in body

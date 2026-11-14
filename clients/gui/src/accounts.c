@@ -181,7 +181,7 @@ void client_accounts_tick(ClientCtx *c){
             if(result>0 && sscanf(reply,"central-pin %64s %8s %lld",secret,pin,&expires)==3 && hex_token(secret) && strlen(pin)==8 && strspn(pin,"0123456789")==8 && expires>time(NULL) && expires<=time(NULL)+600){
                 snprintf(c->account_pin_secret,sizeof(c->account_pin_secret),"%s",secret);snprintf(c->account_pin,sizeof(c->account_pin),"%s",pin);
                 c->account_pin_expires=(time_t)expires;c->account_pin_next=time(NULL)+5;
-                snprintf(c->account_message,sizeof(c->account_message),"Waiting for approval on the website...");
+                snprintf(c->account_message,sizeof(c->account_message),"Waiting for sign-in on the website...");
             }else{snprintf(c->account_message,sizeof(c->account_message),"%.255s",!strncmp(reply,"central-error ",14)?reply+14:"PIN sign-in could not start. Refresh the website.");}
             account_erase(secret,sizeof(secret));account_erase(reply,sizeof(reply));return;
         }

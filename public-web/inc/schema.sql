@@ -101,3 +101,23 @@ CREATE TABLE IF NOT EXISTS account_email_verifications (
  expires BIGINT NOT NULL,
  FOREIGN KEY(account_id) REFERENCES accounts(id), INDEX expiry(expires)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Stable central identity metadata is removed on account deletion; scores stay.
+ALTER TABLE directory_players ADD COLUMN IF NOT EXISTS account_id CHAR(32) CHARACTER SET ascii NULL;
+ALTER TABLE directory_players ADD COLUMN IF NOT EXISTS deleted TINYINT NOT NULL DEFAULT 0;
+ALTER TABLE directory_players ADD INDEX IF NOT EXISTS player_account(account_id);
+ALTER TABLE directory_games ADD COLUMN IF NOT EXISTS winner_account_id CHAR(32) CHARACTER SET ascii NULL;
+ALTER TABLE directory_games ADD COLUMN IF NOT EXISTS winner_deleted TINYINT NOT NULL DEFAULT 0;
+ALTER TABLE directory_games ADD INDEX IF NOT EXISTS winner_account(winner_account_id);
+UPDATE directory_players p JOIN accounts a ON p.nick=CONCAT('@',a.handle) SET p.account_id=a.id WHERE p.account_id IS NULL AND p.deleted=0;
+UPDATE directory_games g JOIN accounts a ON g.winner_nick=CONCAT('@',a.handle) SET g.winner_account_id=a.id WHERE g.winner_account_id IS NULL AND g.winner_deleted=0;
+CREATE TABLE IF NOT EXISTS account_email_changes (
+ account_id CHAR(32) CHARACTER SET ascii PRIMARY KEY,
+ token_hash CHAR(64) CHARACTER SET ascii NOT NULL UNIQUE,
+ email VARCHAR(254) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+ auth_version INT NOT NULL, expires BIGINT NOT NULL,
+ FOREIGN KEY(account_id) REFERENCES accounts(id), INDEX expiry(expires)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE directory_games ADD COLUMN IF NOT EXISTS replay_redacted TINYINT NOT NULL DEFAULT 0;

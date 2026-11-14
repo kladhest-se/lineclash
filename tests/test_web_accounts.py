@@ -53,11 +53,11 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   code,body=call('/api/',dict(request,action='account-begin'),True);assert code==200,(code,body)
   device=body.split()[1];assert len(device)==8
   assert call('/api/',dict(request,action='account-poll'),True)[1]=='central-pending'
-  assert 'Account test server' in call('/account/?code='+device)[1]
+  assert 'Account test server' in call('/pin/',dict(action='lookup',pin=device))[1]
   csrf='0'*64
-  assert 'This form expired' in call(data=dict(action='approve',code=device))[1]
+  assert 'This form expired' in call('/pin/',dict(action='authenticate',pin=device,login=handle,password=password))[1]
   assert call('/api/',dict(request,action='account-poll'),True)[1]=='central-pending'
-  assert 'Approved. Return to the game.' in call(data=dict(action='approve',code=device))[1]
+  assert 'Client authenticated. Return to LineClash.' in call('/pin/',dict(action='authenticate',pin=device,login=handle,password=password))[1]
   body=call('/api/',dict(request,action='account-poll'),True)[1];assert body.startswith('central-approved ') and body.endswith(' '+handle),body
   assert call('/api/',dict(request,action='account-poll'),True)[1].startswith('central-error')
   assert call('/api/',dict(request,action='account-poll',server_key='f'*64),True)[0]==403
@@ -135,7 +135,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   assert status==200 and legacy_session.endswith(' -')
   policy_minimum(6)
   page=call()[1]
-  assert 'minlength="6"' in page and 'Use at least 6 characters.' in page, re.findall(r'<h1>.*?</h1>|minlength="[^"]*"|role="alert">[^<]*',page)
+  assert 'minlength="6"' in page, re.findall(r'<h1>.*?</h1>|minlength="[^"]*"|role="alert">[^<]*',page)
   short_handle='v'+secrets.token_hex(5);short_password=secrets.token_hex(3)
   assert 'Use at least 6 characters.' in call(data=dict(action='register',handle=short_handle,password=short_password[:5]))[1]
   page=call(data=dict(action='register',handle=short_handle,password=short_password))[1]

@@ -170,7 +170,7 @@ Erase all central accounts, browser-approval requests, native sessions, server r
 php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php reset-data --confirm-reset
 ```
 
-`reset-data` without an option also previews. The command uses the database selected by the normal site configuration and prints its name. It requires all ten known LineClash tables to be InnoDB, uses a single DELETE transaction in foreign-key order and rolls back if any deletion fails. The DB account needs SELECT and DELETE on those tables. It preserves the schema, unrelated tables and `config.inc.php`; no DROP or TRUNCATE permission is needed.
+`reset-data` without an option also previews. The command uses the database selected by the normal site configuration and prints its name. It requires all eleven known LineClash tables to be InnoDB, uses a single DELETE transaction in foreign-key order and rolls back if any deletion fails. The DB account needs SELECT and DELETE on those tables. It preserves the schema, unrelated tables and `config.inc.php`; no DROP or TRUNCATE permission is needed.
 
 This is a destructive website reset. Dedicated servers' SQLite accounts, permissions and game records are separate and are not erased. Existing central sign-ins become invalid, while already-connected games continue. Live public servers can register again at their next heartbeat, and enabled result uploaders can repopulate history. Stop announcers/uploaders and website writes during the reset if the database must remain empty. Manually provisioned server identities and their upload tokens must be provisioned again afterward.
 
@@ -252,7 +252,7 @@ LINECLASH_WEB_RESET_TEST_CONFIG=/path/to/test-config.php python3 tests/test_pass
 
 ## Optional client PIN sign-in
 
-Direct username/email and password login remains available. Desktop and Amiga clients can also choose **Sign in with a PIN**, visit `https://lineclash.kladhest.se/account/pin/` on another device, enter their eight-digit PIN, sign in and explicitly approve the client. A signed-in browser can approve without re-entering its password, or choose **Use another account**. This is a client account session; it is independent of the older server-specific browser-code approvals and does not require SMTP.
+Direct username/email and password login remains available. Desktop and Amiga clients can also choose **Sign in with a PIN**, visit `https://lineclash.kladhest.se/pin/` on another device, enter their eight-digit PIN, then enter fresh account credentials to authenticate the client. The page is intentionally unlinked from the website menu and profile page. Even an already signed-in browser must enter fresh credentials. The sign-in button explicitly authenticates the requesting client; there is no separate approval menu. PIN authentication does not change the account currently signed in to the browser. This is a client account session; it is independent of the older server-specific browser-code approvals and does not require SMTP.
 
 Deploy the updated website and run `php bin/manage.php migrate` before updating clients. The migration adds `account_client_pins` without replacing existing accounts or sessions. The runtime website account needs SELECT, INSERT, UPDATE and DELETE on this table. If existing schema-wide grants do not cover it, run these on the database host after migration:
 
@@ -261,7 +261,7 @@ mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lineclash.account_client_pin
 mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lineclash.account_client_pins TO 'lineclash_web'@'172.16.1.132';"
 ```
 
-The user-visible PIN is eight random decimal digits and expires in five minutes. A separate 256-bit device secret is returned only to the requesting client; only its SHA-256 hash is stored. Browser approval requires CSRF validation, an active central account and explicit confirmation of the displayed PIN. The browser never receives that private device secret or the client's native session token. Approval can be redeemed once in a transaction for a twelve-hour native session; changing the password, deactivating the account or consuming/declining the PIN prevents redemption. Polls are spaced by five seconds, with a ten-second client delay on `central-slow-down`. PIN creation is limited to five requests per source per minute, browser PIN operations to fifteen, and polls to six hundred per source plus per-device pacing. Only human-visible PINs, not device secrets, may be copied or displayed.
+The user-visible PIN is eight random decimal digits and expires in five minutes. A separate 256-bit device secret is returned only to the requesting client; only its SHA-256 hash is stored. The hidden PIN page requires CSRF validation, an active central account and fresh password authentication after the PIN is entered. The browser never receives that private device secret or the client's native session token. Approval can be redeemed once in a transaction for a twelve-hour native session; changing the password, deactivating the account or consuming/declining the PIN prevents redemption. Polls are spaced by five seconds, with a ten-second client delay on `central-slow-down`. PIN creation is limited to five requests per source per minute, browser PIN operations to fifteen, and polls to six hundred per source plus per-device pacing. Only human-visible PINs, not device secrets, may be copied or displayed.
 
 Clients keep PIN secrets in memory and discard them on cancellation, expiry, completion or shutdown. They ignore responses from canceled or abandoned PIN screens. A canceled client does not redeem later browser approval; abandoned server records expire. Expired rows are removed when new PINs are created. `reset-data` includes this table. PIN sign-in uses the existing HTTPS workers (AmiSSL on Amiga) and never adds TLS or credentials to the game stream. Rebuild desktop/Amiga clients for the new option; dedicated servers require no change for client PIN authentication.
 
@@ -312,4 +312,37 @@ Tests use a disposable MariaDB schema and local mail relay, never real recipient
 ```sh
 python3 tests/test_account_policy.py
 LINECLASH_WEB_RESET_TEST_CONFIG=/path/to/test-config.php python3 tests/test_email_verification.py
+```
+
+
+## Website profile settings and privacy-preserving deletion
+
+The signed-in `/account/` page supports email/password updates and permanent account deletion. Settings changes require the current password and browser CSRF protection. Password changes follow the configured minimum, increment the account version, revoke native sessions and pending server approvals, and remove outstanding reset/email-change tokens. The current browser session is rotated and updated; other devices sign in again.
+
+With `account_require_email_verification=true`, an email update creates a hashed token in `account_email_changes` and sends a single-use, 24-hour link to the new address. The current address remains active until a CSRF-protected confirmation POST. Confirmation rechecks the account version and uniqueness of the new email, applies it transactionally, invalidates previous sign-ins and sends a notification to the old address when SMTP is available. With verification off, a reauthenticated email change applies immediately. Email/username-derived counters are removed when their old identifiers are no longer needed.
+
+Refresh and migrate before using the new settings. The migration adds `account_email_changes`, private central-account references on result rows, deletion flags and `replay_redacted`. Existing centrally named results are linked to their current accounts during migration. Runtime permissions must include SELECT/INSERT/UPDATE/DELETE on the project data tables, including UPDATE on directory games/players and DELETE on accounts and account token tables. For the current deployment, an administrator can grant the project's CRUD privileges on the database host:
+
+```sh
+mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lineclash.* TO 'lineclash_web'@'sth-ts-web002.kladhest.se';"
+mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lineclash.* TO 'lineclash_web'@'172.16.1.132';"
+```
+
+The migration account also needs its existing CREATE/ALTER privileges. No DROP permission is needed for account deletion. `reset-data` includes `account_email_changes`.
+
+Update and restart the result uploader using the new `scripts/server_directory.py` alongside the website. It adds immutable account IDs from the private SQLite `central_identities` mapping to reported central players/winners; this requires no game-protocol or client update. An unknown, deleted, mismatched or missing central ID is anonymized before storing a new report. This deliberately protects privacy for old queued results and reused handles: older reporters without IDs publish anonymous central names until upgraded. Local nicknames are unaffected. Public result responses omit these account identifiers.
+
+Permanent deletion requires a current password and the exact typed confirmation `DELETE`. In one transaction it removes the account, password hash, email, sessions, PIN approvals, server connection approvals, reset/activation/email-change tokens and counters derived from the known account identifiers. It replaces the central identity in stored player/winner results, scrubs all stored replays (including legacy escaped and replay-only references) and removes unexpected replay metadata. Numeric player results, match IDs, timings, placements and win flags are retained. Independent anonymous result keys prevent multiple deleted participants from being merged. Individual leaderboards retain anonymous win totals without names or profile links; team leaderboards retain ranked team wins.
+
+Ordinary team labels remain intact. A label containing the erased identity or an email is replaced with a non-name team label derived with a private, server-specific key so its wins can remain grouped. Replay joins for deleted players use `DELETED_PLAYER` with no personal team text; the viewer displays **DELETED PLAYER**. Rewritten replay sources receive new SHA-256 checksums and `replay_redacted=1`; the checksum covers the published privacy-edited version. Board snapshots and event timing stay intact. HTML/API responses containing history use no-store caching. Old player-profile requests return 404 without echoing a deleted nickname.
+
+Deletion and game uploads coordinate with a database-scoped advisory lock. Ingestion rechecks account identity inside that lock, so a racing or later report cannot restore deleted names. Erasure processes replays in small batches inside the transaction, and an error rolls back account deletion and history edits together. Never report success after partial erasure. No readable username/email or account-to-anonymous-result lookup table is retained by this operation. Stable anonymous statistical keys use the high-entropy account identity and server scope, keeping late results in their original anonymous cohort.
+
+The scope is the live central website. It cannot erase independently operated server SQLite databases, their logs, previously downloaded replays, existing browser copies or offline backups. Unlinked source-rate counters and operational logs follow operator retention. Backups must be protected and expired by the operator; restoring an old backup can restore personal data, so deletion requests must be reapplied before publishing a restored site. This is retention of pseudonymous game results, not a claim that gameplay traces cannot be recognized using outside information.
+
+Verification uses isolated schemas and synthetic users only:
+
+```sh
+LINECLASH_WEB_RESET_TEST_CONFIG=/path/to/test-config.php python3 tests/test_account_profile.py
+python3 tests/test_directory.py
 ```

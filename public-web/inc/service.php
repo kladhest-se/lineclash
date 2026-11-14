@@ -138,6 +138,7 @@ function public_register(PDO $db,array $a): array {
 }
 
 function announce(PDO $db,array $a): array {
+    require_once __DIR__.'/account-privacy.php';
     $id=text_value($a,'server_id',64);
     $token=text_value($a,'token',256);
     $q=$db->prepare('SELECT token_hash FROM directory_servers WHERE id=?'); $q->execute([$id]); $s=$q->fetch();
@@ -186,7 +187,7 @@ function announce(PDO $db,array $a): array {
                 $last=$ms;
             }
         }
-        $rows[$index]=array_merge($rows[$index],[$started,$ended,$ranked,$reason,$raw,$hash,isset($g['replay_truncated'])?integer_value($g,'replay_truncated',0,1):0,$protocol]);
+        $rows[$index]=array_merge($rows[$index],[$started,$ended,$ranked,$reason,$raw,$hash,isset($g['replay_truncated'])?integer_value($g,'replay_truncated',0,1):0,$protocol,privacy_account_id($g['winner_account_id']??null),0,0]);
         $players=$g['players']??[];
         if(!is_array($players) || !array_is_list($players) || count($players)>8) throw new InvalidArgumentException('Invalid players');
         $playerRows[$index]=[]; $seen=[];
@@ -195,20 +196,22 @@ function announce(PDO $db,array $a): array {
             $nick=text_value($player,'nick',64);
             if($nick==='' || isset($seen[strtolower($nick)])) throw new InvalidArgumentException('Duplicate player');
             $seen[strtolower($nick)]=true;
-            $playerRows[$index][]=[$id,$database,$g['game_id'],$nick,integer_value($player,'lines_cleared',0,10000000),integer_value($player,'specials_sent',0,10000000),integer_value($player,'blocks_placed',0,10000000),integer_value($player,'placement',0,1000),integer_value($player,'won',0,1)];
+            $playerRows[$index][]=[$id,$database,$g['game_id'],$nick,integer_value($player,'lines_cleared',0,10000000),integer_value($player,'specials_sent',0,10000000),integer_value($player,'blocks_placed',0,10000000),integer_value($player,'placement',0,1000),integer_value($player,'won',0,1),privacy_account_id($player['account_id']??null),0];
         }
     }
-    $db->beginTransaction();
+    $privacyLock=privacy_lock($db);
     try {
+        $db->beginTransaction();
+        foreach($rows as $i=>&$row)privacy_ingest($db,$row,$playerRows[$i]);unset($row);
         $q=$db->prepare('UPDATE directory_servers SET last_seen=?,status_json=? WHERE id=?'); $q->execute([time(),json_encode($clean,JSON_THROW_ON_ERROR),$id]);
-        $q=$db->prepare('INSERT INTO directory_games(server_id,database_id,game_id,room_id,started_at,ended_at,winner_nick,winner_team,player_count,started_epoch,ended_epoch,ranked,end_reason,replay_json,replay_sha256,replay_truncated,input_protocol) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE game_id=game_id');
-        $pq=$db->prepare('INSERT INTO directory_players VALUES(?,?,?,?,?,?,?,?,?)');
+        $q=$db->prepare('INSERT INTO directory_games(server_id,database_id,game_id,room_id,started_at,ended_at,winner_nick,winner_team,player_count,started_epoch,ended_epoch,ranked,end_reason,replay_json,replay_sha256,replay_truncated,input_protocol,winner_account_id,winner_deleted,replay_redacted) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE game_id=game_id');
+        $pq=$db->prepare('INSERT INTO directory_players(server_id,database_id,game_id,nick,lines_cleared,specials_sent,blocks_placed,placement,won,account_id,deleted) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
         foreach($rows as $index=>$row) {
             $q->execute($row);
             if($q->rowCount()===1) foreach($playerRows[$index] as $player) $pq->execute($player);
         }
         $db->commit();
-    } catch(Throwable $e) { if($db->inTransaction()) $db->rollBack(); throw $e; }
+    } catch(Throwable $e) { if($db->inTransaction()) $db->rollBack(); throw $e; } finally {privacy_unlock($db,$privacyLock);}
     return ['ok'=>true,'ack'=>array_column($games,'game_id')];
 }
 

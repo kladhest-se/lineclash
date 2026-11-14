@@ -55,6 +55,20 @@ class DirectoryTests(unittest.TestCase):
             self.assertNotEqual(delivery.identity,identity);self.assertNotEqual(delivery.destination,destination)
             delivery.db.close()
 
+    def test_central_identity_metadata_is_reported(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'game.sqlite3'
+            with sqlite3.connect(path) as db:
+                db.execute('CREATE TABLE games(game_id,room_id,started_at,ended_at,winner_nick,winner_team,player_count)')
+                db.execute("INSERT INTO games VALUES(1,1,'start','end','@alice','Red',2)")
+                db.execute('CREATE TABLE game_stats(stat_id,game_id,nick,lines_cleared,specials_sent,blocks_placed,placement,won)')
+                db.execute("INSERT INTO game_stats VALUES(1,1,'@alice',10,2,30,1,1)")
+                db.execute('CREATE TABLE central_identities(account_id,nick)')
+                db.execute('INSERT INTO central_identities VALUES(?,?)',('a'*32,'@alice'))
+            game=d.read_games(path)[0]
+            self.assertEqual(game['winner_account_id'],'a'*32)
+            self.assertEqual(game['players'][0]['account_id'],'a'*32)
+
     def test_only_completed_public_fields(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'game.sqlite3'

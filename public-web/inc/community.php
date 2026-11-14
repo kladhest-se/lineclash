@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__.'/site.php';
+require_once __DIR__.'/site.php';require_once __DIR__.'/account-privacy.php';
 function community_load(string $page='home'): array {
-    $d=['available'=>false,'invalid'=>false,'servers'=>[],'all_servers'=>[],'matches'=>[],'leaders'=>[],'metrics'=>[],'totals'=>[],'server_totals'=>[],'offset'=>0,'more_matches'=>false,'more_leaders'=>false,'server'=>'','mode'=>'all','q'=>'','availability'=>'all'];
+    $d=['available'=>false,'invalid'=>false,'servers'=>[],'all_servers'=>[],'matches'=>[],'leaders'=>[],'teams'=>[],'metrics'=>[],'totals'=>[],'server_totals'=>[],'offset'=>0,'more_matches'=>false,'more_leaders'=>false,'server'=>'','mode'=>'all','q'=>'','availability'=>'all'];
     try {
         if(in_array($page,['matches','leaderboards','directory','statistics'],true)) {
             [$where,$args]=game_filter();$d['server']=$_GET['server']??'';$d['mode']=$_GET['mode']??'all';
@@ -21,19 +21,20 @@ function community_load(string $page='home'): array {
         $d['metrics']['live_servers']=count($d['servers']);$d['metrics']['players']=array_sum(array_map(fn($s)=>(int)($s['status']['players']??0),$d['servers']));
         if(in_array($page,['home','directory','matches','statistics'],true)) {
             $limit=$page==='home'?6:51;
-            $sql='SELECT g.server_id,g.database_id,g.game_id,g.room_id,g.started_epoch,g.ended_epoch,g.ended_at,g.ranked,g.end_reason,g.winner_nick,g.player_count,s.name AS server_name FROM directory_games g JOIN directory_servers s ON s.id=g.server_id WHERE '.$where.' ORDER BY g.ended_epoch DESC,g.ended_at DESC,g.server_id,g.database_id,g.game_id DESC LIMIT '.$limit.' OFFSET ?';
-            $stmt=$db->prepare($sql);foreach($args as $i=>$value)$stmt->bindValue($i+1,$value);$stmt->bindValue(count($args)+1,$d['offset'],PDO::PARAM_INT);$stmt->execute();$d['matches']=$stmt->fetchAll();
+            $sql='SELECT g.server_id,g.database_id,g.game_id,g.room_id,g.started_epoch,g.ended_epoch,g.ended_at,g.ranked,g.end_reason,g.winner_nick,g.winner_team,g.winner_deleted,g.player_count,s.name AS server_name FROM directory_games g JOIN directory_servers s ON s.id=g.server_id WHERE '.$where.' ORDER BY g.ended_epoch DESC,g.ended_at DESC,g.server_id,g.database_id,g.game_id DESC LIMIT '.$limit.' OFFSET ?';
+            $stmt=$db->prepare($sql);foreach($args as $i=>$value)$stmt->bindValue($i+1,$value);$stmt->bindValue(count($args)+1,$d['offset'],PDO::PARAM_INT);$stmt->execute();$d['matches']=array_map('privacy_public_match',$stmt->fetchAll());
             $d['more_matches']=count($d['matches'])>50;$d['matches']=array_slice($d['matches'],0,50);
         }
         if(in_array($page,['home','directory','leaderboards','statistics'],true)) {
             $leaderWhere="g.ranked=1 AND g.end_reason='completed' AND g.winner_nick<>''";$leaderArgs=[];
             if($d['server']!==''){$leaderWhere.=' AND g.server_id=?';$leaderArgs[]=$d['server'];}
             $limit=$page==='home'?5:51;
-            $stmt=$db->prepare('SELECT g.server_id,g.winner_nick,s.name AS server_name,COUNT(*) AS wins FROM directory_games g JOIN directory_servers s ON s.id=g.server_id WHERE '.$leaderWhere.' GROUP BY g.server_id,g.winner_nick,s.name ORDER BY wins DESC,g.server_id,g.winner_nick LIMIT '.$limit.' OFFSET ?');
-            foreach($leaderArgs as $i=>$value)$stmt->bindValue($i+1,$value);$stmt->bindValue(count($leaderArgs)+1,$page==='leaderboards'?$d['offset']:0,PDO::PARAM_INT);$stmt->execute();$d['leaders']=$stmt->fetchAll();
+            $stmt=$db->prepare('SELECT g.server_id,g.winner_nick,g.winner_deleted,s.name AS server_name,COUNT(*) AS wins FROM directory_games g JOIN directory_servers s ON s.id=g.server_id WHERE '.$leaderWhere.' GROUP BY g.server_id,g.winner_nick,g.winner_deleted,s.name ORDER BY wins DESC,g.server_id,g.winner_nick LIMIT '.$limit.' OFFSET ?');
+            foreach($leaderArgs as $i=>$value)$stmt->bindValue($i+1,$value);$stmt->bindValue(count($leaderArgs)+1,$page==='leaderboards'?$d['offset']:0,PDO::PARAM_INT);$stmt->execute();$d['leaders']=array_map('privacy_public_match',$stmt->fetchAll());
             $d['more_leaders']=count($d['leaders'])>50;$d['leaders']=array_slice($d['leaders'],0,50);
         }
         if($page==='statistics') {
+            $d['teams']=$db->query("SELECT g.server_id,g.winner_team,s.name AS server_name,COUNT(*) AS wins FROM directory_games g JOIN directory_servers s ON s.id=g.server_id WHERE g.ranked=1 AND g.end_reason='completed' AND g.winner_team<>'' GROUP BY g.server_id,g.winner_team,s.name ORDER BY wins DESC,g.server_id,g.winner_team LIMIT 50")->fetchAll();
             $d['totals']=$db->query('SELECT COALESCE(SUM(lines_cleared),0) AS cleared_lines,COALESCE(SUM(specials_sent),0) AS specials,COALESCE(SUM(blocks_placed),0) AS blocks FROM directory_players')->fetch();
             $d['totals']['profiles']=$db->query('SELECT COUNT(*) FROM (SELECT server_id,nick FROM directory_players GROUP BY server_id,nick) AS profiles')->fetchColumn();
             $d['totals']['average_duration']=$db->query('SELECT AVG(ended_epoch-started_epoch) FROM directory_games WHERE started_epoch>0 AND ended_epoch>=started_epoch')->fetchColumn();
@@ -60,12 +61,19 @@ function community_player_url(string $server,string $nick,string $base): string 
 function community_match_url(array $g,string $base): string { return $base.'directory/match.php?'.http_build_query(['server'=>$g['server_id'],'database'=>$g['database_id'],'game'=>$g['game_id']]); }
 function community_leaders(array $rows,string $base='../',int $offset=0): void {
     if(!$rows){community_empty('A place on the board is waiting.','Ranked wins will appear here after eligible competitive matches finish. Casual and stopped rounds stay in match history.');return;}
-?><div class="data-panel table-scroll"><table class="community-table"><thead><tr><th scope="col">Rank</th><th scope="col">Player / server</th><th scope="col">Wins</th></tr></thead><tbody><?php foreach($rows as $i=>$p): ?><tr><td><span class="rank <?=$offset+$i===0?'first':''?>"><?=str_pad((string)($offset+$i+1),2,'0',STR_PAD_LEFT)?></span></td><td><a href="<?=site_h(community_player_url($p['server_id'],$p['winner_nick'],$base))?>"><?=site_h($p['winner_nick'])?></a><small><?=site_h($p['server_name'])?></small></td><td><?=number_format((int)$p['wins'])?></td></tr><?php endforeach; ?></tbody></table></div><?php }
+?><div class="data-panel table-scroll"><table class="community-table"><thead><tr><th scope="col">Rank</th><th scope="col">Player / server</th><th scope="col">Wins</th></tr></thead><tbody><?php foreach($rows as $i=>$p): ?><tr><td><span class="rank <?=$offset+$i===0?'first':''?>"><?=str_pad((string)($offset+$i+1),2,'0',STR_PAD_LEFT)?></span></td><td><?php if(!empty($p['winner_deleted'])):?>DELETED PLAYER<?php else:?><a href="<?=site_h(community_player_url($p['server_id'],$p['winner_nick'],$base))?>"><?=site_h($p['winner_nick'])?></a><?php endif;?><small><?=site_h($p['server_name'])?></small></td><td><?=number_format((int)$p['wins'])?></td></tr><?php endforeach; ?></tbody></table></div><?php }
 function community_matches(array $rows,string $base='../'): void {
     if(!$rows){community_empty('Every rivalry has a first round.','Completed matches, results and available replays will appear here. Try another filter or check back after a game.');return;}
-?><div class="data-panel table-scroll"><table class="community-table"><thead><tr><th scope="col">Match / server</th><th scope="col">Mode</th><th scope="col">Winner</th><th scope="col">Finished</th></tr></thead><tbody><?php foreach($rows as $g): ?><tr><td><a href="<?=site_h(community_match_url($g,$base))?>">Match #<?=site_h($g['game_id'])?></a><small><?=site_h($g['server_name'])?> · Room <?=site_h($g['room_id'])?> · <?=site_h($g['player_count'])?> players</small></td><td><span class="mode-pill <?=((int)$g['ranked'])?'ranked':''?>"><?=((int)$g['ranked'])?'Ranked':'Casual'?></span><small><?=site_h($g['end_reason'])?></small></td><td><?php if($g['winner_nick']!==''): ?><a href="<?=site_h(community_player_url($g['server_id'],$g['winner_nick'],$base))?>"><?=site_h($g['winner_nick'])?></a><?php else: ?>No winner<?php endif; ?></td><td><?=site_h($g['ended_epoch']?gmdate('M j, H:i',(int)$g['ended_epoch']).' UTC':$g['ended_at'].' (legacy)')?><small><a href="<?=site_h(community_match_url($g,$base))?>">Details &amp; replay →</a></small></td></tr><?php endforeach; ?></tbody></table></div><?php }
+?><div class="data-panel table-scroll"><table class="community-table"><thead><tr><th scope="col">Match / server</th><th scope="col">Mode</th><th scope="col">Winner</th><th scope="col">Finished</th></tr></thead><tbody><?php foreach($rows as $g): ?><tr><td><a href="<?=site_h(community_match_url($g,$base))?>">Match #<?=site_h($g['game_id'])?></a><small><?=site_h($g['server_name'])?> · Room <?=site_h($g['room_id'])?> · <?=site_h($g['player_count'])?> players</small></td><td><span class="mode-pill <?=((int)$g['ranked'])?'ranked':''?>"><?=((int)$g['ranked'])?'Ranked':'Casual'?></span><small><?=site_h($g['end_reason'])?></small></td><td><?php if(!empty($g['winner_deleted'])): ?>DELETED PLAYER<?php elseif($g['winner_nick']!==''): ?><a href="<?=site_h(community_player_url($g['server_id'],$g['winner_nick'],$base))?>"><?=site_h($g['winner_nick'])?></a><?php else: ?>No winner<?php endif; ?><?php if(($g['winner_team']??'')!==''):?><small>Team <?=site_h($g['winner_team'])?></small><?php endif;?></td><td><?=site_h($g['ended_epoch']?gmdate('M j, H:i',(int)$g['ended_epoch']).' UTC':$g['ended_at'].' (legacy)')?><small><a href="<?=site_h(community_match_url($g,$base))?>">Details &amp; replay →</a></small></td></tr><?php endforeach; ?></tbody></table></div><?php }
 function community_server_select(array $d): void { ?><label>Server<select name="server"><option value="">All servers</option><?php foreach($d['all_servers'] as $s): ?><option value="<?=site_h($s['id'])?>"<?=$s['id']===$d['server']?' selected':''?>><?=site_h($s['name'])?></option><?php endforeach; ?></select></label><?php }
 function community_pagination(array $d,bool $more): void {
     $query=['server'=>$d['server'],'mode'=>$d['mode']];
 ?><nav class="pagination" aria-label="Pagination"><span><?php if($d['offset']>0): ?><a href="?<?=site_h(http_build_query($query+['offset'=>max(0,$d['offset']-50)]))?>">← Previous</a><?php endif; ?></span><span class="muted">Page <?=intdiv($d['offset'],50)+1?></span><span><?php if($more): ?><a href="?<?=site_h(http_build_query($query+['offset'=>$d['offset']+50]))?>">Next →</a><?php endif; ?></span></nav>
 <?php }
+
+function community_teams(array $teams): void {
+    if(!$teams){community_empty('Team rivalries start here.','Completed ranked team wins will appear here.');return;}
+    echo '<div class="data-panel table-scroll"><table class="community-table"><thead><tr><th>Team / server</th><th>Wins</th></tr></thead><tbody>';
+    foreach($teams as $team)echo '<tr><td>'.site_h($team['winner_team']).'<small>'.site_h($team['server_name']).'</small></td><td>'.number_format((int)$team['wins']).'</td></tr>';
+    echo '</tbody></table></div>';
+}

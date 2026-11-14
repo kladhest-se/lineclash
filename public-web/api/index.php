@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require __DIR__.'/../inc/service.php';
+require __DIR__.'/../inc/service.php';require_once __DIR__.'/../inc/account-privacy.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 $account_request=false;
@@ -42,26 +42,30 @@ try {
         }
         elseif($action==='matches') {
             [$where,$args]=game_filter();
-            $q=$db->prepare('SELECT g.server_id,g.database_id,g.game_id,g.room_id,g.started_at,g.ended_at,g.started_epoch,g.ended_epoch,g.ranked,g.end_reason,g.winner_nick,g.winner_team,g.player_count,g.replay_sha256,g.replay_truncated,s.name AS server_name FROM directory_games g JOIN directory_servers s ON s.id=g.server_id WHERE '.$where.' ORDER BY g.ended_epoch DESC,g.ended_at DESC,g.server_id,g.database_id,g.game_id DESC LIMIT 50 OFFSET ?');
-            foreach($args as $i=>$arg) $q->bindValue($i+1,$arg); $q->bindValue(count($args)+1,$offset,PDO::PARAM_INT); $q->execute(); $result=['matches'=>$q->fetchAll()];
+            $q=$db->prepare('SELECT g.server_id,g.database_id,g.game_id,g.room_id,g.started_at,g.ended_at,g.started_epoch,g.ended_epoch,g.ranked,g.end_reason,g.winner_nick,g.winner_team,g.winner_deleted,g.player_count,g.replay_sha256,g.replay_truncated,s.name AS server_name FROM directory_games g JOIN directory_servers s ON s.id=g.server_id WHERE '.$where.' ORDER BY g.ended_epoch DESC,g.ended_at DESC,g.server_id,g.database_id,g.game_id DESC LIMIT 50 OFFSET ?');
+            foreach($args as $i=>$arg) $q->bindValue($i+1,$arg); $q->bindValue(count($args)+1,$offset,PDO::PARAM_INT); $q->execute(); $result=['matches'=>array_map('privacy_public_match',$q->fetchAll())];
         } elseif($action==='statistics') {
             $result=['games'=>(int)$db->query('SELECT COUNT(*) FROM directory_games')->fetchColumn(), 'ranked_games'=>(int)$db->query('SELECT COUNT(*) FROM directory_games WHERE ranked=1')->fetchColumn(), 'servers'=>(int)$db->query('SELECT COUNT(*) FROM directory_servers')->fetchColumn(), 'live_servers'=>count(live_servers($db))];
         } elseif($action==='leaders') {
             // Nicknames belong to a server; they are not global authenticated identities.
-            $result=['leaders'=>$db->query("SELECT server_id,winner_nick,COUNT(*) AS wins FROM directory_games WHERE ranked=1 AND end_reason='completed' AND winner_nick<>'' GROUP BY server_id,winner_nick ORDER BY wins DESC,server_id,winner_nick LIMIT 50")->fetchAll()];
+            $result=['leaders'=>array_map('privacy_public_match',$db->query("SELECT server_id,winner_nick,winner_deleted,COUNT(*) AS wins FROM directory_games WHERE ranked=1 AND end_reason='completed' AND winner_nick<>'' GROUP BY server_id,winner_nick,winner_deleted ORDER BY wins DESC,server_id,winner_nick LIMIT 50")->fetchAll())];
+        } elseif($action==='teams'){
+            $result=['teams'=>$db->query("SELECT server_id,winner_team,COUNT(*) AS wins FROM directory_games WHERE ranked=1 AND end_reason='completed' AND winner_team<>'' GROUP BY server_id,winner_team ORDER BY wins DESC,server_id,winner_team LIMIT 50")->fetchAll()];
         } elseif($action==='match' || $action==='replay') {
             $key=game_key(); $q=$db->prepare('SELECT * FROM directory_games WHERE server_id=? AND database_id=? AND game_id=?'); $q->execute($key); $game=$q->fetch();
             if(!$game) { http_response_code(404); $result=['error'=>'Match not found']; }
             else {
                 $source=$game['replay_json']; $events=$game['replay_json']!==null?json_decode($game['replay_json'],true,16,JSON_THROW_ON_ERROR):[]; unset($game['replay_json']);
-                $q=$db->prepare('SELECT nick,lines_cleared,specials_sent,blocks_placed,placement,won FROM directory_players WHERE server_id=? AND database_id=? AND game_id=? ORDER BY placement=0,placement,nick'); $q->execute($key);
-                $result=['match'=>$game,'players'=>$q->fetchAll()];
+                $q=$db->prepare('SELECT nick,lines_cleared,specials_sent,blocks_placed,placement,won,deleted FROM directory_players WHERE server_id=? AND database_id=? AND game_id=? ORDER BY placement=0,placement,nick'); $q->execute($key);
+                $result=['match'=>privacy_public_match($game),'players'=>array_map('privacy_public_player',$q->fetchAll())];
                 if($action==='replay') { $result['events']=$events; $result['replay_source']=$source; if(($_GET['download']??'')==='1') header('Content-Disposition: attachment; filename="lineclash-replay.json"'); }
             }
         } elseif($action==='player') {
             $server=text_value($_GET,'server',64); $nick=text_value($_GET,'nick',64);
             $q=$db->prepare('SELECT p.*,g.started_epoch,g.ended_epoch,g.ranked,g.end_reason FROM directory_players p JOIN directory_games g USING(server_id,database_id,game_id) WHERE p.server_id=? AND p.nick=? ORDER BY g.ended_epoch DESC,g.game_id DESC LIMIT 50'); $q->execute([$server,$nick]);
-            $result=['server'=>$server,'nick'=>$nick,'matches'=>$q->fetchAll()];
+            $history=$q->fetchAll();
+            if(!$history || (int)$history[0]['deleted']){http_response_code(404);$result=['error'=>'Player history unavailable'];}
+            else $result=['server'=>$server,'nick'=>$nick,'matches'=>array_map('privacy_public_player',$history)];
         } else throw new InvalidArgumentException('Unknown action');
     } else { http_response_code(405); header('Allow: GET, POST'); $result=['error'=>'Method not allowed']; }
     echo json_encode($result,JSON_THROW_ON_ERROR|JSON_INVALID_UTF8_SUBSTITUTE);

@@ -1097,3 +1097,9 @@ section[id],div[id=build] { scroll-margin-top:100px; }
 .account-error,.account-notice{max-width:680px;padding:16px 20px;border:1px solid;border-radius:6px}
 .account-error{color:var(--red);background:var(--mantle)}
 .account-notice{color:var(--green);background:var(--mantle)}
+
+.account-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:48px;align-items:start}
+.account-settings .account-form{max-width:none}
+.account-danger{border-top:1px solid var(--red);padding-top:28px}
+.account-danger button{background:var(--red);color:var(--crust)}
+@media(max-width:700px){.account-settings{grid-template-columns:1fr;gap:12px}}

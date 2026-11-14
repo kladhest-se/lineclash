@@ -86,7 +86,7 @@ int main(void) {
     c.account_create_mode=0;strcpy(c.account_message,"Check your email to activate your account, then sign in.");
     sdl_render_accounts(&c);capture("lineclash-account-activation.bmp");
     c.account_create_mode=0;c.account_pin_mode=1;strcpy(c.account_pin,"12345678");c.account_pin_expires=time(NULL)+300;
-    memset(c.account_pin_secret,'a',64);c.account_pin_secret[64]=0;strcpy(c.account_message,"Waiting for approval on the website...");
+    memset(c.account_pin_secret,'a',64);c.account_pin_secret[64]=0;strcpy(c.account_message,"Waiting for sign-in on the website...");
     sdl_render_accounts(&c);capture("lineclash-account-pin.bmp");
     sound_shutdown(); sdl_shutdown(); return 0;
 }

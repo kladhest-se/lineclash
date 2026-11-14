@@ -1,10 +1,26 @@
 <?php
-require_once __DIR__.'/../inc/accounts.php';require_once __DIR__.'/../inc/password-recovery.php';require_once __DIR__.'/../inc/site.php';account_session();
-$error='';$notice='';$user=null;$device=null;$code=strtoupper(trim((string)($_POST['code']??$_GET['code']??'')));
+require_once __DIR__.'/../inc/accounts.php';require_once __DIR__.'/../inc/account-profile.php';require_once __DIR__.'/../inc/password-recovery.php';require_once __DIR__.'/../inc/site.php';account_session();
+$error='';$notice='';$user=null;$code=strtoupper(trim((string)($_POST['code']??$_GET['code']??'')));
+if($_SERVER['REQUEST_METHOD']==='GET' && preg_match('/^[A-F0-9]{8}$/D',$code)){header('Location: ../pin/?code='.rawurlencode($code),true,303);exit;}
 try {
-    $db=database();account_current($db);
+    $db=database();$user=account_current($db);
     if($_SERVER['REQUEST_METHOD']==='POST'){
         account_csrf();$action=$_POST['action']??'';
+        if(in_array($action,['password','email','delete'],true)){
+            if(!$user)throw new InvalidArgumentException('Sign in first.');
+            $current=is_string($_POST['current_password']??null)?$_POST['current_password']:'';
+            if($action==='password'){
+                account_profile_password($db,$user,$current,is_string($_POST['new_password']??null)?$_POST['new_password']:'',is_string($_POST['confirm_password']??null)?$_POST['confirm_password']:'');
+                $_SESSION['auth_version']++;session_regenerate_id(true);$notice='Password changed. Other sign-ins have been revoked.';
+            }elseif($action==='email'){
+                $pending=account_profile_email($db,$user,$current,is_string($_POST['new_email']??null)?$_POST['new_email']:'');
+                if(!$pending){$_SESSION['auth_version']++;session_regenerate_id(true);}
+                $notice=$pending?'Check the new email address to confirm this change. Your current email remains active.':'Email changed. Other sign-ins have been revoked.';
+            }else{
+                account_profile_delete($db,$user,$current,is_string($_POST['confirmation']??null)?$_POST['confirmation']:'');
+                $_SESSION=[];session_regenerate_id(true);$_SESSION['csrf']=bin2hex(random_bytes(32));$user=null;$notice='Account deleted. Personal account data was erased; match results remain with deleted players anonymized.';
+            }
+        }
         if($action==='logout'){$_SESSION=[];session_destroy();header('Location: ./');exit;}
         if($action==='recover')throw new InvalidArgumentException('Recovery codes are no longer supported. Use the email password recovery page.');
         if(in_array($action,['login','register'],true)){
@@ -19,14 +35,10 @@ try {
                 account_assert_verified($candidate);$user=$candidate;session_regenerate_id(true);$_SESSION['account_id']=$user['id'];$_SESSION['auth_version']=(int)$user['auth_version'];
             }
         }
-        if($action==='approve'){
-            account_limit($db,'account-approve');if(empty($_SESSION['account_id']))throw new InvalidArgumentException('Sign in first.');
-            $q=$db->prepare("UPDATE account_devices SET account_id=?,state='approved' WHERE code=? AND state='pending' AND expires>=?");$q->execute([$_SESSION['account_id'],$code,time()]);if($q->rowCount()!==1)throw new InvalidArgumentException('That code expired or was already used.');$notice='Approved. Return to the game.';
-        }
+        if($action==='approve')throw new InvalidArgumentException('Authenticate the client through /pin/.');
     }
     $user=account_current($db);
-    $device=null;if(preg_match('/^[A-F0-9]{8}$/D',$code)){$q=$db->prepare("SELECT d.code,s.name,s.host,s.port FROM account_devices d JOIN directory_servers s ON s.id=d.server_id WHERE code=? AND state='pending' AND expires>=?");$q->execute([$code,time()]);$device=$q->fetch();}
-}catch(InvalidArgumentException $e){$error=$e->getMessage();}catch(Throwable $e){error_log('LineClash account error: '.$e->getMessage());$error='Account service unavailable, or that handle is already registered.';}
+}catch(InvalidArgumentException $e){$error=$e->getMessage();}catch(Throwable $e){error_log('LineClash account error: '.$e->getMessage());$error='Account service unavailable. Try again later.';}
 site_header('Account','account');
 function account_fields(string $code): void {echo '<input type="hidden" name="csrf" value="'.site_h($_SESSION['csrf']).'"><input type="hidden" name="code" value="'.site_h($code).'">';}
 ?>
@@ -44,15 +56,25 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <label for="account-password">Password</label>
 <input id="account-password" type="password" name="password" required minlength="<?=account_password_min_length()?>" maxlength="72" autocomplete="current-password">
 <button name="action" value="login">Sign in</button><button name="action" value="register">Create account</button>
-<a href="pin/">Sign in a client with a PIN</a>
 <a href="verify/">Resend activation email</a>
 </form></section>
 <?php if(account_recovery_settings()):?><p><a href="recover/">Forgot password?</a></p><?php else:?><p>Email password recovery is disabled because SMTP is not configured.</p><?php endif;?>
 <?php else:?>
-<p><a href="pin/">Sign in a client with a PIN</a>
- · <a href="verify/">Resend activation email</a></p>
 <p>Your central player identity is <strong>@<?=site_h($user['handle'])?></strong>. Server permissions and bans remain under each server operator's control.</p>
-<?php if($device):?><section class="community-section"><h2>Approve this connection?</h2><p>Server: <strong><?=site_h($device['name'])?></strong> — <?=site_h($device['host'])?>:<?=(int)$device['port']?></p><p>Approve only if this is the code currently shown in your game: <strong><?=site_h($code)?></strong>.</p><form method="post"><?php account_fields($code);?><button name="action" value="approve">Approve sign-in</button></form></section>
-<?php else:?><form method="get" class="account-form"><label>Game sign-in code<input name="code" maxlength="8" autocomplete="off" required></label><button>Continue</button></form><?php endif;?>
-<form method="post"><?php account_fields('');?><button name="action" value="logout">Sign out</button></form>
+<section class="community-section"><h2>Profile settings</h2>
+<p>Username: <strong>@<?=site_h($user['handle'])?></strong></p>
+<div class="account-settings"><form method="post" class="account-form"><?php account_fields('');?>
+<label for="profile-email">Email</label><input id="profile-email" name="new_email" type="email" value="<?=site_h($user['email']??'')?>" maxlength="254" autocomplete="email" required>
+<label for="email-current-password">Current password</label><input id="email-current-password" name="current_password" type="password" maxlength="72" autocomplete="current-password" required><button name="action" value="email">Change email</button></form>
+<form method="post" class="account-form"><?php account_fields('');?>
+<label for="password-current">Current password</label><input id="password-current" name="current_password" type="password" maxlength="72" autocomplete="current-password" required>
+<label for="password-new">New password</label><input id="password-new" name="new_password" type="password" minlength="<?=account_password_min_length()?>" maxlength="72" autocomplete="new-password" required>
+<label for="password-confirm">Confirm new password</label><input id="password-confirm" name="confirm_password" type="password" maxlength="72" autocomplete="new-password" required><button name="action" value="password">Change password</button></form></div></section>
+<section class="community-section account-danger"><h2>Delete account</h2>
+<p>This permanently erases your central account, email, password and sign-in tokens. Your name is removed from this website's statistics and replays. Match scores, placements, team results and wins remain; your entries display as <strong>DELETED PLAYER</strong>.</p>
+<p>Independent game-server records, existing downloads and operator backups have separate retention. This cannot be undone.</p>
+<details><summary>Delete my account permanently</summary><form method="post" class="account-form"><?php account_fields('');?>
+<label for="delete-password">Current password</label><input id="delete-password" name="current_password" type="password" maxlength="72" autocomplete="current-password" required>
+<label for="delete-confirmation">Type DELETE to confirm</label><input id="delete-confirmation" name="confirmation" autocomplete="off" pattern="DELETE" required><button name="action" value="delete">Permanently delete account</button></form></details></section>
+<form method="post" class="account-form"><?php account_fields('');?><button name="action" value="logout">Sign out</button></form>
 <?php endif;?></main><?php site_footer();?>

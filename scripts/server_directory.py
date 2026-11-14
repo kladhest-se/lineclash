@@ -51,11 +51,14 @@ def read_games(path, state=None, destination=None):
         games=[dict(row) for row in db.execute(
             "SELECT game_id,room_id,started_at,ended_at,winner_nick,winner_team,player_count," + fields + " FROM games WHERE ended_at<>''" + condition + " ORDER BY game_id LIMIT 20", parameters)]
         tables={row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        identities={row['nick'].lower():row['account_id'] for row in db.execute('SELECT nick,account_id FROM central_identities')} if 'central_identities' in tables else {}
         size=0; batch=[]
         for g in games:
+            g['winner_account_id']=identities.get(g['winner_nick'].lower(),'')
             g['players']=[]
             if 'game_stats' in tables and 'game_id' in {row[1] for row in db.execute('PRAGMA table_info(game_stats)')}:
                 g['players']=[dict(row) for row in db.execute('SELECT nick,lines_cleared,specials_sent,blocks_placed,placement,won FROM game_stats WHERE game_id=? ORDER BY stat_id LIMIT 8',(g['game_id'],))]
+            for player in g['players']:player['account_id']=identities.get(player['nick'].lower(),'')
             if 'replay_events' in tables:
                 events=[dict(row) for row in db.execute('SELECT elapsed_ms,line FROM replay_events WHERE game_id=? ORDER BY seq LIMIT 2048',(g['game_id'],))]
                 if events:

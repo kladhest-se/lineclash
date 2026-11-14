@@ -23,7 +23,7 @@ int sdl_init(void){log_info("Opening native Intuition frontend");KeymapBase=Open
 void sdl_shutdown(void){if(window)CloseWindow(window);if(screen)CloseScreen(screen);if(KeymapBase)CloseLibrary(KeymapBase);window=0;screen=0;KeymapBase=0;}
 void sdl_text_start(void){}void sdl_text_stop(void){}const char *sdl_get_res_dir(void){return "PROGDIR:";}
 void sdl_set_ui_options(int scale,int patterns,int contrast){(void)scale;(void)patterns;(void)contrast;}
-void sdl_open_account_code(const char *code){printf("Approve central sign-in at https://lineclash.kladhest.se/account/  Code: %s\n",code);}
+void sdl_open_account_code(const char *code){printf("Authenticate at https://lineclash.kladhest.se/pin/  PIN: %s\n",code);}
 
 static int raw_sc(UWORD raw,char ch){if(raw>=0x50&&raw<=0x59)return 58+raw-0x50;switch(raw){case 0x4c:return 82;case 0x4d:return 81;case 0x4e:return 79;case 0x4f:return 80;case 0x44:return 40;case 0x45:return 41;case 0x41:return 42;case 0x42:return 43;case 0x40:return 44;case 0x60:return 225;case 0x61:return 229;}if(ch>='A'&&ch<='Z')ch+=32;if(ch>='a'&&ch<='z')return ch-'a'+4;if(ch>='1'&&ch<='9')return ch-'1'+30;if(ch=='0')return 39;return 0;}
 int sdl_poll_events(ClientCtx *c){struct IntuiMessage *message;
@@ -60,9 +60,9 @@ void sdl_render_accounts(ClientCtx *c){begin("ACCOUNT");int busy=account_https_b
   if(!busy && button(x,160,w,"Browse servers"))client_accounts_action(c,ACCOUNT_CONTINUE);
   if(!busy && button(x,190,w,"Sign out"))client_accounts_action(c,ACCOUNT_LOGOUT);
  }else if(c->account_pin_mode){
-  text(x,58,"Sign in with a PIN",5);text(48,86,"Open lineclash.kladhest.se/account/pin in a browser",1);
+  text(x,58,"Sign in with a PIN",5);text(48,86,"Open lineclash.kladhest.se/pin in a browser",1);
   char display[24];snprintf(display,sizeof(display),"PIN: %.4s %.4s",c->account_pin,c->account_pin+4);text(x,114,display,5);
-  text(48,142,"Enter the PIN, sign in, then approve this client.",1);
+  text(48,142,"Enter the PIN, then sign in to authenticate.",1);
   if(button(x,174,w,"Use username / password"))client_accounts_action(c,ACCOUNT_PIN_CANCEL);
   if(!busy && !c->account_pin_secret[0] && button(x,200,w,"Get a new PIN"))client_accounts_action(c,ACCOUNT_PIN_START);
  }else{
