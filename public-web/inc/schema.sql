@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS directory_registration_limits (
 CREATE TABLE IF NOT EXISTS accounts (
  id CHAR(32) CHARACTER SET ascii PRIMARY KEY,
  handle VARCHAR(14) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL UNIQUE,
+ -- recovery_hash is retained for schema compatibility; codes are not issued or accepted.
  password_hash VARCHAR(255) NOT NULL, recovery_hash CHAR(64) CHARACTER SET ascii NOT NULL,
  active TINYINT NOT NULL DEFAULT 1, created_at BIGINT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -64,6 +65,14 @@ CREATE TABLE IF NOT EXISTS account_sessions (
  token_hash CHAR(64) CHARACTER SET ascii PRIMARY KEY,
  account_id CHAR(32) CHARACTER SET ascii NOT NULL,
  auth_version INT NOT NULL, expires BIGINT NOT NULL, revoked TINYINT NOT NULL DEFAULT 0,
+ FOREIGN KEY(account_id) REFERENCES accounts(id), INDEX expiry(expires)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Only hashes of single-use reset tokens are stored; one outstanding link per account.
+CREATE TABLE IF NOT EXISTS account_password_resets (
+ account_id CHAR(32) CHARACTER SET ascii PRIMARY KEY,
+ token_hash CHAR(64) CHARACTER SET ascii NOT NULL UNIQUE,
+ auth_version INT NOT NULL, expires BIGINT NOT NULL,
  FOREIGN KEY(account_id) REFERENCES accounts(id), INDEX expiry(expires)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

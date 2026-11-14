@@ -4,7 +4,7 @@ if(PHP_SAPI!=='cli') { http_response_code(404); exit; }
 require __DIR__.'/../inc/service.php';
 // Child tables precede their parents; DELETE keeps foreign keys and rollback intact.
 function reset_website_data(PDO $db,bool $confirmed): void {
-    $tables=['account_sessions','account_devices','directory_players','directory_games',
+    $tables=['account_password_resets','account_sessions','account_devices','directory_players','directory_games',
              'directory_registration_limits','accounts','directory_servers'];
     $database=$db->query('SELECT DATABASE()')->fetchColumn();
     if(!is_string($database) || $database==='')throw new RuntimeException('No database selected in the site configuration');
@@ -31,6 +31,13 @@ function reset_website_data(PDO $db,bool $confirmed): void {
 try {
     $command=$argv[1]??'';
     if($command==='reset-data' && !(count($argv)===2 || (count($argv)===3 && in_array($argv[2],['--dry-run','--confirm-reset'],true))))throw new RuntimeException('Usage: php bin/manage.php reset-data [--dry-run | --confirm-reset]');
+    if($command==='smtp-test'){
+        if(count($argv)!==3)throw new RuntimeException('Usage: php bin/manage.php smtp-test EMAIL');
+        require_once __DIR__.'/../inc/smtp.php';$smtp=smtp_settings(require web_config_path());
+        if(!$smtp)throw new RuntimeException('SMTP is not configured or its settings are invalid');
+        smtp_send($smtp,$argv[2],'LineClash SMTP test',"SMTP delivery from LineClash is working. This message contains no account information.\n");
+        echo "SMTP relay accepted the test message. Check the recipient inbox.\n";exit;
+    }
     $db=database();
     if(($argv[1]??'')==='migrate') {
         $db->exec(file_get_contents(__DIR__.'/../inc/schema.sql')); echo "Schema ready.\n";
@@ -43,5 +50,5 @@ try {
         $q=$db->prepare("INSERT INTO directory_servers(id,name,host,port,token_hash,status_json) VALUES(?,?,?,?,?,'{}') ON DUPLICATE KEY UPDATE name=VALUES(name),host=VALUES(host),port=VALUES(port),token_hash=VALUES(token_hash),last_seen=0");
         $q->execute([$id,$name,$host,(int)$port,hash('sha256',$token)]);
         echo "Set LINECLASH_DIRECTORY_TOKEN to: $token\n";
-    } else throw new RuntimeException('Usage: php bin/manage.php migrate | server ID HOST PORT NAME | reset-data [--dry-run | --confirm-reset]');
+    } else throw new RuntimeException('Usage: php bin/manage.php migrate | smtp-test EMAIL | server ID HOST PORT NAME | reset-data [--dry-run | --confirm-reset]');
 } catch(Throwable $e) { fwrite(STDERR,$e->getMessage()."\n"); exit(1); }

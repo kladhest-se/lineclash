@@ -29,7 +29,7 @@ static int transfer(const char *body,char *reply,size_t capacity){
  while(total<65536 && (n=SSL_read(ssl,response+total,65536-total))>0){if(memchr(response+total,0,n)){n=-1;break;}total+=n;}response[total]=0;
  char *content=strstr(response,"\r\n\r\n");int status=0;sscanf(response,"HTTP/%*s %d",&status);
  if(n==0 && content){
-  if(reply){size_t length=total-(size_t)(content+4-response);if((status==200 || status==400 || status==401 || status==403 || status==409 || status==429) && length<capacity){memcpy(reply,content+4,length+1);result=0;}}
+  if(reply){size_t length=total-(size_t)(content+4-response);if(length<capacity){memcpy(reply,content+4,length+1);result=account_http_reply(status,reply,(int)capacity)>0?0:20;}}
   else if(status==200 && fwrite(response,1,total,stdout)==total && fflush(stdout)==0)result=0;
  }
  account_erase(response,total);free(response);
@@ -37,4 +37,4 @@ static int transfer(const char *body,char *reply,size_t capacity){
 }
 
 int amiga_directory_worker(void){return transfer(NULL,NULL,0);}
-int amiga_https_request(const char *body,char *reply,size_t size){return transfer(body,reply,size)==0;}
+int amiga_https_request(const char *body,char *reply,size_t size){int ok=transfer(body,reply,size)==0;if(!ok && !reply[0])account_http_reply(0,reply,(int)size);return ok;}

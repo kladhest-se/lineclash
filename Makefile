@@ -56,9 +56,12 @@ web-test: server
 	$(PYTHON) tests/test_web_offline.py
 	$(PYTHON) tests/test_web_mariadb.py
 	$(PYTHON) tests/test_account_policy.py
+	$(PYTHON) tests/test_smtp.py
+	$(PYTHON) tests/test_password_recovery.py
 	$(PYTHON) tests/test_web_accounts.py
 	$(PYTHON) tests/test_web_reset.py
 	$(PYTHON) tests/test_directory_e2e.py
 
 web-js-test:
 	node tests/test_web_downloads.js
+	node tests/test_password_recovery.js

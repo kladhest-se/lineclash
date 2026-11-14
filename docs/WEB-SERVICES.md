@@ -136,11 +136,11 @@ Run `php bin/manage.php migrate` after refreshing this version: the additive `di
 
 ## Central-account deployment
 
-Refresh public-web and run `php bin/manage.php migrate` before updating servers and clients. This creates `accounts`, `account_devices`, `account_sessions` and the session-version upgrade. The website DB account needs SELECT, INSERT and UPDATE on these tables. Browser sessions require PHP's writable session directory, HTTPS, secure/HttpOnly/SameSite cookies and CSRF validation. Native account sign-in uses a fixed HTTPS API endpoint with certificate and hostname verification. Browser-code approval remains available for older clients.
+Refresh public-web and run `php bin/manage.php migrate` before updating servers and clients. This creates `accounts`, `account_devices`, `account_sessions`, `account_password_resets` and the session-version upgrade. The website DB account needs SELECT, INSERT and UPDATE on the account tables, plus DELETE on `account_password_resets` for email recovery. Browser sessions require PHP's writable session directory, HTTPS, secure/HttpOnly/SameSite cookies and CSRF validation. Native account sign-in uses a fixed HTTPS API endpoint with certificate and hostname verification. Browser-code approval remains available for older clients.
 
 Only live, verified server directory keys can create/poll connection requests. Each request is bound to that server and a random connection nonce, lasts five minutes and can be redeemed once. Browser approval shows the registered server endpoint. Central signing-in does not grant a server administrative role or authorize statistics uploads. Guest/local server accounts remain separate. Keep a local administrator account for offline administration tools.
 
-Old account_devices rows can be removed periodically by an administrator after expiry. Keep the accounts table in protected backups, including its password/recovery hashes. No real central account or production database was created by the local test suite.
+Old account_devices rows can be removed periodically by an administrator after expiry. Keep the accounts table in protected backups, including its password hashes. The legacy `recovery_hash` column is retained for schema compatibility, but recovery codes are no longer issued or accepted. No real central account or production database was created by the local test suite.
 
 ### Client sessions and password policy
 
@@ -170,12 +170,81 @@ Erase all central accounts, browser-approval requests, native sessions, server r
 php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php reset-data --confirm-reset
 ```
 
-`reset-data` without an option also previews. The command uses the database selected by the normal site configuration and prints its name. It requires all seven known LineClash tables to be InnoDB, uses a single DELETE transaction in foreign-key order and rolls back if any deletion fails. The DB account needs SELECT and DELETE on those tables. It preserves the schema, unrelated tables and `config.inc.php`; no DROP or TRUNCATE permission is needed.
+`reset-data` without an option also previews. The command uses the database selected by the normal site configuration and prints its name. It requires all eight known LineClash tables to be InnoDB, uses a single DELETE transaction in foreign-key order and rolls back if any deletion fails. The DB account needs SELECT and DELETE on those tables. It preserves the schema, unrelated tables and `config.inc.php`; no DROP or TRUNCATE permission is needed.
 
 This is a destructive website reset. Dedicated servers' SQLite accounts, permissions and game records are separate and are not erased. Existing central sign-ins become invalid, while already-connected games continue. Live public servers can register again at their next heartbeat, and enabled result uploaders can repopulate history. Stop announcers/uploaders and website writes during the reset if the database must remain empty. Manually provisioned server identities and their upload tokens must be provisioned again afterward.
 
 ### Native registration and private email
 
-Refresh public-web and run `php bin/manage.php migrate` before rebuilding the clients for native account creation. The migration adds a nullable, unique `accounts.email` column for compatibility with existing accounts. New registrations require a username, private email and password; emails are normalized to lowercase and are never sent to game servers or public statistics endpoints. Older accounts with no email retain username login. The client remembers one username and email locally; password, session and recovery-code storage remains in memory only.
+Refresh public-web and run `php bin/manage.php migrate` before rebuilding the clients for native account creation. The migration adds a nullable, unique `accounts.email` column for compatibility with existing accounts. New registrations require a username, private email and password; emails are normalized to lowercase and are never sent to game servers or public statistics endpoints. Older accounts with no email retain username login. The client remembers one username and email locally; passwords and sessions remain in memory only.
 
-`account-client-register` creates the account and its first twelve-hour native session in one transaction and returns a recovery code once. The client requires matching password confirmation and keeps the recovery code visible until acknowledged. The existing configurable password minimum applies. Registration is limited to five attempts per observed source per minute. Email verification and recovery by email are not implemented; recovery currently requires the saved recovery code. No confirmation or reset email is sent.
+`account-client-register` with `format: "session"` creates the account and its first twelve-hour native session in one transaction. The client requires matching password confirmation and signs in immediately. Recovery codes are no longer issued or accepted. The existing configurable password minimum applies. Registration is limited to five attempts per observed source per minute. Registration does not send an email or verify email ownership. Optional SMTP enables email password recovery as described below.
+
+
+## Optional SMTP and email password recovery
+
+SMTP is configured in the existing document-root `config.inc.php`; the refresh script preserves this file. No Composer dependencies or local sendmail program are needed. PHP OpenSSL is required for encrypted SMTP.
+
+Add these entries inside the returned configuration array, keeping your existing database and proxy settings:
+
+```php
+'public_url' => 'https://lineclash.kladhest.se',
+'smtp' => [
+    'host' => 'smtp.example.net', // SMTP relay IP or hostname, not the website
+    'port' => 587,
+    'encryption' => 'starttls',   // starttls, tls, or none
+    'username' => '',            // Leave empty for an IP-authorized internal relay
+    'password' => '',
+    'from_address' => 'noreply@kladhest.se',
+    'from_name' => 'LineClash',
+    'hello_host' => 'lineclash.kladhest.se',
+    'source_ip' => '',           // Optional local interface IP on the web host
+    'ca_file' => '',             // Optional PEM CA file for a private relay certificate
+    'timeout' => 10,
+],
+```
+
+`host` is where mail is submitted; `from_address` is the sender email address. `hello_host` is the web application's SMTP EHLO identity. `source_ip` optionally binds the outgoing connection to a local IP assigned to the web host; it cannot choose an arbitrary public/NAT address. Allow web002 to reach the relay and authorize its sender address or SMTP credentials on that relay.
+
+| Encryption | Typical port | Behavior |
+| --- | --- | --- |
+| `starttls` | 587 | Requires a successful STARTTLS upgrade before authentication or message submission. |
+| `tls` | 465 | TLS from the start of the connection. |
+| `none` | 25 | Unencrypted SMTP, including any configured login and message content; use only with a trusted internal relay/network. |
+
+The port is explicit and independent of the encryption choice. Encrypted modes verify the relay certificate and hostname/IP, require TLS 1.2 or newer, and never fall back to cleartext. A private relay CA can be supplied with `ca_file`; there is no disable-verification option. SMTP AUTH PLAIN and LOGIN are supported when a username is configured. The sender name supports up to 45 UTF-8 bytes.
+
+Refresh the website, then run the additive migration on web002:
+
+```sh
+/srv/www/vhosts/refresh-lineclash.sh
+php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php migrate
+```
+
+This adds `account_password_resets` without erasing accounts. The runtime DB account needs SELECT, INSERT, UPDATE and DELETE on that table, UPDATE on accounts/sessions/devices, and its existing rate-limit privileges. The account running migrations also needs CREATE/ALTER. If the previous runtime grants lack DELETE, run on the database host using the existing administrator `.my.cnf`:
+
+```sh
+mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lineclash.account_password_resets TO 'lineclash_web'@'sth-ts-web002.kladhest.se';"
+mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lineclash.account_password_resets TO 'lineclash_web'@'172.16.1.132';"
+```
+
+After saving SMTP settings, test delivery to an address you control:
+
+```sh
+php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php smtp-test you@example.net
+```
+
+“Accepted” means the relay queued the message; check the recipient's inbox/spam folder and relay delivery logs. This command sends only a test message and does not change any account or require a database connection. Protect the config's SMTP password with the same permissions and HTTP-denial rules as its database credentials. Do not commit live configuration.
+
+Omit `smtp`, or leave `host`/`from_address` empty, to disable password recovery automatically. Invalid settings or an invalid/non-HTTPS `public_url` also disable recovery; login and registration still work. No external mail-service probe is made while rendering the page. An unreachable relay keeps the configured form visible; delivery failures are logged server-side while the public response remains generic. The canonical `public_url` determines reset links, never an untrusted HTTP Host header. Change it when self-hosting under another hostname.
+
+Use **Forgot password?** in the desktop client, or `/account/recover/` on the website. The Amiga client displays the same recovery address for opening in a browser. The request form returns the same acknowledgement for registered and unknown addresses. Limits are five requests per source per minute and one per email per minute, with ten reset submissions per source per minute. Resetting requires the email link, matching password confirmation, the configured password policy and browser CSRF protection. JavaScript moves the link's fragment token into a POST form and clears it from the address bar; reset secrets are not sent in GET requests or referrers. All recovery responses use `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+
+Only SHA-256 hashes of random 256-bit reset tokens are stored. One link per account lasts 30 minutes; a new request supersedes it. A successful reset consumes it in a transaction, increments the account version, revokes native/browser sessions and invalidates approved connections awaiting redemption. Requesting a link alone does not change credentials or disconnect games already joined. Users sign in again after resetting. Old recovery codes cannot reset a password. Legacy accounts without an email cannot use this flow. SMTP recovery does not add registration-time email verification.
+
+Expired reset rows can be deleted periodically; each account has at most one. `reset-data` includes this table. Local tests use disposable databases, mailboxes and certificate authorities, and send no real email:
+
+```sh
+python3 tests/test_smtp.py
+LINECLASH_WEB_RESET_TEST_CONFIG=/path/to/test-config.php python3 tests/test_password_recovery.py
+```

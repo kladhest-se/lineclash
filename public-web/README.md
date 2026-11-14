@@ -31,3 +31,8 @@ Run `make web-test` with a disposable `LINECLASH_WEB_CONFIG` for real database, 
 ## Reset website data
 
 `php bin/manage.php reset-data --dry-run` previews the affected table counts. `php bin/manage.php reset-data --confirm-reset` deletes all LineClash website data, including central accounts and reported statistics, in one transaction. It preserves the schema, configuration and unrelated tables. The configured database account needs DELETE privileges. Dedicated-server SQLite databases are separate. See the repository web-service guide for scope and re-registration behavior.
+
+
+## Optional email recovery
+
+Configure `public_url` and the `smtp` block in `config.inc.php` using the sample, then run `php bin/manage.php migrate`. SMTP supports a relay IP/hostname, port, optional authentication, sender address/EHLO identity, optional source IP and `none`, `starttls` or implicit `tls` encryption. TLS always verifies certificates. Test a recipient you control with `php bin/manage.php smtp-test you@example.net`. Recovery is automatically disabled if SMTP is absent or incomplete. Enabled recovery sends single-use, 30-minute links through `/account/recover/`; it replaces the old recovery-code flow. See the repository's web-service guide for configuration, permissions and deployment details. Existing live configuration is preserved by refresh, so new SMTP values must be added manually.

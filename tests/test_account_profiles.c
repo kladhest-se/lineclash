@@ -38,11 +38,17 @@ int main(int argc,char **argv){
     client_accounts_action(&c,ACCOUNT_REGISTER);assert(!pending && strstr(c.account_message,"do not match"));
     strcpy(c.tf_account_confirm.text,c.tf_account_password.text);c.tf_account_confirm.len=c.tf_account_password.len;c.account_join_after=1;
     client_accounts_action(&c,ACCOUNT_REGISTER);assert(pending && strstr(request,"account-client-register") && strstr(request,"gamma@example.test"));assert(!c.tf_account_password.text[0] && !c.tf_account_confirm.text[0]);
-    char registered[512],token[65],recovery[49];memset(token,'d',64);token[64]=0;memset(recovery,'e',48);recovery[48]=0;
-    snprintf(registered,sizeof(registered),"central-registered %s gamma %lld %s gamma@example.test",token,(long long)time(NULL)+600,recovery);
-    int previous_connects=connects;reply(&c,registered);assert(c.account_recovery[0] && connects==previous_connects && c.state==CS_ACCOUNT);
-    f=fopen(argv[1],"r");assert(f);memset(saved,0,sizeof(saved));fread(saved,1,sizeof(saved)-1,f);fclose(f);assert(!strcmp(saved,"gamma\tgamma@example.test\n") && !strstr(saved,token) && !strstr(saved,recovery));
-    client_accounts_action(&c,ACCOUNT_BACK);assert(c.account_recovery[0] && c.state==CS_ACCOUNT);
-    client_accounts_action(&c,ACCOUNT_RECOVERY_DONE);assert(!c.account_recovery[0] && connects==previous_connects+1 && !strcmp(c.central_profile,"@gamma"));
+    assert(strstr(request,"\"format\":\"session\""));
+    char registered[512],token[65];memset(token,'d',64);token[64]=0;
+    snprintf(registered,sizeof(registered),"central-session %s gamma %lld gamma@example.test",token,(long long)time(NULL)+600);
+    int previous_connects=connects;reply(&c,registered);assert(connects==previous_connects+1 && c.state==CS_SERVER_LIST && !strcmp(c.central_profile,"@gamma"));
+    f=fopen(argv[1],"r");assert(f);memset(saved,0,sizeof(saved));fread(saved,1,sizeof(saved)-1,f);fclose(f);assert(!strcmp(saved,"gamma\tgamma@example.test\n") && !strstr(saved,token));
+    char error[512]="central-error Website database migration required: run php bin/manage.php migrate";
+    assert(account_http_reply(503,error,sizeof(error))==-1 && strstr(error,"migration required"));
+    strcpy(error,"{\"error\":\"Service unavailable\"}");assert(account_http_reply(503,error,sizeof(error))==-1 && strstr(error,"HTTP 503"));
+    snprintf(error,sizeof(error),"central-session %s gamma %lld gamma@example.test",token,(long long)time(NULL)+600);
+    assert(account_http_reply(401,error,sizeof(error))==-1 && !strstr(error,token));
+    strcpy(error,"<html>upstream failure</html>");assert(account_http_reply(500,error,sizeof(error))==-1 && !strstr(error,"<html>"));
+    c.state=CS_ACCOUNT;c.account_job=4;snprintf(response,sizeof(response),"central-error Website database migration required: run php bin/manage.php migrate");reply_ready=1;pending=1;client_accounts_tick(&c);assert(strstr(c.account_message,"migration required"));
     client_accounts_shutdown(&c);assert(!c.account.handle[0]);puts("PASS: one remembered account, legacy import, automatic login, logout, secret disposal, registration and stale join protection");return 0;
 }

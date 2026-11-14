@@ -83,6 +83,5 @@ int main(void) {
     client_on_key(&c,41,0,0,NULL);account_erase(&c.account,sizeof(c.account));c.central_profile[0]=0;
     client_accounts_open(&c,0);client_accounts_action(&c,ACCOUNT_CREATE_MODE);strcpy(c.tf_account_handle.text,"newplayer");c.tf_account_handle.len=9;strcpy(c.tf_account_email.text,"player@example.test");c.tf_account_email.len=19;
     sdl_render_accounts(&c);capture("lineclash-account-create.bmp");
-    memset(c.account_recovery,'a',48);c.account_recovery[48]=0;sdl_render_accounts(&c);capture("lineclash-account-created.bmp");account_erase(c.account_recovery,sizeof(c.account_recovery));
     sound_shutdown(); sdl_shutdown(); return 0;
 }

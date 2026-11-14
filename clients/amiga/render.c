@@ -53,7 +53,6 @@ void sdl_render_game(ClientCtx *c){begin(c->nick);if(c->state==CS_IN_LOBBY){text
  text(8,230,c->status,5);if(c->chat_input.active)text(160,230,c->chat_input.text,1);overlay(c);end();}
 
 void sdl_render_accounts(ClientCtx *c){begin("ACCOUNT");int busy=account_https_busy();const int x=112,w=416;
- if(c->account_recovery[0]){text(x,42,"Account created",5);text(x,66,"Save your recovery code privately:",1);text(x,96,c->account_recovery,6);text(x,132,"Needed to reset your password.",1);if(button(x,178,w,"I saved my code - continue"))client_accounts_action(c,ACCOUNT_RECOVERY_DONE);end();return;}
  if(!busy && button(516,26,100,"Back"))client_accounts_action(c,ACCOUNT_BACK);
  if(client_account_ready(c)){
   text(x,66,"You're signed in.",5);text(x,96,c->central_profile,1);char email[53];snprintf(email,sizeof(email),"%.52s",c->account.email);text(x,120,email,3);
@@ -63,6 +62,7 @@ void sdl_render_accounts(ClientCtx *c){begin("ACCOUNT");int busy=account_https_b
   TextField *fields[]={&c->tf_account_handle,&c->tf_account_email,&c->tf_account_password,&c->tf_account_confirm};const char *labels[]={"Username","Email","Password","Confirm password"};
   int creating=c->account_create_mode,first=creating?0:1,last=creating?3:2;
   for(int i=first;i<=last;i++){int y=(creating?44:74)+(i-first)*(creating?38:52);text(x,y-12,labels[i],1);box(x,y,w,18,2);char value[128];if(i>=2){int visible=fields[i]->len<50?fields[i]->len:50;memset(value,'*',visible);value[visible]=0;}else snprintf(value,sizeof(value),"%.50s",fields[i]->text);text(x+8,y+3,value,fields[i]->focused?5:1);if(!busy && click_y>=y && click_y<y+18 && click_x>=x && click_x<x+w){for(int j=0;j<4;j++)fields[j]->focused=i==j;}}
+  if(!creating && !busy && button(x,214,w,"Forgot password?"))snprintf(c->account_message,sizeof(c->account_message),"Visit lineclash.kladhest.se/account/recover/ in a browser.");
   if(!busy){if(button(x,creating?190:164,w,creating?"Create account":"Sign in"))client_accounts_action(c,creating?ACCOUNT_REGISTER:ACCOUNT_SIGNIN);if(button(x,creating?214:190,w,creating?"Back to sign in":"Create a new account"))client_accounts_action(c,creating?ACCOUNT_LOGIN_MODE:ACCOUNT_CREATE_MODE);}
  }
  char message[78];snprintf(message,sizeof(message),"%.77s",busy?"Working securely with AmiSSL...":c->account_message);text(8,240,message,5);end();}

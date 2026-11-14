@@ -36,17 +36,18 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
    try:call();break
    except OSError:time.sleep(.03)
   assert csrf
+  assert 'Save your recovery code' not in call()[1] and 'name="recovery"' not in call()[1]
   page=call()[1]
   assert 'novalidate' in page and 'Use at least 12 characters.' in page
   assert 'aria-describedby="account-password-help"' in page
   short=secrets.token_hex(5)+'x'
   invalid=call(data=dict(action='register',handle=handle,password=short))[1]
   assert 'Password is too short. Use at least 12 characters.' in invalid
-  assert 'role="alert"' in invalid and 'Save your recovery code' not in invalid
+  assert 'role="alert"' in invalid and 'Account created.' not in invalid
   assert 'value="'+handle+'"' in invalid and short not in invalid
   too_long=call(data=dict(action='register',handle=handle,password='é'*37))[1]
-  assert 'Password is too long.' in too_long and 'Save your recovery code' not in too_long
-  assert 'Save your recovery code' in call(data=dict(action='register',handle=handle,password=password))[1]
+  assert 'Password is too long.' in too_long and 'Account created.' not in too_long
+  assert 'Account created.' in call(data=dict(action='register',handle=handle,password=password))[1]
   assert '@'+handle in call()[1]
   assert call('/api/',dict(server_id=server,token=key,database_id=secrets.token_hex(16),games=[],status={}),True)[0]==200
   nonce=secrets.token_hex(32);request=dict(server_key=key,nonce=nonce)
@@ -97,17 +98,20 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   subprocess.run(['php','-r',php,handle],check=True)
   auth,challenge=begin();join.update(challenge=challenge)
   assert call('/api/',join,True)[0]==401
-  # Native registration requires a private unique email, returns recovery once,
+  # Native registration requires a private unique email, returns no recovery code,
   # and starts a session without a browser cookie or approval code.
   native_handle='n'+secrets.token_hex(5);native_email=native_handle+'@example.test'
-  signup=dict(action='account-client-register',handle=native_handle,email=native_email,password=password)
+  signup=dict(action='account-client-register',format='session',handle=native_handle,email=native_email,password=password)
+  status,error=call('/api/',dict(signup,format='legacy'),True)
+  assert status==400 and 'Update the client' in error
+  assert call('/api/',dict(action='account-client-login',login=native_email,password=password),True)[0]==401
   status,error=call('/api/',dict(signup,email=''),True)
   assert status==400 and 'valid email' in error
   status,error=call('/api/',dict(signup,password='short'),True)
   assert status==400 and 'at least 12' in error
   status,registered=call('/api/',signup,True);assert status==200,(status,registered)
-  prefix,native_token,nick,expiry,native_recovery,saved_email=registered.split()
-  assert prefix=='central-registered' and nick==native_handle and len(native_recovery)==48 and saved_email==native_email
+  prefix,native_token,nick,expiry,saved_email=registered.split()
+  assert prefix=='central-session' and nick==native_handle and saved_email==native_email
   status,error=call('/api/',dict(signup,handle='d'+secrets.token_hex(5)),True)
   assert status==400 and 'already registered' in error
   status,error=call('/api/',dict(signup,email='other_'+native_email),True)
@@ -121,10 +125,9 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   identity=call('/api/',dict(auth,action='account-poll'),True)[1]
   assert identity.endswith(' '+native_handle) and native_email not in identity
   assert native_email not in call('/api/?action=servers')[1]
-  page=call(data=dict(action='recover',email=native_email,recovery=native_recovery,password=secrets.token_hex(16)))[1]
-  assert 'Save your recovery code' in page
-  assert call('/api/',dict(action='account-client-logout',session=native_token),True)[0]==401
-  call(data=dict(action='logout'))
+  page=call(data=dict(action='recover',email=native_email,recovery='obsolete',password=secrets.token_hex(16)))[1]
+  assert 'Recovery codes are no longer supported.' in page
+  assert call('/api/',dict(action='account-client-login',login=native_email,password=password),True)[0]==200
   # Existing migrated accounts with NULL email retain username sign-in.
   legacy='l'+secrets.token_hex(5)
   php='require '+json.dumps(str(root/'public-web/inc/service.php'))+'; $q=database()->prepare("INSERT INTO accounts(id,handle,password_hash,recovery_hash,created_at) VALUES(?,?,?,?,?)");$q->execute([bin2hex(random_bytes(16)),$argv[1],password_hash($argv[2],PASSWORD_DEFAULT),str_repeat("0",64),time()]);'
@@ -137,16 +140,16 @@ with tempfile.TemporaryDirectory(prefix='lineclash-account-config-') as config_d
   short_handle='v'+secrets.token_hex(5);short_password=secrets.token_hex(3)
   assert 'Use at least 6 characters.' in call(data=dict(action='register',handle=short_handle,password=short_password[:5]))[1]
   page=call(data=dict(action='register',handle=short_handle,password=short_password))[1]
-  assert 'Save your recovery code' in page
-  recovery=re.search(r'<code>([a-f0-9]{48})</code>',page).group(1)
+  assert 'Account created.' in page
   policy_minimum(20)
   call(data=dict(action='logout'))
   assert '@'+short_handle in call(data=dict(action='login',handle=short_handle,password=short_password))[1]
   status,native=call('/api/',dict(action='account-client-login',handle=short_handle,password=short_password),True)
   assert status==200
   native_session=native.split()[1]
-  assert 'Use at least 20 characters.' in call(data=dict(action='recover',handle=short_handle,password=short_password,recovery=recovery))[1]
-  assert 'Save your recovery code' in call(data=dict(action='recover',handle=short_handle,password=secrets.token_hex(16),recovery=recovery))[1]
+  assert 'Use at least 20 characters.' in call(data=dict(action='register',handle='w'+secrets.token_hex(5),password=short_password))[1]
+  php='require '+json.dumps(str(root/'public-web/inc/service.php'))+'; $q=database()->prepare("UPDATE accounts SET auth_version=auth_version+1 WHERE handle=?");$q->execute([$argv[1]]);'
+  subprocess.run(['php','-r',php,short_handle],check=True)
   assert call('/api/',dict(action='account-client-logout',session=native_session),True)[0]==401
-  print('PASS: visible validation, rejected short/oversized passwords, central registration, browser sessions, native profile sessions, target-bound HTTPS joins, logout/recovery revocation, single-use redemption and configurable password policy with existing-account login, native registration, unique email login and legacy compatibility')
+  print('PASS: visible validation, rejected short/oversized passwords, central registration, browser sessions, native profile sessions, target-bound HTTPS joins, logout/session-version revocation, single-use redemption and configurable password policy with existing-account login, native registration, unique email login and legacy compatibility')
  finally:p.terminate();p.wait(timeout=5)

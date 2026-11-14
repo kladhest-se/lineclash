@@ -75,11 +75,11 @@ function account_lookup(PDO $db,string $login): array|false {
 }
 function account_register(PDO $db,string $handle,string $email,string $password): array {
     $handle=account_handle($handle);$email=account_email($email);account_password($password);
-    $id=bin2hex(random_bytes(16));$recovery=bin2hex(random_bytes(24));
+    $id=bin2hex(random_bytes(16));
     try {
-        $q=$db->prepare('INSERT INTO accounts(id,handle,email,password_hash,recovery_hash,created_at) VALUES(?,?,?,?,?,?)');$q->execute([$id,$handle,$email,password_hash($password,PASSWORD_DEFAULT),hash('sha256',$recovery),time()]);
+        $q=$db->prepare('INSERT INTO accounts(id,handle,email,password_hash,recovery_hash,created_at) VALUES(?,?,?,?,?,?)');$q->execute([$id,$handle,$email,password_hash($password,PASSWORD_DEFAULT),'',time()]);
     }catch(PDOException $e){if($e->getCode()==='23000')throw new InvalidArgumentException('Username or email is already registered.');throw $e;}
-    return ['id'=>$id,'handle'=>$handle,'email'=>$email,'auth_version'=>1,'recovery'=>$recovery];
+    return ['id'=>$id,'handle'=>$handle,'email'=>$email,'auth_version'=>1];
 }
 function account_native_session(PDO $db,array $user): string {
     $token=bin2hex(random_bytes(32));$expires=time()+43200;
@@ -89,12 +89,13 @@ function account_native_session(PDO $db,array $user): string {
 function account_client_api(PDO $db,array $a): string {
     $action=$a['action']??'';
     if($action==='account-client-register') {
+        if(($a['format']??'')!=='session')throw new InvalidArgumentException('Update the client before creating an account.');
         account_limit($db,'account-client-register',5);
         $db->beginTransaction();
         try {
             $user=account_register($db,is_string($a['handle']??null)?$a['handle']:'',is_string($a['email']??null)?$a['email']:'',is_string($a['password']??null)?$a['password']:'');
             $session=account_native_session($db,$user);$db->commit();
-            return 'central-registered '.$session.' '.$user['recovery'].' '.$user['email'];
+            return 'central-session '.$session.' '.$user['email'];
         }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
     }
     if($action==='account-client-login') {

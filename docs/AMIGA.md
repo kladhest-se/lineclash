@@ -4,7 +4,7 @@ Build with `make amiga`, or `make -C clients/amiga AMIGA_TOOLS=/path/to/toolchai
 
 ## Runtime
 
-Use a 68020 and adequate Fast RAM; the test profile has 2 MB Chip plus 8 MB Fast. AmigaOS 3.x, graphics/intuition/keymap libraries and Roadshow/AmiTCP/Miami's bsdsocket.library are required. HTTPS public discovery also needs AmiSSL 4.10+ with a valid certificate store, `AmiSSL:` assigned, and AmiSSL libraries in `LIBS:`. Set the system date correctly. TLS is used for directory discovery and native account sign-in; account creation is native and password recovery currently uses the HTTPS website. The game stream remains plain TCP.
+Use a 68020 and adequate Fast RAM; the test profile has 2 MB Chip plus 8 MB Fast. AmigaOS 3.x, graphics/intuition/keymap libraries and Roadshow/AmiTCP/Miami's bsdsocket.library are required. HTTPS public discovery also needs AmiSSL 4.10+ with a valid certificate store, `AmiSSL:` assigned, and AmiSSL libraries in `LIBS:`. Set the system date correctly. TLS is used for directory discovery and native account sign-in; account creation is native and email password recovery uses the HTTPS website when its operator has configured SMTP. Without SMTP, recovery is disabled. Registration signs in immediately without a recovery-code screen. The game stream remains plain TCP.
 
 Keep the executable named `LineClash` in its drawer. It launches itself as an asynchronous directory worker using temporary files in `T:`. Preferences and server entries are stored beside it. No account password is passed to that worker. The native frontend currently has no audio playback or modern gamepad integration. Gameplay/runtime verification is still in progress; compilation is not evidence of hardware compatibility.
 

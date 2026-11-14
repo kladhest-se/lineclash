@@ -249,7 +249,6 @@ typedef struct {
     ClientState account_return;
     TextField tf_account_handle,tf_account_email,tf_account_password,tf_account_confirm;
     int account_create_mode;
-    char account_recovery[49];
     char account_message[256];
     /* Connect screen */
     TextField tf_host;
@@ -544,8 +543,9 @@ int directory_parse(char *body,SavedServer *rows,int capacity);
 int directory_url_valid(const char *url,int local);
 void directory_shutdown(void);
 
-enum {ACCOUNT_SIGNIN=1,ACCOUNT_CONTINUE,ACCOUNT_LOGOUT,ACCOUNT_BACK,ACCOUNT_CREATE_MODE,ACCOUNT_LOGIN_MODE,ACCOUNT_REGISTER,ACCOUNT_RECOVERY_DONE};
+enum {ACCOUNT_SIGNIN=1,ACCOUNT_CONTINUE,ACCOUNT_LOGOUT,ACCOUNT_BACK,ACCOUNT_CREATE_MODE,ACCOUNT_LOGIN_MODE,ACCOUNT_REGISTER};
 void account_erase(void *,size_t);
+int account_http_reply(long,char *,int);
 int account_https_start(const char *);
 int account_https_busy(void);
 int account_https_poll(char *,int);

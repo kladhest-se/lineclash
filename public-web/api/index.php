@@ -3,18 +3,26 @@ declare(strict_types=1);
 require __DIR__.'/../inc/service.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
+$account_request=false;
+function api_failure(string $message,int $status,bool $account): void {
+    http_response_code($status);
+    if($account){header('Content-Type: text/plain; charset=utf-8');echo 'central-error '.$message;}
+    else{header('Content-Type: application/json; charset=utf-8');echo json_encode(['error'=>$message]);}
+}
 try {
-    $db=database();
     if($_SERVER['REQUEST_METHOD']==='POST') {
         if((int)($_SERVER['CONTENT_LENGTH']??0)>2097152) { http_response_code(413); echo '{"error":"Payload too large"}'; exit; }
         $body=file_get_contents('php://input',false,null,0,2097153);
         if(strlen($body)>2097152) { http_response_code(413); echo '{"error":"Payload too large"}'; exit; }
         $a=json_decode($body,true,32,JSON_THROW_ON_ERROR);
         if(!is_array($a)) throw new InvalidArgumentException('Expected object');
+        $account_request=in_array($a['action']??'',['account-client-register','account-client-login','account-client-join','account-client-logout','account-begin','account-poll'],true);
+        $db=database();
         if(in_array($a['action']??'',['account-client-register','account-client-login','account-client-join','account-client-logout'],true)){require_once __DIR__.'/../inc/accounts.php';header('Content-Type: text/plain; charset=utf-8');try{echo account_client_api($db,$a);}catch(InvalidArgumentException $e){http_response_code(str_starts_with($e->getMessage(),'Too many')?429:400);echo 'central-error '.$e->getMessage();}exit;}
         if(in_array($a['action']??'',['account-begin','account-poll'],true)){require_once __DIR__.'/../inc/accounts.php';header('Content-Type: text/plain; charset=utf-8');echo account_api($db,$a);exit;}
         $result=($a['action']??'')==='public-register'?public_register($db,$a):announce($db,$a);
     } elseif($_SERVER['REQUEST_METHOD']==='GET') {
+        $db=database();
         header('Access-Control-Allow-Origin: *');
         $action=$_GET['action']??'servers';
         $offset=filter_var($_GET['offset']??0,FILTER_VALIDATE_INT,['options'=>['min_range'=>0,'max_range'=>1000000]]);
@@ -57,9 +65,12 @@ try {
         } else throw new InvalidArgumentException('Unknown action');
     } else { http_response_code(405); header('Allow: GET, POST'); $result=['error'=>'Method not allowed']; }
     echo json_encode($result,JSON_THROW_ON_ERROR|JSON_INVALID_UTF8_SUBSTITUTE);
-} catch(InvalidArgumentException|JsonException $e) { http_response_code(400); echo json_encode(['error'=>$e->getMessage()]); }
+} catch(InvalidArgumentException|JsonException $e) { api_failure($e->getMessage(),400,$account_request); }
 catch(PDOException $e) {
-    http_response_code(503);error_log('LineClash database error: '.$e->getMessage());
-    echo json_encode(['error'=>$e->getCode()==='42S02'?'Website database migration required: run php bin/manage.php migrate':'Service unavailable']);
+    error_log('LineClash database error: '.$e->getMessage());
+    $migration=in_array($e->getCode(),['42S02','42S22'],true);
+    $permission=in_array((int)($e->errorInfo[1]??0),[1044,1045,1142,1143],true);
+    $message=$migration?'Website database migration required: run php bin/manage.php migrate':($permission?'Website database permissions are incomplete; check the Apache error log':'Account service unavailable; check the website server log');
+    api_failure($message,503,$account_request);
 }
-catch(Throwable $e) { http_response_code(503); error_log('LineClash service error: '.$e->getMessage()); echo '{"error":"Service unavailable"}'; }
+catch(Throwable $e) { error_log('LineClash service error: '.$e->getMessage());api_failure('Service unavailable; check the website server log',503,$account_request); }

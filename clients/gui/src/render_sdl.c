@@ -2859,18 +2859,9 @@ void sdl_render_accounts(ClientCtx *c){
     SDL_SetRenderDrawColor(g_rend,0x0d,0x0d,0x1a,0xff);SDL_RenderClear(g_rend);
     fr(0,0,WIN_W,88,0x111b28ff);fr(32,87,WIN_W-64,1,0x25354aff);
     brick_logo(36,26,13,3,busy);dt(80,22,"LineClash",0xf0f5fcff,2);dt(81,56,"ACCOUNT",0x91a4bfff,1);
-    if(dbtn(WIN_W-160,28,124,32,"Back",busy || c->account_recovery[0]?BS_DISABLED:BS_NORMAL) && !busy && !c->account_recovery[0])client_accounts_action(c,ACCOUNT_BACK);
-    dt(x,132,c->account_recovery[0]?"ALL SET":creating?"JOIN LINECLASH":"YOUR ACCOUNT",0x75dabbff,1);
-    if(c->account_recovery[0]){
-        dt(x,170,"Account created.",COL_WHITE,3);
-        dt(x,230,"Save your recovery code somewhere safe.",COL_LTGRAY,1);
-        dt(x,254,"It is shown only once.",COL_GRAY,1);
-        char first[25];memcpy(first,c->account_recovery,24);first[24]=0;
-        dt(x,310,first,0x75dabbff,2);dt(x,354,c->account_recovery+24,0x75dabbff,2);
-        if(dbtn(x,420,w,36,"Copy recovery code",BS_NORMAL)){SDL_SetClipboardText(c->account_recovery);snprintf(c->account_message,sizeof(c->account_message),"Recovery code copied.");}
-        if(dbtn(x,478,w,44,"I saved my code - continue",BS_ACTIVE))client_accounts_action(c,ACCOUNT_RECOVERY_DONE);
-        account_notice(x,552,w,c->account_message,COL_LTGRAY);
-    }else if(ready){
+    if(dbtn(WIN_W-160,28,124,32,"Back",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_BACK);
+    dt(x,132,creating?"JOIN LINECLASH":"YOUR ACCOUNT",0x75dabbff,1);
+    if(ready){
         dt(x,170,"You're signed in.",COL_WHITE,3);
         dt(x,224,"Ready for your next match.",COL_LTGRAY,1);
         dt(x,278,c->central_profile,0xbba5f4ff,2);
@@ -2894,7 +2885,7 @@ void sdl_render_accounts(ClientCtx *c){
         if(dbtn(x,submit,w,44,label,busy?BS_DISABLED:BS_ACTIVE) && !busy)client_accounts_action(c,creating?ACCOUNT_REGISTER:ACCOUNT_SIGNIN);
         if(dbtn(x,creating?642:526,w,36,creating?"Already have an account? Sign in":"Create a new account",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,creating?ACCOUNT_LOGIN_MODE:ACCOUNT_CREATE_MODE);
         if(creating)dt(x,694,"Your username is public. Your email stays private.",COL_GRAY,1);
-        else if(dbtn(x,578,w,32,"Forgot password?",busy?BS_DISABLED:BS_NORMAL) && !busy)sdl_open_account_code("");
+        else if(dbtn(x,578,w,32,"Forgot password?",busy?BS_DISABLED:BS_NORMAL) && !busy)music_link("https://lineclash.kladhest.se/account/recover/");
         if(!busy)account_notice(x,creating?714:644,w,c->account_message,!strncmp(c->account_message,"Signed out",10)?COL_GRAY:0xe78284ff);
     }
     dtc(WIN_W/2,WIN_H-28,"LINECLASH / v" TETRINETZ_VERSION,0x7489a6ff,1);

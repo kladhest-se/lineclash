@@ -67,8 +67,8 @@ curl --fail 'https://lineclash.example.org/api/?action=statistics'
 <tbody>
 <tr>
 <td>account-client-register</td>
-<td><code>handle</code>, <code>email</code>, <code>password</code></td>
-<td><code>central-registered TOKEN HANDLE EXPIRES RECOVERY EMAIL</code></td>
+<td><code>handle</code>, <code>email</code>, <code>password</code>, <code>format: "session"</code></td>
+<td><code>central-session TOKEN HANDLE EXPIRES EMAIL</code></td>
 </tr>
 <tr>
 <td>account-client-login</td>
@@ -87,9 +87,9 @@ curl --fail 'https://lineclash.example.org/api/?action=statistics'
 </tr>
 </tbody>
 </table>
-<p>Registration enforces unique usernames/emails and the configured password policy. Account creation and session issuance are atomic. Save the recovery code once; it is never returned by login. Email is private and is not a verified ownership claim; email-based recovery is not implemented yet. Existing clients may still send <code>handle</code> for username login. A missing email on an older account is represented by <code>-</code> in the login response.</p>
+<p>Registration enforces unique usernames/emails and the configured password policy. Account creation and session issuance are atomic. Registration signs the client in directly and no recovery code is returned. Clients must send <code>format: "session"</code>; older registration formats receive an update-required error before any account is created. Email is private and is not a verified ownership claim. Email password recovery uses the separate browser page <code>/account/recover/</code> only when SMTP is configured; no reset token is sent through the game protocol. Existing clients may still send <code>handle</code> for username login. A missing email on an older account is represented by <code>-</code> in the login response.</p>
 <p>The game server creates a connection-bound request with <code>account-begin</code> and <code>direct=true</code>, authenticating with its own directory key and random nonce. It gives the client the returned 64-character challenge. The client authorizes that challenge through <code>account-client-join</code>; its target host and port must match the request's live verified directory entry. The server polls its own request using <code>account-poll</code> and consumes the approved identity once. Replays, expired requests and mismatched targets are rejected. Client passwords and session tokens are not part of the game protocol.</p>
-<p>Client-account errors return plain text starting with <code>central-error</code> or <code>central-expired</code>. Failed credentials/sessions return 401, wrong targets return 403, concurrent approval conflicts return 409 and rate limits return 429. Password recovery invalidates existing sessions. Browser-code approval remains compatible with older clients.</p>
+<p>Client-account errors return plain text starting with <code>central-error</code> or <code>central-expired</code>, including database/service failures. Missing tables or columns return HTTP 503 with an instruction to run <code>php bin/manage.php migrate</code>; the client preserves that message. Failed credentials/sessions return 401, wrong targets return 403, concurrent approval conflicts return 409 and rate limits return 429. Password recovery invalidates existing sessions. Browser-code approval remains compatible with older clients.</p>
 <h3 id="community-api-errors-and-announcements">Errors and announcements</h3>
 <p>Invalid requests return 400; failed server authentication returns 403; missing matches return 404; unsupported methods return 405; service failures return 503. Responses include a JSON <code>error</code> message. Do not treat unavailable services as an empty successful result.</p>
 <p>Operators send announcements using POST JSON with provisioned <code>server_id</code> and <code>token</code> values. Announcements have a 2 MiB request limit. Keep tokens private and use HTTPS.</p><p class="back-to-contents"><a href="#main">Back to contents ↑</a></p></section>

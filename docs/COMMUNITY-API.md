@@ -28,16 +28,16 @@ These POST JSON actions return plain text and require HTTPS. Do not put credenti
 
 | Action | Body fields | Success response |
 | --- | --- | --- |
-| account-client-register | `handle`, `email`, `password` | `central-registered TOKEN HANDLE EXPIRES RECOVERY EMAIL` |
+| account-client-register | `handle`, `email`, `password`, `format: "session"` | `central-session TOKEN HANDLE EXPIRES EMAIL` |
 | account-client-login | `login` (email or existing username), `password` | `central-session TOKEN HANDLE EXPIRES EMAIL` (12 hours) |
 | account-client-join | `session`, `challenge`, `host`, `port` | `central-joined HANDLE` |
 | account-client-logout | `session` | `central-signed-out` |
 
-Registration enforces unique usernames/emails and the configured password policy. Account creation and session issuance are atomic. Save the recovery code once; it is never returned by login. Email is private and is not a verified ownership claim; email-based recovery is not implemented yet. Existing clients may still send `handle` for username login. A missing email on an older account is represented by `-` in the login response.
+Registration enforces unique usernames/emails and the configured password policy. Account creation and session issuance are atomic. Registration signs the client in directly and no recovery code is returned. Clients must send `format: "session"`; older registration formats receive an update-required error before any account is created. Email is private and is not a verified ownership claim. Email password recovery uses the separate browser page `/account/recover/` only when SMTP is configured; no reset token is sent through the game protocol. Existing clients may still send `handle` for username login. A missing email on an older account is represented by `-` in the login response.
 
 The game server creates a connection-bound request with `account-begin` and `direct=true`, authenticating with its own directory key and random nonce. It gives the client the returned 64-character challenge. The client authorizes that challenge through `account-client-join`; its target host and port must match the request's live verified directory entry. The server polls its own request using `account-poll` and consumes the approved identity once. Replays, expired requests and mismatched targets are rejected. Client passwords and session tokens are not part of the game protocol.
 
-Client-account errors return plain text starting with `central-error` or `central-expired`. Failed credentials/sessions return 401, wrong targets return 403, concurrent approval conflicts return 409 and rate limits return 429. Password recovery invalidates existing sessions. Browser-code approval remains compatible with older clients.
+Client-account errors return plain text starting with `central-error` or `central-expired`, including database/service failures. Missing tables or columns return HTTP 503 with an instruction to run `php bin/manage.php migrate`; the client preserves that message. Failed credentials/sessions return 401, wrong targets return 403, concurrent approval conflicts return 409 and rate limits return 429. Password recovery invalidates existing sessions. Browser-code approval remains compatible with older clients.
 
 ## Errors and announcements
 

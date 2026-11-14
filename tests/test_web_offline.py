@@ -31,6 +31,8 @@ with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryFile() as log:
   assert 'href="./" aria-current="page">Home</a>' in home
   for path in ['/servers/','/leaderboards/','/matches/','/statistics/']:
    code,body=get(path);assert code==503 and 'aria-label="Main"' in body and 'temporarily unavailable' in body,path
+  code,body=get('/account/recover/');assert code==200 and 'disabled because SMTP' in body
+  assert get('/assets/password-recovery.js')[0]==200
   assert get('/assets/site.css')[0]==200
   for asset in ['blocks.js','downloads.js','screenshots/game.png','screenshots/servers.png']:assert get('/assets/'+asset)[0]==200
   assert get('/config.inc.php')[0] in (403,404)

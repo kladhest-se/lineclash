@@ -5,6 +5,20 @@
 #include <sys/stat.h>
 #endif
 void account_erase(void *data,size_t size){volatile unsigned char *p=data;while(size--)*p++=0;}
+/* Preserve controlled API errors for every HTTP status; never display HTML/JSON
+   error pages or accept success tokens carried by a failed HTTP response. */
+int account_http_reply(long status,char *reply,int capacity){
+    if(!strncmp(reply,"central-error ",14) || !strncmp(reply,"central-expired ",16))return -1;
+    if(status==200 && (!strncmp(reply,"central-session ",16) || !strncmp(reply,"central-registered ",19) || !strncmp(reply,"central-joined ",15) || !strcmp(reply,"central-signed-out")))return 1;
+    const char *message;
+    if(status==503 && strstr(reply,"migration required"))message="Website database migration required: run php bin/manage.php migrate";
+    else if(status==503)message="Account service unavailable (HTTP 503). Run website migrations and check the Apache error log.";
+    else if(status==429)message="Too many account attempts. Try again in a minute.";
+    else if(status==404 || status==400 || status==200)message="Account API is missing or outdated. Refresh the website and try again.";
+    else if(status==0)message="Secure account connection failed. Check the network, TLS certificates and system date.";
+    else{snprintf(reply,capacity,"central-error Account service returned HTTP %ld; check the website and proxy logs.",status);return -1;}
+    snprintf(reply,capacity,"central-error %s",message);return -1;
+}
 static int hex_token(const char *s){return strlen(s)==64 && strspn(s,"0123456789abcdef")==64;}
 static int handle_valid(const char *s){size_t n=strlen(s);return n>=3 && n<=14 && s[0]>='a' && s[0]<='z' && strspn(s,"abcdefghijklmnopqrstuvwxyz0123456789_")==n;}
 static int email_valid(const char *s){size_t n=strlen(s);if(!n || n>254 || !strchr(s,'@'))return 0;for(const unsigned char *p=(const unsigned char*)s;*p;p++)if(*p<33 || *p>126)return 0;return 1;}
@@ -66,11 +80,6 @@ void client_accounts_open(ClientCtx *c,int join){
 }
 void client_accounts_action(ClientCtx *c,int action){
     if(account_https_busy())return;
-    if(c->account_recovery[0]){
-        if(action==ACCOUNT_RECOVERY_DONE){account_erase(c->account_recovery,sizeof(c->account_recovery));c->account_create_mode=0;client_accounts_action(c,ACCOUNT_CONTINUE);}
-        else{snprintf(c->account_message,sizeof(c->account_message),"Save your recovery code and choose Continue first");}
-        return;
-    }
     if(action==ACCOUNT_CREATE_MODE || action==ACCOUNT_LOGIN_MODE){
         if(client_account_ready(c))return;
         passwords_clear(c);c->account_create_mode=action==ACCOUNT_CREATE_MODE;c->account_message[0]=0;
@@ -112,7 +121,7 @@ void client_accounts_action(ClientCtx *c,int action){
     const char *login=email_input[0]?email_input:handle;
     if(!registering && !email_valid(login) && !handle_valid(login)){snprintf(c->account_message,sizeof(c->account_message),"Enter your email or username");return;}
     char escaped[512],identifier[384];json_string(escaped,sizeof(escaped),c->tf_account_password.text);json_string(identifier,sizeof(identifier),registering?email_input:login);
-    if(registering)snprintf(body,sizeof(body),"{\"action\":\"account-client-register\",\"handle\":\"%s\",\"email\":\"%s\",\"password\":\"%s\"}",handle,identifier,escaped);
+    if(registering)snprintf(body,sizeof(body),"{\"action\":\"account-client-register\",\"format\":\"session\",\"handle\":\"%s\",\"email\":\"%s\",\"password\":\"%s\"}",handle,identifier,escaped);
     else snprintf(body,sizeof(body),"{\"action\":\"account-client-login\",\"login\":\"%s\",\"password\":\"%s\"}",identifier,escaped);
     int started=account_https_start(body);account_erase(body,sizeof(body));account_erase(escaped,sizeof(escaped));account_erase(identifier,sizeof(identifier));passwords_clear(c);c->tf_account_password.focused=1;
     if(started){c->account_job=registering?4:1;snprintf(c->account_message,sizeof(c->account_message),"%s",registering?"Creating your account securely...":"Signing in securely over HTTPS...");}
@@ -120,7 +129,6 @@ void client_accounts_action(ClientCtx *c,int action){
 }
 void client_accounts_key(ClientCtx *c,int sc,int is_text,const char *txt){
     if(account_https_busy())return;
-    if(c->account_recovery[0]){if(sc==40)client_accounts_action(c,ACCOUNT_RECOVERY_DONE);return;}
     if(sc==41){client_accounts_action(c,c->account_create_mode?ACCOUNT_LOGIN_MODE:ACCOUNT_BACK);return;}
     if(client_account_ready(c)){if(sc==40)client_accounts_action(c,ACCOUNT_CONTINUE);return;}
     if(sc==40){client_accounts_action(c,c->account_create_mode?ACCOUNT_REGISTER:ACCOUNT_SIGNIN);return;}
@@ -143,22 +151,23 @@ void client_account_challenge(ClientCtx *c,const char *challenge){
 void client_accounts_tick(ClientCtx *c){
     char reply[512];int result=account_https_poll(reply,sizeof(reply));if(!result)return;
     int kind=c->account_job;c->account_job=0;
-    if(kind==1 || kind==4){char token[65]={0},handle[15]={0},email[255]={0},recovery[49]={0};long long expires=0;
-        int fields=kind==4?sscanf(reply,"central-registered %64s %14s %lld %48s %254s",token,handle,&expires,recovery,email):sscanf(reply,"central-session %64s %14s %lld %254s",token,handle,&expires,email);
-        int valid=fields>=(kind==4?5:3) && (kind!=4 || (strlen(recovery)==48 && strspn(recovery,"0123456789abcdef")==48 && email_valid(email)));
+    if(kind==1 || kind==4){char token[65]={0},handle[15]={0},email[255]={0};long long expires=0;
+        /* Accept older registration replies during a rolling website update,
+           discarding the obsolete field without storing or showing it. */
+        int fields=kind==4 && !strncmp(reply,"central-registered ",19)?sscanf(reply,"central-registered %64s %14s %lld %*48s %254s",token,handle,&expires,email):sscanf(reply,"central-session %64s %14s %lld %254s",token,handle,&expires,email);
+        int valid=fields>=3 && (kind!=4 || (fields==4 && email_valid(email)));
         if(result>0 && valid && hex_token(token) && handle_valid(handle) && expires>time(NULL)){
             account_erase(&c->account,sizeof(c->account));
             snprintf(c->account.handle,15,"%s",handle);if(email_valid(email))snprintf(c->account.email,255,"%s",email);
             snprintf(c->account.token,65,"%s",token);c->account.expires=(time_t)expires;
             snprintf(c->central_profile,sizeof(c->central_profile),"@%s",handle);account_save(c);
-            if(kind==4){snprintf(c->account_recovery,sizeof(c->account_recovery),"%s",recovery);snprintf(c->account_message,sizeof(c->account_message),"Account created. Save the recovery code before continuing.");}
-            else client_accounts_action(c,ACCOUNT_CONTINUE);
+            c->account_create_mode=0;client_accounts_action(c,ACCOUNT_CONTINUE);
         }else snprintf(c->account_message,sizeof(c->account_message),"%.255s",!strncmp(reply,"central-error ",14)?reply+14:"Account request failed. Check your details and website status.");
-        account_erase(token,sizeof(token));account_erase(recovery,sizeof(recovery));
+        account_erase(token,sizeof(token));
     }else if(kind==2 && c->state==CS_AUTH && c->central_mode && c->sock==c->account_join_socket && (result<0 || strncmp(reply,"central-joined ",15))){
         if(!strncmp(reply,"central-expired ",16)){account_erase(c->account.token,65);c->account.expires=0;}
         client_on_button(c,BTN_BACK_CONNECT);snprintf(c->connect_error,sizeof(c->connect_error),"%.200s",!strncmp(reply,"central-error ",14)?reply+14:!strncmp(reply,"central-expired ",16)?reply+16:"Secure server sign-in failed; try again");c->state=CS_CONNECT;
     }
     account_erase(reply,sizeof(reply));
 }
-void client_accounts_shutdown(ClientCtx *c){account_https_shutdown();account_erase(&c->account,sizeof(c->account));passwords_clear(c);account_erase(c->account_recovery,sizeof(c->account_recovery));}
+void client_accounts_shutdown(ClientCtx *c){account_https_shutdown();account_erase(&c->account,sizeof(c->account));passwords_clear(c);}
