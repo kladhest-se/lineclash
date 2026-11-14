@@ -46,9 +46,11 @@ function account_fields(string $code): void {echo '<input type="hidden" name="cs
 <input id="account-password" type="password" name="password" required minlength="<?=account_password_min_length()?>" maxlength="72" autocomplete="current-password" aria-describedby="account-password-help">
 <small id="account-password-help"><?=site_h(account_password_hint())?> Maximum 72 bytes.</small>
 <button name="action" value="login">Sign in</button><button name="action" value="register">Create account</button>
+<a href="pin/">Sign in a client with a PIN</a>
 </form></section>
 <?php if(account_recovery_settings()):?><p><a href="recover/">Forgot password?</a></p><?php else:?><p>Email password recovery is disabled because SMTP is not configured.</p><?php endif;?>
 <?php else:?>
+<p><a href="pin/">Sign in a client with a PIN</a></p>
 <p>Your central player identity is <strong>@<?=site_h($user['handle'])?></strong>. Server permissions and bans remain under each server operator's control.</p>
 <?php if($device):?><section class="community-section"><h2>Approve this connection?</h2><p>Server: <strong><?=site_h($device['name'])?></strong> — <?=site_h($device['host'])?>:<?=(int)$device['port']?></p><p>Approve only if this is the code currently shown in your game: <strong><?=site_h($code)?></strong>.</p><form method="post"><?php account_fields($code);?><button name="action" value="approve">Approve sign-in</button></form></section>
 <?php else:?><form method="get" class="account-form"><label>Game sign-in code<input name="code" maxlength="8" autocomplete="off" required></label><button>Continue</button></form><?php endif;?>

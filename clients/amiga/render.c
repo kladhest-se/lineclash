@@ -58,11 +58,18 @@ void sdl_render_accounts(ClientCtx *c){begin("ACCOUNT");int busy=account_https_b
   text(x,66,"You're signed in.",5);text(x,96,c->central_profile,1);char email[53];snprintf(email,sizeof(email),"%.52s",c->account.email);text(x,120,email,3);
   if(!busy && button(x,160,w,"Browse servers"))client_accounts_action(c,ACCOUNT_CONTINUE);
   if(!busy && button(x,190,w,"Sign out"))client_accounts_action(c,ACCOUNT_LOGOUT);
+ }else if(c->account_pin_mode){
+  text(x,58,"Sign in with a PIN",5);text(48,86,"Open lineclash.kladhest.se/account/pin in a browser",1);
+  char display[24];snprintf(display,sizeof(display),"PIN: %.4s %.4s",c->account_pin,c->account_pin+4);text(x,114,display,5);
+  text(48,142,"Enter the PIN, sign in, then approve this client.",1);
+  if(button(x,174,w,"Use username / password"))client_accounts_action(c,ACCOUNT_PIN_CANCEL);
+  if(!busy && !c->account_pin_secret[0] && button(x,200,w,"Get a new PIN"))client_accounts_action(c,ACCOUNT_PIN_START);
  }else{
   TextField *fields[]={&c->tf_account_handle,&c->tf_account_email,&c->tf_account_password,&c->tf_account_confirm};const char *labels[]={"Username","Email","Password","Confirm password"};
   int creating=c->account_create_mode,first=creating?0:1,last=creating?3:2;
   for(int i=first;i<=last;i++){int y=(creating?44:74)+(i-first)*(creating?38:52);text(x,y-12,labels[i],1);box(x,y,w,18,2);char value[128];if(i>=2){int visible=fields[i]->len<50?fields[i]->len:50;memset(value,'*',visible);value[visible]=0;}else snprintf(value,sizeof(value),"%.50s",fields[i]->text);text(x+8,y+3,value,fields[i]->focused?5:1);if(!busy && click_y>=y && click_y<y+18 && click_x>=x && click_x<x+w){for(int j=0;j<4;j++)fields[j]->focused=i==j;}}
-  if(!creating && !busy && button(x,214,w,"Forgot password?"))snprintf(c->account_message,sizeof(c->account_message),"Visit lineclash.kladhest.se/account/recover/ in a browser.");
+  if(!creating && !busy && button(x,212,w,"Sign in with a PIN"))client_accounts_action(c,ACCOUNT_PIN_START);
+  if(!creating && !busy && button(8,26,140,"Forgot password?"))snprintf(c->account_message,sizeof(c->account_message),"Visit lineclash.kladhest.se/account/recover/ in a browser.");
   if(!busy){if(button(x,creating?190:164,w,creating?"Create account":"Sign in"))client_accounts_action(c,creating?ACCOUNT_REGISTER:ACCOUNT_SIGNIN);if(button(x,creating?214:190,w,creating?"Back to sign in":"Create a new account"))client_accounts_action(c,creating?ACCOUNT_LOGIN_MODE:ACCOUNT_CREATE_MODE);}
  }
  char message[78];snprintf(message,sizeof(message),"%.77s",busy?"Working securely with AmiSSL...":c->account_message);text(8,240,message,5);end();}

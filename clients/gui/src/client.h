@@ -248,7 +248,9 @@ typedef struct {
     sock_t account_join_socket;
     ClientState account_return;
     TextField tf_account_handle,tf_account_email,tf_account_password,tf_account_confirm;
-    int account_create_mode;
+    int account_create_mode,account_pin_mode;
+    char account_pin_secret[65],account_pin[9];
+    time_t account_pin_expires,account_pin_next;
     char account_message[256];
     /* Connect screen */
     TextField tf_host;
@@ -543,7 +545,7 @@ int directory_parse(char *body,SavedServer *rows,int capacity);
 int directory_url_valid(const char *url,int local);
 void directory_shutdown(void);
 
-enum {ACCOUNT_SIGNIN=1,ACCOUNT_CONTINUE,ACCOUNT_LOGOUT,ACCOUNT_BACK,ACCOUNT_CREATE_MODE,ACCOUNT_LOGIN_MODE,ACCOUNT_REGISTER};
+enum {ACCOUNT_SIGNIN=1,ACCOUNT_CONTINUE,ACCOUNT_LOGOUT,ACCOUNT_BACK,ACCOUNT_CREATE_MODE,ACCOUNT_LOGIN_MODE,ACCOUNT_REGISTER,ACCOUNT_PIN_START,ACCOUNT_PIN_CANCEL};
 void account_erase(void *,size_t);
 int account_http_reply(long,char *,int);
 int account_https_start(const char *);

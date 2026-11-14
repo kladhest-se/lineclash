@@ -136,7 +136,7 @@ Run `php bin/manage.php migrate` after refreshing this version: the additive `di
 
 ## Central-account deployment
 
-Refresh public-web and run `php bin/manage.php migrate` before updating servers and clients. This creates `accounts`, `account_devices`, `account_sessions`, `account_password_resets` and the session-version upgrade. The website DB account needs SELECT, INSERT and UPDATE on the account tables, plus DELETE on `account_password_resets` for email recovery. Browser sessions require PHP's writable session directory, HTTPS, secure/HttpOnly/SameSite cookies and CSRF validation. Native account sign-in uses a fixed HTTPS API endpoint with certificate and hostname verification. Browser-code approval remains available for older clients.
+Refresh public-web and run `php bin/manage.php migrate` before updating servers and clients. This creates `accounts`, `account_devices`, `account_sessions`, `account_password_resets`, `account_client_pins` and the session-version upgrade. The website DB account needs SELECT, INSERT and UPDATE on the account tables, plus DELETE on `account_password_resets` for email recovery and `account_client_pins` for expired PIN cleanup. Browser sessions require PHP's writable session directory, HTTPS, secure/HttpOnly/SameSite cookies and CSRF validation. Native account sign-in uses a fixed HTTPS API endpoint with certificate and hostname verification. Browser-code approval remains available for older clients.
 
 Only live, verified server directory keys can create/poll connection requests. Each request is bound to that server and a random connection nonce, lasts five minutes and can be redeemed once. Browser approval shows the registered server endpoint. Central signing-in does not grant a server administrative role or authorize statistics uploads. Guest/local server accounts remain separate. Keep a local administrator account for offline administration tools.
 
@@ -170,7 +170,7 @@ Erase all central accounts, browser-approval requests, native sessions, server r
 php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php reset-data --confirm-reset
 ```
 
-`reset-data` without an option also previews. The command uses the database selected by the normal site configuration and prints its name. It requires all eight known LineClash tables to be InnoDB, uses a single DELETE transaction in foreign-key order and rolls back if any deletion fails. The DB account needs SELECT and DELETE on those tables. It preserves the schema, unrelated tables and `config.inc.php`; no DROP or TRUNCATE permission is needed.
+`reset-data` without an option also previews. The command uses the database selected by the normal site configuration and prints its name. It requires all nine known LineClash tables to be InnoDB, uses a single DELETE transaction in foreign-key order and rolls back if any deletion fails. The DB account needs SELECT and DELETE on those tables. It preserves the schema, unrelated tables and `config.inc.php`; no DROP or TRUNCATE permission is needed.
 
 This is a destructive website reset. Dedicated servers' SQLite accounts, permissions and game records are separate and are not erased. Existing central sign-ins become invalid, while already-connected games continue. Live public servers can register again at their next heartbeat, and enabled result uploaders can repopulate history. Stop announcers/uploaders and website writes during the reset if the database must remain empty. Manually provisioned server identities and their upload tokens must be provisioned again afterward.
 
@@ -247,4 +247,26 @@ Expired reset rows can be deleted periodically; each account has at most one. `r
 ```sh
 python3 tests/test_smtp.py
 LINECLASH_WEB_RESET_TEST_CONFIG=/path/to/test-config.php python3 tests/test_password_recovery.py
+```
+
+
+## Optional client PIN sign-in
+
+Direct username/email and password login remains available. Desktop and Amiga clients can also choose **Sign in with a PIN**, visit `https://lineclash.kladhest.se/account/pin/` on another device, enter their eight-digit PIN, sign in and explicitly approve the client. A signed-in browser can approve without re-entering its password, or choose **Use another account**. This is a client account session; it is independent of the older server-specific browser-code approvals and does not require SMTP.
+
+Deploy the updated website and run `php bin/manage.php migrate` before updating clients. The migration adds `account_client_pins` without replacing existing accounts or sessions. The runtime website account needs SELECT, INSERT, UPDATE and DELETE on this table. If existing schema-wide grants do not cover it, run these on the database host after migration:
+
+```sh
+mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lineclash.account_client_pins TO 'lineclash_web'@'sth-ts-web002.kladhest.se';"
+mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lineclash.account_client_pins TO 'lineclash_web'@'172.16.1.132';"
+```
+
+The user-visible PIN is eight random decimal digits and expires in five minutes. A separate 256-bit device secret is returned only to the requesting client; only its SHA-256 hash is stored. Browser approval requires CSRF validation, an active central account and explicit confirmation of the displayed PIN. The browser never receives that private device secret or the client's native session token. Approval can be redeemed once in a transaction for a twelve-hour native session; changing the password, deactivating the account or consuming/declining the PIN prevents redemption. Polls are spaced by five seconds, with a ten-second client delay on `central-slow-down`. PIN creation is limited to five requests per source per minute, browser PIN operations to fifteen, and polls to six hundred per source plus per-device pacing. Only human-visible PINs, not device secrets, may be copied or displayed.
+
+Clients keep PIN secrets in memory and discard them on cancellation, expiry, completion or shutdown. They ignore responses from canceled or abandoned PIN screens. A canceled client does not redeem later browser approval; abandoned server records expire. Expired rows are removed when new PINs are created. `reset-data` includes this table. PIN sign-in uses the existing HTTPS workers (AmiSSL on Amiga) and never adds TLS or credentials to the game stream. Rebuild desktop/Amiga clients for the new option; dedicated servers require no change for client PIN authentication.
+
+Run the isolated protocol tests with:
+
+```sh
+LINECLASH_WEB_RESET_TEST_CONFIG=/path/to/test-config.php python3 tests/test_web_pins.py
 ```

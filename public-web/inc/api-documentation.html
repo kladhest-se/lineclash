@@ -54,7 +54,7 @@
 curl --fail 'https://lineclash.example.org/api/?action=matches&amp;mode=ranked&amp;offset=0'
 curl --fail 'https://lineclash.example.org/api/?action=statistics'
 </code></pre>
-<h3 id="community-api-native-account-profiles">Native account profiles</h3>
+<h3 id="community-api-native-account-sign-in">Native account sign-in</h3>
 <p>These POST JSON actions return plain text and require HTTPS. Do not put credentials or sessions in URL parameters. Password login is independent of browser cookies.</p>
 <table>
 <thead>
@@ -65,6 +65,16 @@ curl --fail 'https://lineclash.example.org/api/?action=statistics'
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>account-client-pin-begin</td>
+<td><code>client</code>: <code>desktop</code> or <code>amiga</code></td>
+<td><code>central-pin DEVICE_SECRET PIN EXPIRES</code> (five minutes)</td>
+</tr>
+<tr>
+<td>account-client-pin-poll</td>
+<td><code>device</code>: private device secret</td>
+<td><code>central-session TOKEN HANDLE EXPIRES EMAIL</code> after browser approval</td>
+</tr>
 <tr>
 <td>account-client-register</td>
 <td><code>handle</code>, <code>email</code>, <code>password</code>, <code>format: "session"</code></td>
@@ -88,6 +98,7 @@ curl --fail 'https://lineclash.example.org/api/?action=statistics'
 </tbody>
 </table>
 <p>Registration enforces unique usernames/emails and the configured password policy. Account creation and session issuance are atomic. Registration signs the client in directly and no recovery code is returned. Clients must send <code>format: "session"</code>; older registration formats receive an update-required error before any account is created. Email is private and is not a verified ownership claim. Email password recovery uses the separate browser page <code>/account/recover/</code> only when SMTP is configured; no reset token is sent through the game protocol. Existing clients may still send <code>handle</code> for username login. A missing email on an older account is represented by <code>-</code> in the login response.</p>
+<p>For PIN login, display only the eight-digit PIN and <code>/account/pin/</code> URL to the user; keep the random 64-character <code>DEVICE_SECRET</code> private and in memory. The browser accepts the PIN, username/email and password and requires explicit approval. Native clients poll over HTTPS at least five seconds apart. <code>central-pending</code> means keep waiting; <code>central-slow-down</code> means wait ten seconds before retrying. A denied, expired, consumed or revoked request returns <code>central-error ...</code>. These PIN state replies use HTTP 200; malformed inputs and source limits return 400/429. Only the device secret can redeem approval, once, for a normal twelve-hour account session. PINs alone cannot obtain sessions. Password resets or account deactivation prevent outstanding approvals from being redeemed. The PIN endpoints use LineClash’s text protocol; they are not a general-purpose OAuth service.</p>
 <p>The game server creates a connection-bound request with <code>account-begin</code> and <code>direct=true</code>, authenticating with its own directory key and random nonce. It gives the client the returned 64-character challenge. The client authorizes that challenge through <code>account-client-join</code>; its target host and port must match the request's live verified directory entry. The server polls its own request using <code>account-poll</code> and consumes the approved identity once. Replays, expired requests and mismatched targets are rejected. Client passwords and session tokens are not part of the game protocol.</p>
 <p>Client-account errors return plain text starting with <code>central-error</code> or <code>central-expired</code>, including database/service failures. Missing tables or columns return HTTP 503 with an instruction to run <code>php bin/manage.php migrate</code>; the client preserves that message. Failed credentials/sessions return 401, wrong targets return 403, concurrent approval conflicts return 409 and rate limits return 429. Password recovery invalidates existing sessions. Browser-code approval remains compatible with older clients.</p>
 <h3 id="community-api-errors-and-announcements">Errors and announcements</h3>

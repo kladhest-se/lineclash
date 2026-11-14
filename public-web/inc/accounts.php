@@ -88,6 +88,7 @@ function account_native_session(PDO $db,array $user): string {
 }
 function account_client_api(PDO $db,array $a): string {
     $action=$a['action']??'';
+    if(in_array($action,['account-client-pin-begin','account-client-pin-poll'],true)){require_once __DIR__.'/account-pins.php';return account_pin_api($db,$a);}
     if($action==='account-client-register') {
         if(($a['format']??'')!=='session')throw new InvalidArgumentException('Update the client before creating an account.');
         account_limit($db,'account-client-register',5);

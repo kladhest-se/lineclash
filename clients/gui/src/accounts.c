@@ -9,7 +9,7 @@ void account_erase(void *data,size_t size){volatile unsigned char *p=data;while(
    error pages or accept success tokens carried by a failed HTTP response. */
 int account_http_reply(long status,char *reply,int capacity){
     if(!strncmp(reply,"central-error ",14) || !strncmp(reply,"central-expired ",16))return -1;
-    if(status==200 && (!strncmp(reply,"central-session ",16) || !strncmp(reply,"central-registered ",19) || !strncmp(reply,"central-joined ",15) || !strcmp(reply,"central-signed-out")))return 1;
+    if(status==200 && (!strncmp(reply,"central-session ",16) || !strncmp(reply,"central-registered ",19) || !strncmp(reply,"central-joined ",15) || !strcmp(reply,"central-signed-out") || !strncmp(reply,"central-pin ",12) || !strcmp(reply,"central-pending") || !strcmp(reply,"central-slow-down")))return 1;
     const char *message;
     if(status==503 && strstr(reply,"migration required"))message="Website database migration required: run php bin/manage.php migrate";
     else if(status==503)message="Account service unavailable (HTTP 503). Run website migrations and check the Apache error log.";
@@ -22,6 +22,7 @@ int account_http_reply(long status,char *reply,int capacity){
 static int hex_token(const char *s){return strlen(s)==64 && strspn(s,"0123456789abcdef")==64;}
 static int handle_valid(const char *s){size_t n=strlen(s);return n>=3 && n<=14 && s[0]>='a' && s[0]<='z' && strspn(s,"abcdefghijklmnopqrstuvwxyz0123456789_")==n;}
 static int email_valid(const char *s){size_t n=strlen(s);if(!n || n>254 || !strchr(s,'@'))return 0;for(const unsigned char *p=(const unsigned char*)s;*p;p++)if(*p<33 || *p>126)return 0;return 1;}
+static void pin_clear(ClientCtx *c){account_erase(c->account_pin_secret,sizeof(c->account_pin_secret));memset(c->account_pin,0,sizeof(c->account_pin));c->account_pin_expires=c->account_pin_next=0;c->account_pin_mode=0;}
 static void passwords_clear(ClientCtx *c){account_erase(&c->tf_account_password,sizeof(c->tf_account_password));account_erase(&c->tf_account_confirm,sizeof(c->tf_account_confirm));}
 static const char *account_path(void){
     static char path[1024];
@@ -76,19 +77,32 @@ static void account_prefill(ClientCtx *c){
 void client_accounts_open(ClientCtx *c,int join){
     c->account_return=c->state==CS_ACCOUNT?c->account_return:c->state;
     c->account_join_after=join;c->state=CS_ACCOUNT;c->account_message[0]=0;c->account_create_mode=0;
-    passwords_clear(c);account_prefill(c);c->tf_account_handle.focused=0;c->tf_account_email.focused=1;
+    pin_clear(c);passwords_clear(c);account_prefill(c);c->tf_account_handle.focused=0;c->tf_account_email.focused=1;
 }
 void client_accounts_action(ClientCtx *c,int action){
+    if(action==ACCOUNT_PIN_CANCEL){pin_clear(c);passwords_clear(c);account_prefill(c);c->tf_account_email.focused=1;c->account_message[0]=0;return;}
     if(account_https_busy())return;
+    if(action==ACCOUNT_PIN_START){
+        if(client_account_ready(c))return;
+        pin_clear(c);passwords_clear(c);c->account_create_mode=0;c->account_pin_mode=1;
+#ifdef PLATFORM_AMIGA
+        const char *request="{\"action\":\"account-client-pin-begin\",\"client\":\"amiga\"}";
+#else
+        const char *request="{\"action\":\"account-client-pin-begin\",\"client\":\"desktop\"}";
+#endif
+        if(account_https_start(request)){c->account_job=5;snprintf(c->account_message,sizeof(c->account_message),"Requesting your sign-in PIN...");}
+        else{c->account_pin_mode=0;snprintf(c->account_message,sizeof(c->account_message),"Cannot start secure PIN sign-in");}
+        return;
+    }
     if(action==ACCOUNT_CREATE_MODE || action==ACCOUNT_LOGIN_MODE){
         if(client_account_ready(c))return;
-        passwords_clear(c);c->account_create_mode=action==ACCOUNT_CREATE_MODE;c->account_message[0]=0;
+        pin_clear(c);passwords_clear(c);c->account_create_mode=action==ACCOUNT_CREATE_MODE;c->account_message[0]=0;
         c->tf_account_handle.focused=c->account_create_mode;c->tf_account_email.focused=!c->account_create_mode;
         if(c->account_create_mode){c->tf_account_handle.text[0]=c->tf_account_email.text[0]=0;c->tf_account_handle.len=c->tf_account_email.len=0;}
         if(!c->account_create_mode)account_prefill(c);
         return;
     }
-    if(action==ACCOUNT_BACK){passwords_clear(c);c->account_join_after=0;c->state=c->account_return==CS_AUTH?CS_SERVER_LIST:c->account_return;return;}
+    if(action==ACCOUNT_BACK){pin_clear(c);passwords_clear(c);c->account_join_after=0;c->state=c->account_return==CS_AUTH?CS_SERVER_LIST:c->account_return;return;}
     if(action==ACCOUNT_CONTINUE){
         if(!client_account_ready(c))return;
         c->state=CS_SERVER_LIST;int join=c->account_join_after;c->account_join_after=0;
@@ -106,7 +120,7 @@ void client_accounts_action(ClientCtx *c,int action){
         passwords_clear(c);account_prefill(c);c->tf_account_email.focused=1;
         snprintf(c->account_message,sizeof(c->account_message),"Signed out.");return;
     }
-    if(client_account_ready(c))return;
+    if(client_account_ready(c) || c->account_pin_mode)return;
     if(action!=ACCOUNT_SIGNIN && action!=ACCOUNT_REGISTER)return;
     int registering=action==ACCOUNT_REGISTER;
     char handle[15];snprintf(handle,sizeof(handle),"%.14s",c->tf_account_handle.text);for(char *p=handle;*p;p++)*p=(char)tolower((unsigned char)*p);
@@ -128,6 +142,7 @@ void client_accounts_action(ClientCtx *c,int action){
     else snprintf(c->account_message,sizeof(c->account_message),"Cannot start secure sign-in");
 }
 void client_accounts_key(ClientCtx *c,int sc,int is_text,const char *txt){
+    if(c->account_pin_mode){if(sc==41)client_accounts_action(c,ACCOUNT_PIN_CANCEL);return;}
     if(account_https_busy())return;
     if(sc==41){client_accounts_action(c,c->account_create_mode?ACCOUNT_LOGIN_MODE:ACCOUNT_BACK);return;}
     if(client_account_ready(c)){if(sc==40)client_accounts_action(c,ACCOUNT_CONTINUE);return;}
@@ -149,9 +164,34 @@ void client_account_challenge(ClientCtx *c,const char *challenge){
     if(account_https_start(body)){c->account_job=2;c->account_join_socket=c->sock;}else snprintf(c->connect_error,sizeof(c->connect_error),"Secure sign-in is busy; reconnect");account_erase(body,sizeof(body));
 }
 void client_accounts_tick(ClientCtx *c){
+    if(c->account_pin_mode && c->account_pin_secret[0] && c->account_pin_expires<=time(NULL)){
+        account_erase(c->account_pin_secret,sizeof(c->account_pin_secret));
+        snprintf(c->account_message,sizeof(c->account_message),"PIN expired. Request a new PIN to try again.");
+    }
+    if(c->state==CS_ACCOUNT && c->account_pin_mode && c->account_pin_secret[0] && !account_https_busy() && !c->account_job && time(NULL)>=c->account_pin_next){
+        char body[192];snprintf(body,sizeof(body),"{\"action\":\"account-client-pin-poll\",\"device\":\"%s\"}",c->account_pin_secret);
+        if(account_https_start(body)){c->account_job=6;c->account_pin_next=time(NULL)+5;}account_erase(body,sizeof(body));
+    }
     char reply[512];int result=account_https_poll(reply,sizeof(reply));if(!result)return;
     int kind=c->account_job;c->account_job=0;
-    if(kind==1 || kind==4){char token[65]={0},handle[15]={0},email[255]={0};long long expires=0;
+    if(kind==5 || kind==6){
+        if(!c->account_pin_mode || c->state!=CS_ACCOUNT){account_erase(reply,sizeof(reply));return;}
+        if(kind==5){
+            char secret[65]={0},pin[9]={0};long long expires=0;
+            if(result>0 && sscanf(reply,"central-pin %64s %8s %lld",secret,pin,&expires)==3 && hex_token(secret) && strlen(pin)==8 && strspn(pin,"0123456789")==8 && expires>time(NULL) && expires<=time(NULL)+600){
+                snprintf(c->account_pin_secret,sizeof(c->account_pin_secret),"%s",secret);snprintf(c->account_pin,sizeof(c->account_pin),"%s",pin);
+                c->account_pin_expires=(time_t)expires;c->account_pin_next=time(NULL)+5;
+                snprintf(c->account_message,sizeof(c->account_message),"Waiting for approval on the website...");
+            }else{snprintf(c->account_message,sizeof(c->account_message),"%.255s",!strncmp(reply,"central-error ",14)?reply+14:"PIN sign-in could not start. Refresh the website.");}
+            account_erase(secret,sizeof(secret));account_erase(reply,sizeof(reply));return;
+        }
+        if(result>0 && (!strcmp(reply,"central-pending") || !strcmp(reply,"central-slow-down"))){c->account_pin_next=time(NULL)+(!strcmp(reply,"central-slow-down")?10:5);account_erase(reply,sizeof(reply));return;}
+        if(result<0 || strncmp(reply,"central-session ",16)){
+            account_erase(c->account_pin_secret,sizeof(c->account_pin_secret));
+            snprintf(c->account_message,sizeof(c->account_message),"%.255s",!strncmp(reply,"central-error ",14)?reply+14:"PIN sign-in failed. Request a new PIN.");account_erase(reply,sizeof(reply));return;
+        }
+    }
+    if(kind==1 || kind==4 || kind==6){char token[65]={0},handle[15]={0},email[255]={0};long long expires=0;
         /* Accept older registration replies during a rolling website update,
            discarding the obsolete field without storing or showing it. */
         int fields=kind==4 && !strncmp(reply,"central-registered ",19)?sscanf(reply,"central-registered %64s %14s %lld %*48s %254s",token,handle,&expires,email):sscanf(reply,"central-session %64s %14s %lld %254s",token,handle,&expires,email);
@@ -161,7 +201,7 @@ void client_accounts_tick(ClientCtx *c){
             snprintf(c->account.handle,15,"%s",handle);if(email_valid(email))snprintf(c->account.email,255,"%s",email);
             snprintf(c->account.token,65,"%s",token);c->account.expires=(time_t)expires;
             snprintf(c->central_profile,sizeof(c->central_profile),"@%s",handle);account_save(c);
-            c->account_create_mode=0;client_accounts_action(c,ACCOUNT_CONTINUE);
+            pin_clear(c);c->account_create_mode=0;client_accounts_action(c,ACCOUNT_CONTINUE);
         }else snprintf(c->account_message,sizeof(c->account_message),"%.255s",!strncmp(reply,"central-error ",14)?reply+14:"Account request failed. Check your details and website status.");
         account_erase(token,sizeof(token));
     }else if(kind==2 && c->state==CS_AUTH && c->central_mode && c->sock==c->account_join_socket && (result<0 || strncmp(reply,"central-joined ",15))){
@@ -170,4 +210,4 @@ void client_accounts_tick(ClientCtx *c){
     }
     account_erase(reply,sizeof(reply));
 }
-void client_accounts_shutdown(ClientCtx *c){account_https_shutdown();account_erase(&c->account,sizeof(c->account));passwords_clear(c);}
+void client_accounts_shutdown(ClientCtx *c){account_https_shutdown();account_erase(&c->account,sizeof(c->account));pin_clear(c);passwords_clear(c);}

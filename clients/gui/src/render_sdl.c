@@ -2868,6 +2868,20 @@ void sdl_render_accounts(ClientCtx *c){
         account_notice(x,322,w,c->account.email,COL_GRAY);
         if(dbtn(x,414,w,44,"Browse servers",busy?BS_DISABLED:BS_ACTIVE) && !busy)client_accounts_action(c,ACCOUNT_CONTINUE);
         if(dbtn(x,478,w,36,"Sign out",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_LOGOUT);
+    }else if(c->account_pin_mode){
+        dt(x,170,"Sign in with a PIN.",COL_WHITE,3);
+        dt(x,234,"Open this page on a phone or computer:",COL_LTGRAY,1);
+        dt(x,268,"lineclash.kladhest.se/account/pin",0xbba5f4ff,1);
+        dt(x,318,"Enter the PIN, sign in, then approve this client.",COL_LTGRAY,1);
+        if(c->account_pin[0]){
+            char display[16];snprintf(display,sizeof(display),"%.4s %.4s",c->account_pin,c->account_pin+4);dtc(WIN_W/2,370,display,0x75dabbff,3);
+            char remaining[64];int seconds=(int)(c->account_pin_expires-time(NULL));if(seconds<0)seconds=0;
+            snprintf(remaining,sizeof(remaining),"PIN expires in %d:%02d",seconds/60,seconds%60);dt(x,432,remaining,COL_GRAY,1);
+        }
+        if(dbtn(x,474,w,36,"Open sign-in page",BS_NORMAL))music_link("https://lineclash.kladhest.se/account/pin/");
+        if(dbtn(x,524,w,36,"Use username / password instead",BS_NORMAL))client_accounts_action(c,ACCOUNT_PIN_CANCEL);
+        if(!c->account_pin_secret[0] && !busy && dbtn(x,574,w,36,"Get a new PIN",BS_NORMAL))client_accounts_action(c,ACCOUNT_PIN_START);
+        account_notice(x,640,w,c->account_message,COL_GRAY);
     }else{
         dt(x,170,creating?"Create account.":"Welcome back.",COL_WHITE,3);
         dt(x,224,creating?"Your next match starts here.":"Sign in to join the next match.",COL_LTGRAY,1);
@@ -2876,7 +2890,7 @@ void sdl_render_accounts(ClientCtx *c){
         int first=creating?0:1,last=creating?3:2;
         for(int i=first;i<=last;i++){
             int y=(creating?254:270)+(i-first)*(creating?80:92);
-            dt(x,y,labels[i],COL_LTGRAY,1);
+            dt(x,y,!creating && i==1?"Email or username":labels[i],COL_LTGRAY,1);
             int clicked=i>=2?draw_passfield(x,y+24,w,38,fields[i],labels[i]):draw_textfield(x,y+24,w,38,fields[i],i==1?"you@example.com":labels[i]);
             if(clicked && !busy){for(int j=0;j<4;j++)fields[j]->focused=i==j;}
         }
@@ -2885,8 +2899,9 @@ void sdl_render_accounts(ClientCtx *c){
         if(dbtn(x,submit,w,44,label,busy?BS_DISABLED:BS_ACTIVE) && !busy)client_accounts_action(c,creating?ACCOUNT_REGISTER:ACCOUNT_SIGNIN);
         if(dbtn(x,creating?642:526,w,36,creating?"Already have an account? Sign in":"Create a new account",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,creating?ACCOUNT_LOGIN_MODE:ACCOUNT_CREATE_MODE);
         if(creating)dt(x,694,"Your username is public. Your email stays private.",COL_GRAY,1);
-        else if(dbtn(x,578,w,32,"Forgot password?",busy?BS_DISABLED:BS_NORMAL) && !busy)music_link("https://lineclash.kladhest.se/account/recover/");
-        if(!busy)account_notice(x,creating?714:644,w,c->account_message,!strncmp(c->account_message,"Signed out",10)?COL_GRAY:0xe78284ff);
+        else if(dbtn(x,626,w,32,"Forgot password?",busy?BS_DISABLED:BS_NORMAL) && !busy)music_link("https://lineclash.kladhest.se/account/recover/");
+        if(!creating && dbtn(x,576,w,36,"Sign in with a PIN",busy?BS_DISABLED:BS_NORMAL) && !busy)client_accounts_action(c,ACCOUNT_PIN_START);
+        if(!busy)account_notice(x,creating?714:680,w,c->account_message,!strncmp(c->account_message,"Signed out",10)?COL_GRAY:0xe78284ff);
     }
     dtc(WIN_W/2,WIN_H-28,"LINECLASH / v" TETRINETZ_VERSION,0x7489a6ff,1);
     SDL_RenderPresent(g_rend);

@@ -22,18 +22,22 @@ curl --fail 'https://lineclash.example.org/api/?action=matches&mode=ranked&offse
 curl --fail 'https://lineclash.example.org/api/?action=statistics'
 ```
 
-## Native account profiles
+## Native account sign-in
 
 These POST JSON actions return plain text and require HTTPS. Do not put credentials or sessions in URL parameters. Password login is independent of browser cookies.
 
 | Action | Body fields | Success response |
 | --- | --- | --- |
+| account-client-pin-begin | `client`: `desktop` or `amiga` | `central-pin DEVICE_SECRET PIN EXPIRES` (five minutes) |
+| account-client-pin-poll | `device`: private device secret | `central-session TOKEN HANDLE EXPIRES EMAIL` after browser approval |
 | account-client-register | `handle`, `email`, `password`, `format: "session"` | `central-session TOKEN HANDLE EXPIRES EMAIL` |
 | account-client-login | `login` (email or existing username), `password` | `central-session TOKEN HANDLE EXPIRES EMAIL` (12 hours) |
 | account-client-join | `session`, `challenge`, `host`, `port` | `central-joined HANDLE` |
 | account-client-logout | `session` | `central-signed-out` |
 
 Registration enforces unique usernames/emails and the configured password policy. Account creation and session issuance are atomic. Registration signs the client in directly and no recovery code is returned. Clients must send `format: "session"`; older registration formats receive an update-required error before any account is created. Email is private and is not a verified ownership claim. Email password recovery uses the separate browser page `/account/recover/` only when SMTP is configured; no reset token is sent through the game protocol. Existing clients may still send `handle` for username login. A missing email on an older account is represented by `-` in the login response.
+
+For PIN login, display only the eight-digit PIN and `/account/pin/` URL to the user; keep the random 64-character `DEVICE_SECRET` private and in memory. The browser accepts the PIN, username/email and password and requires explicit approval. Native clients poll over HTTPS at least five seconds apart. `central-pending` means keep waiting; `central-slow-down` means wait ten seconds before retrying. A denied, expired, consumed or revoked request returns `central-error ...`. These PIN state replies use HTTP 200; malformed inputs and source limits return 400/429. Only the device secret can redeem approval, once, for a normal twelve-hour account session. PINs alone cannot obtain sessions. Password resets or account deactivation prevent outstanding approvals from being redeemed. The PIN endpoints use LineClash’s text protocol; they are not a general-purpose OAuth service.
 
 The game server creates a connection-bound request with `account-begin` and `direct=true`, authenticating with its own directory key and random nonce. It gives the client the returned 64-character challenge. The client authorizes that challenge through `account-client-join`; its target host and port must match the request's live verified directory entry. The server polls its own request using `account-poll` and consumes the approved identity once. Replays, expired requests and mismatched targets are rejected. Client passwords and session tokens are not part of the game protocol.
 

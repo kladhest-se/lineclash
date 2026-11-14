@@ -76,6 +76,17 @@ CREATE TABLE IF NOT EXISTS account_password_resets (
  FOREIGN KEY(account_id) REFERENCES accounts(id), INDEX expiry(expires)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Browser PIN login for a native client, separate from server connection approvals.
+CREATE TABLE IF NOT EXISTS account_client_pins (
+ device_hash CHAR(64) CHARACTER SET ascii PRIMARY KEY,
+ pin CHAR(8) CHARACTER SET ascii NOT NULL UNIQUE,
+ client VARCHAR(16) CHARACTER SET ascii NOT NULL,
+ account_id CHAR(32) CHARACTER SET ascii NULL,
+ auth_version INT NULL, expires BIGINT NOT NULL,
+ last_poll BIGINT NOT NULL DEFAULT 0, state VARCHAR(16) NOT NULL DEFAULT 'pending',
+ FOREIGN KEY(account_id) REFERENCES accounts(id), INDEX expiry(expires)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Existing accounts keep username sign-in until an email is added.
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS email VARCHAR(254) CHARACTER SET ascii COLLATE ascii_general_ci NULL;
 ALTER TABLE accounts ADD UNIQUE INDEX IF NOT EXISTS accounts_email(email);

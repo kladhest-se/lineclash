@@ -8,7 +8,7 @@ if not base:
  print('SKIP: set LINECLASH_WEB_RESET_TEST_CONFIG to a test MariaDB config with CREATE DATABASE permission')
  raise SystemExit(0)
 name='lineclash_reset_test_'+secrets.token_hex(8)
-tables=['account_password_resets','account_sessions','account_devices','directory_players','directory_games','directory_registration_limits','accounts','directory_servers']
+tables=['account_client_pins','account_password_resets','account_sessions','account_devices','directory_players','directory_games','directory_registration_limits','accounts','directory_servers']
 with tempfile.TemporaryDirectory(prefix='lineclash-reset-') as folder:
  config=Path(folder)/'web.php';env=dict(os.environ,LINECLASH_WEB_CONFIG=base)
  def php(code,*args,environment=env):
@@ -46,6 +46,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-reset-') as folder:
   sql('DELETE FROM directory_registration_limits')
   sql("INSERT INTO directory_servers(id,name,host,port,token_hash,status_json) VALUES('fixture','Fixture','127.0.0.1',31457,'"+'0'*64+"','{}')")
   sql("INSERT INTO accounts(id,handle,password_hash,recovery_hash,created_at) VALUES('"+'a'*32+"','tester','fixture','"+'1'*64+"',1)")
+  sql("INSERT INTO account_client_pins(device_hash,pin,client,account_id,auth_version,expires) VALUES('"+'6'*64+"','12345678','desktop','"+'a'*32+"',1,9999999999)")
   sql("INSERT INTO account_password_resets VALUES('"+'a'*32+"','"+'5'*64+"',1,9999999999)")
   sql("INSERT INTO account_sessions(token_hash,account_id,auth_version,expires) VALUES('"+'2'*64+"','"+'a'*32+"',1,9999999999)")
   sql("INSERT INTO account_devices(request_hash,code,server_id,account_id,expires,state) VALUES('"+'3'*64+"','01234567','fixture','"+'a'*32+"',9999999999,'pending')")
@@ -66,7 +67,7 @@ with tempfile.TemporaryDirectory(prefix='lineclash-reset-') as folder:
   result=manage('reset-data','--confirm-reset');assert result.returncode!=0 and 'rolled back' in result.stderr,result.stderr
   assert counts()==before,'Partial reset was not rolled back'
   sql('DROP TRIGGER reset_failure')
-  result=manage('reset-data','--confirm-reset');assert result.returncode==0 and 'Removed 8 rows' in result.stdout,result.stderr
+  result=manage('reset-data','--confirm-reset');assert result.returncode==0 and 'Removed 9 rows' in result.stdout,result.stderr
   after=counts();assert all(after[t]==0 for t in tables) and after['unrelated_notes']==1
   assert config.read_bytes()==original
   print('PASS: reset preview, exact confirmation, engine check, atomic rollback, all project tables emptied, unrelated data and configuration preserved')

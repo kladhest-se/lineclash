@@ -36,3 +36,8 @@ Run `make web-test` with a disposable `LINECLASH_WEB_CONFIG` for real database, 
 ## Optional email recovery
 
 Configure `public_url` and the `smtp` block in `config.inc.php` using the sample, then run `php bin/manage.php migrate`. SMTP supports a relay IP/hostname, port, optional authentication, sender address/EHLO identity, optional source IP and `none`, `starttls` or implicit `tls` encryption. TLS always verifies certificates. Test a recipient you control with `php bin/manage.php smtp-test you@example.net`. Recovery is automatically disabled if SMTP is absent or incomplete. Enabled recovery sends single-use, 30-minute links through `/account/recover/`; it replaces the old recovery-code flow. See the repository's web-service guide for configuration, permissions and deployment details. Existing live configuration is preserved by refresh, so new SMTP values must be added manually.
+
+
+## Client PIN sign-in
+
+`/account/pin/` lets users enter a client PIN, sign in with username/email and password, and approve their desktop or Amiga client. Direct password login remains available. Refresh the website and run `php bin/manage.php migrate` to add `account_client_pins`; the runtime database account needs SELECT, INSERT, UPDATE and DELETE on it. PINs last five minutes, require a separate private device secret for redemption, and create ordinary twelve-hour native sessions. SMTP is not required. See the repository web-service guide for deployment and limits.
