@@ -28,6 +28,14 @@ Data is read directly from the existing MariaDB tables; this interface change re
 
 Run `make web-test` with a disposable `LINECLASH_WEB_CONFIG` for real database, integration and outage checks. The test fixtures are confined to that disposable database. Refresh the website after publishing the source updates; `config.inc.php` is still preserved by the update helper.
 
+## Reset central users during a refresh
+
+Update your installed copy of `scripts/refresh-lineclash.sh`, then use `--reset-users --dry-run` to preview or `--reset-users` to refresh and erase every central account. Normal refreshes never erase accounts. The option requires an existing configured site and the current migrated schema. It removes email addresses, password hashes, sessions, PIN approvals and recovery/activation records, and clears shared rate counters. Retained match results and replays are anonymized through the existing account-deletion logic; scores, placements, team results and server registrations remain. Dedicated-server SQLite records are separate.
+
+A real reset first saves a private SQL backup in `${LINECLASH_SITE}.private-backups/users.TIMESTAMP.RANDOM/database.sql` (the default site is `/srv/www/vhosts/lineclash.kladhest.se`). The directory is mode 700 and backup is mode 600, outside the document root. A backup failure prevents deletion; database failures roll back the reset. Backups contain the original private data and are subject to the operator's retention policy.
+
+For CLI maintenance without refreshing, preview with `php bin/manage.php reset-users --dry-run`, then use `php bin/manage.php reset-users --confirm-reset --backup /private/path/users.sql`. The destination must be a new file in an existing directory outside both the application and configuration directories. All project tables must use InnoDB; the configured DB account needs SELECT, UPDATE and DELETE. See the repository deployment guide for recovery commands. `reset-data` below remains a separate command that also deletes game history and server registrations.
+
 ## Reset website data
 
 `php bin/manage.php reset-data --dry-run` previews the affected table counts. `php bin/manage.php reset-data --confirm-reset` deletes all LineClash website data, including central accounts and reported statistics, in one transaction. It preserves the schema, configuration and unrelated tables. The configured database account needs DELETE privileges. Dedicated-server SQLite databases are separate. See the repository web-service guide for scope and re-registration behavior.

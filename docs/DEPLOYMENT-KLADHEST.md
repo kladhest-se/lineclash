@@ -126,6 +126,31 @@ Install/update the schema:
 php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php migrate
 ```
 
+### Optional account reset during refresh
+
+Replace the installed refresh script before using its new option:
+
+```sh
+curl -fL https://raw.githubusercontent.com/kladhest-se/lineclash/main/scripts/refresh-lineclash.sh -o /srv/www/vhosts/refresh-lineclash.sh
+chmod 750 /srv/www/vhosts/refresh-lineclash.sh
+/srv/www/vhosts/refresh-lineclash.sh --reset-users --dry-run
+/srv/www/vhosts/refresh-lineclash.sh --reset-users
+```
+
+Use the same `LINECLASH_OWNER` override as your normal refresh if needed. `--reset-users` erases every central account and its email, password hash, sessions, device/PIN approvals and activation/recovery/email-change records. It clears transient shared rate counters. Players in retained website statistics and replays become **DELETED PLAYER**; scores, placements, team results and server registrations stay. It does not touch dedicated-server SQLite databases. A refresh without this flag never resets users.
+
+An existing `config.inc.php` and current migrated InnoDB schema are required. The script previews the configured database before syncing; it resets only after the website sync succeeds. If needed, run a normal refresh and `php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php migrate` first. The configured account needs SELECT, UPDATE and DELETE on the LineClash tables. No DROP permission or external dump utility is required.
+
+Before deleting anything it writes and flushes a private SQL backup at `/srv/www/vhosts/lineclash.kladhest.se.private-backups/users.TIMESTAMP.RANDOM/database.sql`. It prints the exact path. Backup directories are mode 700 and SQL files mode 600, outside the document root. If backup creation fails no user data is erased. If redaction or deletion fails all database changes roll back and a completed backup remains. Dry runs create no data backup and change no accounts. An unsuccessful reset can follow a successful website-file refresh; check the exit status.
+
+Schedule a maintenance window and pause account/result writes while resetting or restoring. Accounts registered after the transaction commits are new accounts and remain. Backups retain original private data until you remove them under your own retention policy. The SQL contains data for all eleven LineClash tables, preserving the rows needed for a consistent restoration, but no configuration, unrelated tables or schema changes. To undo a reset, use the matching migrated schema and the exact backup path printed by the script. For example, on the database host with your existing administrative `.my.cnf`, after securely copying the backup there:
+
+```sh
+mariadb lineclash < /root/lineclash-before-user-reset.sql
+```
+
+This restores the backed-up LineClash rows, replacing subsequent changes in those tables. It leaves unrelated tables alone. Take a current backup first if you need to preserve changes made since the reset. The lower-level website CLI also supports `reset-users --dry-run` and `reset-users --confirm-reset --backup /private/path/users.sql`; the backup directory must already exist outside the website/config directories. The separate `reset-data --confirm-reset` command erases website game history and server registrations as well.
+
 ## 4. Apache virtual host
 
 Set DNS for **lineclash.kladhest.se** to the appropriate web002 address (or the public reverse proxy/NAT address serving it). Install a certificate covering this hostname. Use your existing certificate process.

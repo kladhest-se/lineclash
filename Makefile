@@ -64,6 +64,7 @@ web-test: server
 	$(PYTHON) tests/test_account_profile.py
 	$(PYTHON) tests/test_web_accounts.py
 	$(PYTHON) tests/test_web_reset.py
+	$(PYTHON) tests/test_web_users_reset.py
 	$(PYTHON) tests/test_directory_e2e.py
 
 web-js-test:

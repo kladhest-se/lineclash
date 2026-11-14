@@ -8,12 +8,16 @@ BRANCH=${LINECLASH_BRANCH:-main}
 OWNER=${LINECLASH_OWNER:-wwwrun:wwwrun}
 WEB_CONFIG=$SITE/config.inc.php
 DRY_RUN=
-case "${1-}" in
-    '') ;;
-    --dry-run) DRY_RUN=--dry-run ;;
-    *) echo "Usage: $0 [--dry-run]" >&2; exit 1 ;;
-esac
-[ "$#" -le 1 ] || { echo "Usage: $0 [--dry-run]" >&2; exit 1; }
+RESET_USERS=
+usage() { echo "Usage: $0 [--dry-run] [--reset-users]"; }
+for argument do
+    case "$argument" in
+        --dry-run) [ -z "$DRY_RUN" ] || { usage >&2; exit 1; }; DRY_RUN=--dry-run ;;
+        --reset-users) [ -z "$RESET_USERS" ] || { usage >&2; exit 1; }; RESET_USERS=yes ;;
+        --help|-h) usage; echo "--reset-users erases all central users after a private SQL backup; results are anonymized and retained."; exit 0 ;;
+        *) usage >&2; exit 1 ;;
+    esac
+done
 [ "$(id -u)" -eq 0 ] || { echo "Run as root." >&2; exit 1; }
 for tool in git rsync php flock; do
     command -v "$tool" >/dev/null 2>&1 || { echo "Required command is missing: $tool" >&2; exit 1; }
@@ -24,6 +28,7 @@ case "$SITE" in /*) ;; *) echo "SITE must be an absolute path." >&2; exit 1;; es
 if [ -e "$WEB_CONFIG" ] && [ ! -f "$WEB_CONFIG" ]; then
     echo "Configuration path exists but is not a regular file: $WEB_CONFIG" >&2; exit 1
 fi
+[ -z "$RESET_USERS" ] || [ -f "$WEB_CONFIG" ] || { echo "User reset requires an existing configured site: $WEB_CONFIG" >&2; exit 1; }
 [ -d "$(dirname "$SITE")" ] || { echo "Site parent directory is missing." >&2; exit 1; }
 exec 9>"${SITE}.refresh.lock"
 flock -n 9 || { echo "Another website refresh is running." >&2; exit 1; }
@@ -33,7 +38,7 @@ trap '[ -z "$CONFIG_TEMP" ] || rm -f "$CONFIG_TEMP"; rm -rf "$TEMP"' 0
 trap 'exit 1' HUP INT TERM
 git clone --quiet --depth 1 --single-branch --branch "$BRANCH" "$REPOSITORY" "$TEMP/repository"
 SOURCE=$TEMP/repository/public-web
-for file in index.php config.example.php inc/service.php inc/accounts.php account/index.php account/pin/index.php account/pin/.htaccess pin/index.php pin/.htaccess inc/pin-route.php inc/schema.sql inc/site.php inc/community.php inc/community-page.php assets/site.css assets/community.js assets/blocks.js assets/downloads.js assets/screenshots.js assets/screenshots/game.png assets/screenshots/servers.png bin/manage.php api/index.php directory/index.php servers/index.php leaderboards/index.php matches/index.php statistics/index.php documentation/index.php source/index.php credits/index.php privacy/index.php api/docs/index.php inc/music-credits.json documentation/basics/index.php inc/basics-documentation.html documentation/controls/index.php inc/controls-documentation.html documentation/features/index.php documentation/modes/index.php documentation/specials/index.php documentation/server/index.php inc/server-documentation.html inc/source-documentation.html inc/api-documentation.html .htaccess; do
+for file in index.php config.example.php inc/service.php inc/accounts.php inc/user-reset.php inc/account-privacy.php account/index.php account/pin/index.php account/pin/.htaccess pin/index.php pin/.htaccess inc/pin-route.php inc/schema.sql inc/site.php inc/community.php inc/community-page.php assets/site.css assets/community.js assets/blocks.js assets/downloads.js assets/screenshots.js assets/screenshots/game.png assets/screenshots/servers.png bin/manage.php api/index.php directory/index.php servers/index.php leaderboards/index.php matches/index.php statistics/index.php documentation/index.php source/index.php credits/index.php privacy/index.php api/docs/index.php inc/music-credits.json documentation/basics/index.php inc/basics-documentation.html documentation/controls/index.php inc/controls-documentation.html documentation/features/index.php documentation/modes/index.php documentation/specials/index.php documentation/server/index.php inc/server-documentation.html inc/source-documentation.html inc/api-documentation.html .htaccess; do
     [ -f "$SOURCE/$file" ] || { echo "public-web/$file is missing; site left unchanged." >&2; exit 1; }
 done
 [ -z "$(find "$SOURCE" -type l -print -quit)" ] || { echo "Refusing symlinked website inputs." >&2; exit 1; }
@@ -41,6 +46,10 @@ done
 find "$SOURCE" -type f -name '*.php' -exec sh -c '
     for file do php -l "$file" >/dev/null || exit 1; done
 ' sh {} +
+if [ -n "$RESET_USERS" ]; then
+    echo "User reset requested: accounts and private sign-in data will be erased; game results and server registrations retained."
+    LINECLASH_WEB_CONFIG="$WEB_CONFIG" php "$SOURCE/bin/manage.php" reset-users --dry-run
+fi
 chown -R "$OWNER" "$SOURCE"
 find "$SOURCE" -type d -exec chmod 750 {} +
 find "$SOURCE" -type f -exec chmod 640 {} +
@@ -91,6 +100,11 @@ else
         echo "Preserved existing config.inc.php."
     fi
     [ -z "$BACKUP" ] || echo "Private configuration backup: $BACKUP"
+    if [ -n "$RESET_USERS" ]; then
+        RESET_BACKUP_DIR=$(mktemp -d "$BACKUP_DIR/users.$(date -u +%Y%m%dT%H%M%SZ).XXXXXX")
+        echo "Resetting central users after creating a private SQL backup."
+        LINECLASH_WEB_CONFIG="$WEB_CONFIG" php "$SOURCE/bin/manage.php" reset-users --confirm-reset --backup "$RESET_BACKUP_DIR/database.sql"
+    fi
     echo "Next: php $SITE/bin/manage.php migrate"
     echo "Migrations need the installation DB privileges; config.inc.php loads automatically."
 fi

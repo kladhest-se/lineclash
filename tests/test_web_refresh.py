@@ -15,7 +15,7 @@ class RefreshTests(unittest.TestCase):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.base=Path(self.tmp.name)
   self.source=self.base/'source';self.source.mkdir();self.site=self.base/'site';self.site.mkdir();(self.site/'keep.txt').write_text('keep')
   self.config=self.site/'config.inc.php';self.config.write_text('<?php return [];')
-  for name in ['index.php','config.example.php','inc/service.php','inc/accounts.php','account/index.php','account/pin/index.php','account/pin/.htaccess','pin/index.php','pin/.htaccess','inc/pin-route.php','inc/schema.sql','inc/site.php','inc/community.php','inc/community-page.php','assets/site.css','assets/community.js','assets/blocks.js','assets/downloads.js','assets/screenshots.js','assets/screenshots/game.png','assets/screenshots/servers.png','servers/index.php','leaderboards/index.php','matches/index.php','statistics/index.php','documentation/index.php','source/index.php','credits/index.php','privacy/index.php','api/docs/index.php','inc/music-credits.json','documentation/basics/index.php','inc/basics-documentation.html','documentation/controls/index.php','inc/controls-documentation.html','documentation/features/index.php','documentation/modes/index.php','documentation/specials/index.php','documentation/server/index.php','inc/server-documentation.html','inc/source-documentation.html','inc/api-documentation.html','bin/manage.php','api/index.php','directory/index.php','.htaccess']:
+  for name in ['index.php','config.example.php','inc/service.php','inc/accounts.php','inc/user-reset.php','inc/account-privacy.php','account/index.php','account/pin/index.php','account/pin/.htaccess','pin/index.php','pin/.htaccess','inc/pin-route.php','inc/schema.sql','inc/site.php','inc/community.php','inc/community-page.php','assets/site.css','assets/community.js','assets/blocks.js','assets/downloads.js','assets/screenshots.js','assets/screenshots/game.png','assets/screenshots/servers.png','servers/index.php','leaderboards/index.php','matches/index.php','statistics/index.php','documentation/index.php','source/index.php','credits/index.php','privacy/index.php','api/docs/index.php','inc/music-credits.json','documentation/basics/index.php','inc/basics-documentation.html','documentation/controls/index.php','inc/controls-documentation.html','documentation/features/index.php','documentation/modes/index.php','documentation/specials/index.php','documentation/server/index.php','inc/server-documentation.html','inc/source-documentation.html','inc/api-documentation.html','bin/manage.php','api/index.php','directory/index.php','.htaccess']:
    p=self.source/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('<?php echo "test";' if p.suffix=='.php' else '# fixture')
   self.bin=self.base/'bin';self.bin.mkdir();self.record=self.base/'rsync.json'
   programs={'id': 'echo 0', 'git': 'for last do :; done; mkdir -p "$last/public-web"; cp -R "$TEST_SOURCE/." "$last/public-web/"', 'flock': 'exit 0', 'chown': 'exit 0', 'rsync': 'exec python3 -c \'import json,os,sys;open(os.environ["TEST_RECORD"],"w").write(json.dumps(sys.argv[1:]))\' "$@"'}
@@ -23,6 +23,21 @@ class RefreshTests(unittest.TestCase):
    p=self.bin/name;p.write_text('#!/bin/sh\n'+body+'\n');p.chmod(0o755)
   self.env=dict(os.environ,PATH=str(self.bin)+os.pathsep+os.environ['PATH'],LINECLASH_SITE=str(self.site),LINECLASH_WEB_CONFIG=str(self.config),TEST_SOURCE=str(self.source),TEST_RECORD=str(self.record))
   self.env.pop('LINECLASH_WEB_CONFIG',None)
+  self.calls=self.base/'maintenance.jsonl';self.env['TEST_MAINTENANCE']=str(self.calls)
+  self.env['TEST_PHP']=shutil.which('php')
+  dispatcher=self.bin/'php';dispatcher.write_text("""#!/usr/bin/env python3
+import json,os,subprocess,sys
+from pathlib import Path
+args=sys.argv[1:]
+if len(args)>1 and args[1]=='reset-users':
+ with open(os.environ['TEST_MAINTENANCE'],'a') as f:f.write(json.dumps([args,os.environ.get('LINECLASH_WEB_CONFIG')])+'\\n')
+ if '--dry-run' in args:
+  print('Preview only; no data changed.')
+  sys.exit(int(os.environ.get('TEST_PREFLIGHT_FAIL','0')))
+ backup=Path(args[-1]);backup.write_text('-- fixture SQL backup');backup.chmod(0o600)
+ sys.exit(int(os.environ.get('TEST_RESET_FAIL','0')))
+sys.exit(subprocess.call([os.environ['TEST_PHP'],*args]))
+""");dispatcher.chmod(0o755)
  def run_script(self,*args):return subprocess.run(['sh',str(ROOT/'scripts/refresh-lineclash.sh'),*args],env=self.env,capture_output=True,text=True)
  def test_missing_pin_route_leaves_site_unchanged(self):
   for name in ['account/pin/index.php','account/pin/.htaccess','pin/.htaccess','inc/pin-route.php']:
@@ -72,4 +87,36 @@ class RefreshTests(unittest.TestCase):
   self.config.write_text('<?php return ["ttl"=>240];')
   result=subprocess.run(['php','-r','require $argv[1]; echo json_encode([web_config_path(),ttl()]);',str(inc/'service.php')],env=self.env,capture_output=True,text=True)
   self.assertEqual(result.returncode,0,result.stderr);self.assertEqual(json.loads(result.stdout),[str(self.config.resolve()),240])
+ def maintenance(self):return [json.loads(line) for line in self.calls.read_text().splitlines()] if self.calls.exists() else []
+ def test_reset_preview_both_orders(self):
+  for args in [('--reset-users','--dry-run'),('--dry-run','--reset-users')]:
+   self.calls.unlink(missing_ok=True);result=self.run_script(*args)
+   self.assertEqual(result.returncode,0,result.stderr);calls=self.maintenance();self.assertEqual(len(calls),1)
+   self.assertEqual(calls[0][0][1:],['reset-users','--dry-run']);self.assertEqual(calls[0][1],str(self.config))
+   self.assertFalse(Path(str(self.site)+'.private-backups').exists());self.assertEqual(self.config.read_text(),'<?php return [];')
+ def test_reset_requires_existing_config(self):
+  self.config.unlink();result=self.run_script('--reset-users');self.assertNotEqual(result.returncode,0)
+  self.assertIn('existing configured site',result.stderr);self.assertFalse(self.record.exists());self.assertFalse(self.config.exists())
+ def test_reset_creates_private_backup_after_sync(self):
+  result=self.run_script('--reset-users');self.assertEqual(result.returncode,0,result.stderr)
+  calls=self.maintenance();self.assertEqual(len(calls),2);self.assertEqual(calls[1][0][1:4],['reset-users','--confirm-reset','--backup'])
+  backup=Path(calls[1][0][-1]);self.assertTrue(backup.is_file());self.assertEqual(backup.stat().st_mode&0o777,0o600)
+  self.assertEqual(backup.parent.stat().st_mode&0o777,0o700);self.assertEqual(backup.parent.parent,Path(str(self.site)+'.private-backups'))
+  self.assertEqual(calls[1][1],str(self.config));self.assertEqual(self.config.read_text(),'<?php return [];')
+ def test_reset_preflight_failure_prevents_refresh(self):
+  self.env['TEST_PREFLIGHT_FAIL']='1';result=self.run_script('--reset-users');self.assertNotEqual(result.returncode,0)
+  self.assertFalse(self.record.exists());self.assertFalse(Path(str(self.site)+'.private-backups').exists());self.assertEqual(len(self.maintenance()),1)
+ def test_sync_failure_prevents_reset(self):
+  (self.bin/'rsync').write_text('#!/bin/sh\nexit 1\n');result=self.run_script('--reset-users');self.assertNotEqual(result.returncode,0)
+  self.assertEqual(len(self.maintenance()),1);self.assertFalse(list(Path(str(self.site)+'.private-backups').glob('users.*')))
+ def test_reset_failure_keeps_backup(self):
+  self.env['TEST_RESET_FAIL']='1';result=self.run_script('--reset-users');self.assertNotEqual(result.returncode,0)
+  self.assertTrue(Path(self.maintenance()[1][0][-1]).exists());self.assertEqual(self.config.read_text(),'<?php return [];')
+ def test_normal_refresh_never_calls_reset(self):
+  self.assertEqual(self.run_script().returncode,0);self.assertEqual(self.maintenance(),[])
+ def test_invalid_and_duplicate_options(self):
+  for args in [('--bad',),('--reset-users','--reset-users'),('--dry-run','--dry-run')]:
+   self.assertNotEqual(self.run_script(*args).returncode,0)
+  self.assertFalse(self.record.exists());self.assertEqual(self.maintenance(),[])
+  result=self.run_script('--help');self.assertEqual(result.returncode,0);self.assertIn('--reset-users',result.stdout)
 if __name__=='__main__':unittest.main()

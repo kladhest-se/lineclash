@@ -31,6 +31,7 @@ function reset_website_data(PDO $db,bool $confirmed): void {
 try {
     $command=$argv[1]??'';
     if($command==='reset-data' && !(count($argv)===2 || (count($argv)===3 && in_array($argv[2],['--dry-run','--confirm-reset'],true))))throw new RuntimeException('Usage: php bin/manage.php reset-data [--dry-run | --confirm-reset]');
+    if($command==='reset-users' && !(count($argv)===2 || (count($argv)===3 && $argv[2]==='--dry-run') || (count($argv)===5 && $argv[2]==='--confirm-reset' && $argv[3]==='--backup' && $argv[4]!=='')))throw new RuntimeException('Usage: php bin/manage.php reset-users [--dry-run | --confirm-reset --backup /private/path/users.sql]');
     if($command==='smtp-test'){
         if(count($argv)!==3)throw new RuntimeException('Usage: php bin/manage.php smtp-test EMAIL');
         require_once __DIR__.'/../inc/smtp.php';$smtp=smtp_settings(require web_config_path());
@@ -43,6 +44,8 @@ try {
         $db->exec(file_get_contents(__DIR__.'/../inc/schema.sql')); echo "Schema ready.\n";
     } elseif($command==='reset-data') {
         reset_website_data($db,($argv[2]??'')==='--confirm-reset');
+    } elseif($command==='reset-users') {
+        require_once __DIR__.'/../inc/user-reset.php';reset_central_users($db,($argv[2]??'')==='--confirm-reset',$argv[4]??'');
     } elseif(($argv[1]??'')==='server' && count($argv)===6) {
         [,,$id,$host,$port,$name]=$argv;
         if(!preg_match('/^[a-zA-Z0-9_-]{1,64}$/D',$id) || !preg_match('/^[a-zA-Z0-9.:-]{1,253}$/D',$host) || !ctype_digit($port) || (int)$port<1 || (int)$port>65535 || strlen($name)>128) throw new RuntimeException('Invalid server fields');
@@ -50,5 +53,5 @@ try {
         $q=$db->prepare("INSERT INTO directory_servers(id,name,host,port,token_hash,status_json) VALUES(?,?,?,?,?,'{}') ON DUPLICATE KEY UPDATE name=VALUES(name),host=VALUES(host),port=VALUES(port),token_hash=VALUES(token_hash),last_seen=0");
         $q->execute([$id,$name,$host,(int)$port,hash('sha256',$token)]);
         echo "Set LINECLASH_DIRECTORY_TOKEN to: $token\n";
-    } else throw new RuntimeException('Usage: php bin/manage.php migrate | smtp-test EMAIL | server ID HOST PORT NAME | reset-data [--dry-run | --confirm-reset]');
+    } else throw new RuntimeException('Usage: php bin/manage.php migrate | smtp-test EMAIL | server ID HOST PORT NAME | reset-data [--dry-run | --confirm-reset] | reset-users [--dry-run | --confirm-reset --backup /private/path/users.sql]');
 } catch(Throwable $e) { fwrite(STDERR,$e->getMessage()."\n"); exit(1); }

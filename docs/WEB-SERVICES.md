@@ -170,6 +170,8 @@ Erase all central accounts, browser-approval requests, native sessions, server r
 php /srv/www/vhosts/lineclash.kladhest.se/bin/manage.php reset-data --confirm-reset
 ```
 
+`scripts/refresh-lineclash.sh --reset-users --dry-run` previews a user-only reset during deployment. `--reset-users` performs it after a private, restorable SQL backup: central accounts and authentication records are erased, match identities/replays anonymized, and results/server registrations retained. See [deployment instructions](DEPLOYMENT-KLADHEST.md#optional-account-reset-during-refresh) for scope, privileges and restoration. The equivalent CLI is `reset-users --confirm-reset --backup /private/path/users.sql`.
+
 `reset-data` without an option also previews. The command uses the database selected by the normal site configuration and prints its name. It requires all eleven known LineClash tables to be InnoDB, uses a single DELETE transaction in foreign-key order and rolls back if any deletion fails. The DB account needs SELECT and DELETE on those tables. It preserves the schema, unrelated tables and `config.inc.php`; no DROP or TRUNCATE permission is needed.
 
 This is a destructive website reset. Dedicated servers' SQLite accounts, permissions and game records are separate and are not erased. Existing central sign-ins become invalid, while already-connected games continue. Live public servers can register again at their next heartbeat, and enabled result uploaders can repopulate history. Stop announcers/uploaders and website writes during the reset if the database must remain empty. Manually provisioned server identities and their upload tokens must be provisioned again afterward.
